@@ -110,23 +110,23 @@ struct DirtyTiles(HashSet<UVec2>);
 
 #[derive(Resource)]
 pub struct NavMeshSettings {
-    cell_width: f32,  // Recast recommends having this be 1/2 of character radius.
-    cell_height: f32, // Recast recommends having this be 1/2 of cell_width.
+    pub cell_width: f32,  // Recast recommends having this be 1/2 of character radius.
+    pub cell_height: f32, // Recast recommends having this be 1/2 of cell_width.
 
-    tile_width: u16, // As a multiple of cell_width
+    pub tile_width: u16, // As a multiple of cell_width
 
-    world_bound: f32, // Keep this as small as possible whilst fitting your world between -world_bound & world_bound on X & Z. This is added onto any calculation to figure out which tile we are in. Exists because without it we'd be in a big mess around 0,0.
-    world_bottom_bound: f32, // Minium height of anything in the world: For example: -100.
+    pub world_bound: f32, // Keep this as small as possible whilst fitting your world between -world_bound & world_bound on X & Z. This is added onto any calculation to figure out which tile we are in. Exists because without it we'd be in a big mess around 0,0.
+    pub world_bottom_bound: f32, // Minium height of anything in the world: For example: -100.
 
-    max_traversable_slope: f32, // In Radians.
-    walkable_height: u16, // Minimum open height for a cell to be considered walkable. Size in cell_height(s).
-    walkable_radius: u16, // Theoretically minimum width of an area to be considered walkable, not quite used for that yet. Size in cell_widths.
-    step_height: u16, // Maximum height difference that is still considered traversable. (Think, stair steps)
+    pub max_traversable_slope: f32, // In Radians.
+    pub walkable_height: u16, // Minimum open height for a cell to be considered walkable. Size in cell_height(s).
+    pub walkable_radius: u16, // Theoretically minimum width of an area to be considered walkable, not quite used for that yet. Size in cell_widths.
+    pub step_height: u16, // Maximum height difference that is still considered traversable. (Think, stair steps)
 
-    min_region_area: usize, // Minimum area of a region for it to not be removed in cells.
-    merge_region_size: usize, // Maximum size of a region to merge other regions into.
+    pub min_region_area: usize, // Minimum area of a region for it to not be removed in cells.
+    pub merge_region_size: usize, // Maximum size of a region to merge other regions into.
 
-    max_contour_simplification_error: f32, // Maximum difference allowed for the contour generation on the XZ-plane in cell_widths. Recast suggests keeping this in the range of [1.1, 1.5]
+    pub max_contour_simplification_error: f32, // Maximum difference allowed for the contour generation on the XZ-plane in cell_widths. Recast suggests keeping this in the range of [1.1, 1.5]
 }
 impl NavMeshSettings {
     pub fn get_tile_size(&self) -> f32 {

@@ -36,21 +36,6 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(DirtyTiles::default())
             .insert_resource(TilePolyMesh::default());
 
-        app.insert_resource(NavMeshSettings {
-            cell_width: 0.2,
-            cell_height: 0.1,
-            tile_width: 100,
-            world_bound: 2000.0,
-            world_bottom_bound: -100.0,
-            max_traversable_slope: (40.0_f32 - 0.1).to_radians(),
-            walkable_height: 20,
-            walkable_radius: 2,
-            step_height: 3,
-            min_region_area: 6,
-            merge_region_size: 12,
-            max_contour_simplification_error: 1.3,
-        });
-
         app.add_system(update_navmesh_affectors_system)
             .add_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
             .add_system(construct_open_heightfields_system.after(rebuild_heightfields_system))

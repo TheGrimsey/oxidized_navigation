@@ -459,31 +459,25 @@ pub(super) fn create_neighbour_links_system(
                 z_negative.clear();
 
                 if x_positive_contained {
-                    x_positive.extend(tile.cells[i + 1]
-                        .spans
-                        .iter()
-                        .map(|span| span.min)
-                    );
+                    x_positive.extend(tile.cells[i + 1].spans.iter().map(|span| span.min));
                 }
                 if x_negative_contained {
-                    x_negative.extend(tile.cells[i - 1]
-                        .spans
-                        .iter()
-                        .map(|span| span.min)
-                    );
+                    x_negative.extend(tile.cells[i - 1].spans.iter().map(|span| span.min));
                 }
                 if z_positive_contained {
-                    z_positive.extend(tile.cells[i + nav_mesh_settings.tile_width as usize]
-                        .spans
-                        .iter()
-                        .map(|span| span.min)
+                    z_positive.extend(
+                        tile.cells[i + nav_mesh_settings.tile_width as usize]
+                            .spans
+                            .iter()
+                            .map(|span| span.min),
                     );
                 }
                 if z_negative_contained {
-                    z_negative.extend(tile.cells[i - nav_mesh_settings.tile_width as usize]
-                        .spans
-                        .iter()
-                        .map(|span| span.min)
+                    z_negative.extend(
+                        tile.cells[i - nav_mesh_settings.tile_width as usize]
+                            .spans
+                            .iter()
+                            .map(|span| span.min),
                     );
                 }
             }

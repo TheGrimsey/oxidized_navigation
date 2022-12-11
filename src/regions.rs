@@ -617,7 +617,7 @@ fn merge_regions_i(regions: &mut [Region], a: usize, b: usize) -> bool {
         let a = &mut regions[a];
         a.span_count += b_span_count;
         a.connections = merged_connections;
-        
+
         remove_adjacent_connection_duplicates(a);
 
         // add unique floors.

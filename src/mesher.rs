@@ -10,8 +10,8 @@ use super::{
 #[derive(Default)]
 pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
-    pub indices: Vec<[u32; VERTICES_PER_POLYGON]>, //
-    edges: Vec<[EdgeConnectionType; VERTICES_PER_POLYGON]>, // For each polygon edge points to a polygon (if any) that shares the edge.
+    pub polygons: Vec<[u32; VERTICES_PER_POLYGON]>, //
+    pub edges: Vec<[EdgeConnectionType; VERTICES_PER_POLYGON]>, // For each polygon edge points to a polygon (if any) that shares the edge.
     regions: Vec<u16>, // Region Id for each polygon. TODO: Is this usefull beyond debugging?
     portal_edge_count: usize,
 }
@@ -22,7 +22,7 @@ pub(super) struct TilePolyMesh {
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
-const VERTICES_PER_POLYGON: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
+pub const VERTICES_PER_POLYGON: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
 pub(super) fn build_poly_mesh_system(
     nav_mesh_settings: Res<NavMeshSettings>,
@@ -52,7 +52,7 @@ pub(super) fn build_poly_mesh_system(
         let mut poly_mesh = PolyMesh {
             vertices: Vec::with_capacity(max_vertices),
             regions: Vec::with_capacity(max_tris),
-            indices: Vec::with_capacity(max_tris),
+            polygons: Vec::with_capacity(max_tris),
             edges: Vec::with_capacity(max_tris),
             portal_edge_count: 0,
         };
@@ -113,7 +113,7 @@ pub(super) fn build_poly_mesh_system(
             }
 
             // Store polygons.
-            poly_mesh.indices.extend(polygons.iter());
+            poly_mesh.polygons.extend(polygons.iter());
             for _ in 0..polygons.len() {
                 poly_mesh.regions.push(contour.region);
             }
@@ -121,15 +121,15 @@ pub(super) fn build_poly_mesh_system(
 
         // For each edge, find other polygon that shares that edge.
         build_mesh_adjacency(
-            &poly_mesh.indices,
+            &poly_mesh.polygons,
             poly_mesh.vertices.len(),
             &mut poly_mesh.edges,
         );
 
         // Fix portal edges.
-        let polygon_count = poly_mesh.indices.len() / VERTICES_PER_POLYGON;
+        let polygon_count = poly_mesh.polygons.len() / VERTICES_PER_POLYGON;
         for i in 0..polygon_count {
-            let indices = &poly_mesh.indices[i];
+            let indices = &poly_mesh.polygons[i];
             for index in 0..indices.len() {
                 // Connect to edges that don't have an internal edge connection.
                 let EdgeConnectionType::None = poly_mesh.edges[i * VERTICES_PER_POLYGON][index] else {
@@ -166,7 +166,7 @@ pub(super) fn build_poly_mesh_system(
 
         info!("Mesher Output for {:?}:", tile_coord);
         info!("Vertices: {:?}", poly_mesh.vertices);
-        info!("Indices: {:?}", poly_mesh.indices);
+        info!("Indices: {:?}", poly_mesh.polygons);
         info!("Edges: {:?}", poly_mesh.edges);
         poly_meshes.map.insert(*tile_coord, poly_mesh);
     }

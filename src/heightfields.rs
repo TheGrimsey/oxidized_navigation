@@ -331,7 +331,7 @@ fn divide_polygon(
     (verts_a, polygon_a, verts_b, polygon_b)
 }
 
-#[test]
+/*#[test]
 fn test_clip_polygon() {
     let mut vertices = [Vec3::ZERO; 7];
     vertices[0] = Vec3::new(0.0, 0.0, 0.0);
@@ -343,7 +343,7 @@ fn test_clip_polygon() {
 
     let (verts_c, polygon_c, _, _) = divide_polygon(&polygon_b, verts_b, 5.0, 0);
     println!("C: {}, Verts: {:?}", verts_c, polygon_c);
-}
+}*/
 
 pub(super) fn construct_open_heightfields_system(
     nav_mesh_settings: Res<NavMeshSettings>,

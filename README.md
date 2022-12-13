@@ -11,6 +11,7 @@ One of the main ideas is that this should allow runtime generation of tiled navi
 - [X] Generate poly meshes for single tiles.
 - [ ] Handle linking tiles together.
 - [ ] Pathfinding across tiles.
+- [ ] Clean up intermediate representations when we finish processing a tile (Voxelized, Open cells, etc. Only keeping polymesh).
 - [ ] Switch to more Rust-y implementations where it makes sense (Option<>, enums, etc).
 - [ ] Switch to async tasks for mesh generation instead of systems. We really just need to get the data once at the start and then it can run by itself independently of frames.
 - [ ] Switch to the Bevy 0.9 plugin settings system.

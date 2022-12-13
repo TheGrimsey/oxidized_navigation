@@ -11,7 +11,7 @@ use super::{
 pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
     pub polygons: Vec<[u32; VERTICES_PER_POLYGON]>, //
-    pub edges: Vec<[EdgeConnectionType; VERTICES_PER_POLYGON]>, // For each polygon edge points to a polygon (if any) that shares the edge.
+    pub edges: Vec<[EdgeConnection; VERTICES_PER_POLYGON]>, // For each polygon edge points to a polygon (if any) that shares the edge.
     regions: Vec<u16>, // Region Id for each polygon. TODO: Is this usefull beyond debugging?
     portal_edge_count: usize,
 }
@@ -132,7 +132,7 @@ pub(super) fn build_poly_mesh_system(
             let indices = &poly_mesh.polygons[i];
             for index in 0..indices.len() {
                 // Connect to edges that don't have an internal edge connection.
-                let EdgeConnectionType::None = poly_mesh.edges[i * VERTICES_PER_POLYGON][index] else {
+                let EdgeConnection::None = poly_mesh.edges[i * VERTICES_PER_POLYGON][index] else {
                     continue;
                 };
 
@@ -142,23 +142,23 @@ pub(super) fn build_poly_mesh_system(
                 // Only edges parallel to the tile edge.
                 if vertex_a.x == 0 && vertex_b.x == 0 {
                     poly_mesh.edges[i][index] =
-                        EdgeConnectionType::OffMesh(EdgeConnectionDirection::XNegative);
+                        EdgeConnection::OffMesh(EdgeConnectionDirection::XNegative);
                     poly_mesh.portal_edge_count += 1;
                 } else if vertex_a.z == nav_mesh_settings.tile_width as u32
                     && vertex_b.z == nav_mesh_settings.tile_width as u32
                 {
                     poly_mesh.edges[i][index] =
-                        EdgeConnectionType::OffMesh(EdgeConnectionDirection::ZPositive);
+                        EdgeConnection::OffMesh(EdgeConnectionDirection::ZPositive);
                     poly_mesh.portal_edge_count += 1;
                 } else if vertex_a.x == nav_mesh_settings.tile_width as u32
                     && vertex_b.x == nav_mesh_settings.tile_width as u32
                 {
                     poly_mesh.edges[i][index] =
-                        EdgeConnectionType::OffMesh(EdgeConnectionDirection::XPositive);
+                        EdgeConnection::OffMesh(EdgeConnectionDirection::XPositive);
                     poly_mesh.portal_edge_count += 1;
                 } else if vertex_a.z == 0 && vertex_b.z == 0 {
                     poly_mesh.edges[i][index] =
-                        EdgeConnectionType::OffMesh(EdgeConnectionDirection::ZNegative);
+                        EdgeConnection::OffMesh(EdgeConnectionDirection::ZNegative);
                     poly_mesh.portal_edge_count += 1;
                 }
             }
@@ -172,7 +172,7 @@ pub(super) fn build_poly_mesh_system(
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EdgeConnectionDirection {
     XNegative,
     ZPositive,
@@ -181,7 +181,7 @@ pub enum EdgeConnectionDirection {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum EdgeConnectionType {
+pub enum EdgeConnection {
     None,
     Internal(u16),
     OffMesh(EdgeConnectionDirection),
@@ -200,7 +200,7 @@ struct Edge {
 fn build_mesh_adjacency(
     polygons: &[[u32; VERTICES_PER_POLYGON]],
     vertex_count: usize,
-    in_edges: &mut Vec<[EdgeConnectionType; VERTICES_PER_POLYGON]>,
+    in_edges: &mut Vec<[EdgeConnection; VERTICES_PER_POLYGON]>,
 ) {
     let max_edge_count = polygons.len() * VERTICES_PER_POLYGON;
 
@@ -246,16 +246,16 @@ fn build_mesh_adjacency(
     in_edges.clear();
     in_edges.resize(
         polygons.len(),
-        [EdgeConnectionType::None; VERTICES_PER_POLYGON],
+        [EdgeConnection::None; VERTICES_PER_POLYGON],
     );
     for edge in edges.iter() {
         if edge.polygon[0] != edge.polygon[1] {
             let polygon_one = edge.polygon[0];
             let polygon_two = edge.polygon[1];
             in_edges[polygon_one][edge.edge_in_polygon[0]] =
-                EdgeConnectionType::Internal(edge.polygon[1] as u16);
+                EdgeConnection::Internal(edge.polygon[1] as u16);
             in_edges[polygon_two][edge.edge_in_polygon[1]] =
-                EdgeConnectionType::Internal(edge.polygon[0] as u16);
+                EdgeConnection::Internal(edge.polygon[0] as u16);
         }
     }
 }

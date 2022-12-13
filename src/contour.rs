@@ -669,7 +669,7 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32)
         }
 
         if max_i.is_some() && max_deviation > (max_error * max_error) {
-            let max_i = max_i.unwrap();
+            let max_i = max_i.unwrap(); // TODO: Let-chains make this nicer.
             simplified.insert(
                 i + 1,
                 UVec4 {

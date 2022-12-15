@@ -9,6 +9,7 @@ use bevy::{
 };
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use smallvec::SmallVec;
+use tiles::{NavMesh, create_nav_mesh_data_from_poly_mesh};
 
 use self::{
     contour::{build_contours_system, TileContours},
@@ -34,7 +35,8 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(TilesOpen::default())
             .insert_resource(TileContours::default())
             .insert_resource(DirtyTiles::default())
-            .insert_resource(TilePolyMesh::default());
+            .insert_resource(TilePolyMesh::default())
+            .insert_resource(NavMesh::default());
 
         app.add_system(update_navmesh_affectors_system)
             .add_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
@@ -44,7 +46,8 @@ impl Plugin for OxidizedNavigationPlugin {
             .add_system(build_regions_system.after(create_distance_field_system))
             .add_system(build_contours_system.after(build_regions_system))
             .add_system(build_poly_mesh_system.after(build_contours_system))
-            .add_system_to_stage(CoreStage::PostUpdate, clear_dirty_tiles_system);
+            .add_system_to_stage(CoreStage::PostUpdate, insert_updated_tile)
+            .add_system_to_stage(CoreStage::PostUpdate, clear_dirty_tiles_system.after(insert_updated_tile));
     }
 }
 
@@ -210,6 +213,22 @@ fn update_navmesh_affectors_system(
                 dirty_tiles.0.insert(tile_coord);
             }
         }
+    }
+}
+
+fn insert_updated_tile(
+    dirty_tiles: Res<DirtyTiles>,
+    poly_meshes: Res<TilePolyMesh>,
+    mut nav_mesh: ResMut<NavMesh>
+) {
+    for tile in dirty_tiles.0.iter() {
+        let Some(poly_mesh) = poly_meshes.map.get(tile) else {
+            continue;
+        };
+
+        let nav_mesh_tile = create_nav_mesh_data_from_poly_mesh(poly_mesh);
+
+        nav_mesh.add_tile(*tile, nav_mesh_tile);
     }
 }
 

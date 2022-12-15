@@ -18,7 +18,7 @@ pub struct PolyMesh {
 
 #[derive(Default, Resource)]
 pub(super) struct TilePolyMesh {
-    map: HashMap<UVec2, PolyMesh>,
+    pub(super) map: HashMap<UVec2, PolyMesh>,
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096

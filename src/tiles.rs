@@ -26,7 +26,7 @@ struct Polygon {
 /*
 *   Polygons make up a form of graph, linking to other polygons (which could be on another mesh)
 */
-struct NavMeshTile {
+pub(super) struct NavMeshTile {
     salt: u32,
     vertices: Vec<UVec3>,
     polygons: Vec<Polygon>,
@@ -38,7 +38,7 @@ struct NavMeshTile {
 }
 
 #[derive(Default, Resource)]
-struct NavMesh {
+pub(super) struct NavMesh {
     tiles: HashMap<UVec2, NavMeshTile>
 }
 
@@ -56,31 +56,34 @@ impl NavMesh {
         // Connect neighbours.
         if tile_coord.x > 0 {
             let neighbour_coord = UVec2::new(tile_coord.x - 1, tile_coord.y);
-            let opposite_direction = EdgeConnectionDirection::XPositive;
 
             if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
-                for polygon in neighbour.polygons.iter_mut() {
-                    if previous_tile_existed { // Drain previous existing links to this tile.
-                        let mut i = 0;
-                        while i < polygon.links.len() {
-                            if let Link::OffMesh { direction, .. } = polygon.links[i] {
-                                if direction == opposite_direction {
-                                    polygon.links.swap_remove(i);
-                                }
-                            }
-
-                            i += 1;
-                        }
-                    }
-
-                    
-                }
+                connect_external_links(&mut tile, neighbour, EdgeConnectionDirection::XPositive, previous_tile_existed);
             }
         }
     }
 }
 
-fn create_nav_mesh_data_from_poly_mesh(mesh: &PolyMesh) -> NavMeshTile {
+fn connect_external_links(new_tile: &mut NavMeshTile, neighbour_tile: &mut NavMeshTile, opposite_direction: EdgeConnectionDirection, tile_existed: bool) {
+    for polygon in neighbour_tile.polygons.iter_mut() { // TODO: What if we just store a list of edge polygons?
+        if tile_existed { // Remove existing links to this tile.
+            let mut i = 0;
+            while i < polygon.links.len() {
+                if let Link::OffMesh { direction, .. } = polygon.links[i] {
+                    if direction == opposite_direction {
+                        polygon.links.swap_remove(i);
+                    }
+                }
+
+                i += 1;
+            }
+        }
+
+        
+    }
+}
+
+pub(super) fn create_nav_mesh_data_from_poly_mesh(mesh: &PolyMesh) -> NavMeshTile {
     let (min_height, max_height) = mesh.vertices.iter().fold((u32::MAX, 0), |(min, max), val| {
         (min.min(val.y), max.max(val.y))
     });

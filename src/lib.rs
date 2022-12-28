@@ -144,6 +144,12 @@ impl NavMeshSettings {
         (offset_world / tile_size).as_uvec2()
     }
 
+    pub fn get_tile_min_bound(&self, tile: UVec2) -> Vec2 {
+        let tile_size = self.get_tile_size();
+
+        tile.as_vec2() * tile_size - self.world_bound
+    }
+
     pub fn get_tile_bounds(&self, tile: UVec2) -> (Vec2, Vec2) {
         let tile_size = self.get_tile_size();
 
@@ -219,6 +225,7 @@ fn update_navmesh_affectors_system(
 fn insert_updated_tile(
     dirty_tiles: Res<DirtyTiles>,
     poly_meshes: Res<TilePolyMesh>,
+    nav_mesh_settings: Res<NavMeshSettings>,
     mut nav_mesh: ResMut<NavMesh>
 ) {
     for tile in dirty_tiles.0.iter() {
@@ -226,9 +233,9 @@ fn insert_updated_tile(
             continue;
         };
 
-        let nav_mesh_tile = create_nav_mesh_data_from_poly_mesh(poly_mesh);
+        let nav_mesh_tile = create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
 
-        nav_mesh.add_tile(*tile, nav_mesh_tile);
+        nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
     }
 }
 

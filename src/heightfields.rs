@@ -67,7 +67,7 @@ pub(super) fn rebuild_heightfields_system(
             VoxelCell::default(),
         );
 
-        let (tile_min, _) = nav_mesh_settings.get_tile_bounds(*tile_coord);
+        let tile_min = nav_mesh_settings.get_tile_min_bound(*tile_coord);
 
         let mut iter = collider_query.iter_many(affectors.iter());
         while let Some((collider, transform)) = iter.fetch_next() {

@@ -9,8 +9,10 @@ One of the main ideas is that this should allow runtime generation of tiled navi
 ## Non-exhaustive TODO-list:
 
 - [X] Generate poly meshes for single tiles.
-- [ ] Handle linking tiles together.
+- [X] Handle linking tiles together.
 - [ ] Pathfinding across tiles.
+- [ ] Optimize linking tiles. (At a cost of memory we can save a lot of time finding OffMesh links by just... saving indices of the polygons with OffMesh links)
+- [ ] Adjust memory representation for cache usage. (Some data we only need when linking tiles and not pathfinding)
 - [ ] Clean up intermediate representations when we finish processing a tile (Voxelized, Open cells, etc. Only keeping polymesh).
 - [ ] Switch to more Rust-y implementations where it makes sense (Option<>, enums, etc).
 - [ ] Switch to async tasks for mesh generation instead of systems. We really just need to get the data once at the start and then it can run by itself independently of frames.

@@ -12,8 +12,6 @@ pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
     pub polygons: Vec<[u32; VERTICES_PER_POLYGON]>, //
     pub edges: Vec<[EdgeConnection; VERTICES_PER_POLYGON]>, // For each polygon edge points to a polygon (if any) that shares the edge.
-    regions: Vec<u16>, // Region Id for each polygon. TODO: Is this usefull beyond debugging?
-    portal_edge_count: usize,
 }
 
 #[derive(Default, Resource)]
@@ -51,10 +49,8 @@ pub(super) fn build_poly_mesh_system(
 
         let mut poly_mesh = PolyMesh {
             vertices: Vec::with_capacity(max_vertices),
-            regions: Vec::with_capacity(max_tris),
             polygons: Vec::with_capacity(max_tris),
             edges: Vec::with_capacity(max_tris),
-            portal_edge_count: 0,
         };
 
         let mut first_vertex = vec![-1; VERTEX_BUCKET_COUNT];
@@ -114,9 +110,6 @@ pub(super) fn build_poly_mesh_system(
 
             // Store polygons.
             poly_mesh.polygons.extend(polygons.iter());
-            for _ in 0..polygons.len() {
-                poly_mesh.regions.push(contour.region);
-            }
         }
 
         // For each edge, find other polygon that shares that edge.
@@ -127,12 +120,10 @@ pub(super) fn build_poly_mesh_system(
         );
 
         // Fix portal edges.
-        let polygon_count = poly_mesh.polygons.len() / VERTICES_PER_POLYGON;
-        for i in 0..polygon_count {
-            let indices = &poly_mesh.polygons[i];
+        for (i, indices) in poly_mesh.polygons.iter().enumerate() {
             for index in 0..indices.len() {
                 // Connect to edges that don't have an internal edge connection.
-                let EdgeConnection::None = poly_mesh.edges[i * VERTICES_PER_POLYGON][index] else {
+                let EdgeConnection::None = poly_mesh.edges[i][index] else {
                     continue;
                 };
 
@@ -143,23 +134,19 @@ pub(super) fn build_poly_mesh_system(
                 if vertex_a.x == 0 && vertex_b.x == 0 {
                     poly_mesh.edges[i][index] =
                         EdgeConnection::OffMesh(EdgeConnectionDirection::XNegative);
-                    poly_mesh.portal_edge_count += 1;
                 } else if vertex_a.z == nav_mesh_settings.tile_width as u32
                     && vertex_b.z == nav_mesh_settings.tile_width as u32
                 {
                     poly_mesh.edges[i][index] =
                         EdgeConnection::OffMesh(EdgeConnectionDirection::ZPositive);
-                    poly_mesh.portal_edge_count += 1;
                 } else if vertex_a.x == nav_mesh_settings.tile_width as u32
                     && vertex_b.x == nav_mesh_settings.tile_width as u32
                 {
                     poly_mesh.edges[i][index] =
                         EdgeConnection::OffMesh(EdgeConnectionDirection::XPositive);
-                    poly_mesh.portal_edge_count += 1;
                 } else if vertex_a.z == 0 && vertex_b.z == 0 {
                     poly_mesh.edges[i][index] =
                         EdgeConnection::OffMesh(EdgeConnectionDirection::ZNegative);
-                    poly_mesh.portal_edge_count += 1;
                 }
             }
         }
@@ -244,10 +231,7 @@ fn build_mesh_adjacency(
     }
 
     in_edges.clear();
-    in_edges.resize(
-        polygons.len(),
-        [EdgeConnection::None; VERTICES_PER_POLYGON],
-    );
+    in_edges.resize(polygons.len(), [EdgeConnection::None; VERTICES_PER_POLYGON]);
     for edge in edges.iter() {
         if edge.polygon[0] != edge.polygon[1] {
             let polygon_one = edge.polygon[0];

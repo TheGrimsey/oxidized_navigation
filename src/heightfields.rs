@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, ops::Div};
 
 use bevy::{
-    prelude::{GlobalTransform, IVec3, Query, Res, ResMut, Resource, UVec2, Vec3, With},
+    prelude::{info, GlobalTransform, IVec3, Query, Res, ResMut, Resource, UVec2, Vec3, With},
     utils::HashMap,
 };
 use bevy_rapier3d::prelude::Collider;
@@ -187,7 +187,7 @@ pub(super) fn rebuild_heightfields_system(
                     let column_min =
                         ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
                     let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
-                        .min(nav_mesh_settings.tile_width.into());
+                        .min((nav_mesh_settings.tile_width - 1).into());
 
                     for x in column_min..=column_max {
                         let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
@@ -411,9 +411,7 @@ pub(super) fn construct_open_heightfields_system(
         }
 
         open_tile.distances.clear();
-        open_tile
-            .distances
-            .resize(open_tile.span_count, u16::MAX / 2);
+        open_tile.distances.resize(open_tile.span_count, u16::MAX);
     }
 }
 

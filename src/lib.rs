@@ -1,4 +1,4 @@
-use bevy::prelude::IntoSystemDescriptor;
+use bevy::prelude::{info, IntoSystemDescriptor};
 use bevy::{
     ecs::system::Resource,
     prelude::{
@@ -9,7 +9,7 @@ use bevy::{
 };
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use smallvec::SmallVec;
-use tiles::{NavMesh, create_nav_mesh_data_from_poly_mesh};
+use tiles::{create_nav_mesh_data_from_poly_mesh, NavMesh};
 
 use self::{
     contour::{build_contours_system, TileContours},
@@ -46,8 +46,11 @@ impl Plugin for OxidizedNavigationPlugin {
             .add_system(build_regions_system.after(create_distance_field_system))
             .add_system(build_contours_system.after(build_regions_system))
             .add_system(build_poly_mesh_system.after(build_contours_system))
-            .add_system_to_stage(CoreStage::PostUpdate, insert_updated_tile)
-            .add_system_to_stage(CoreStage::PostUpdate, clear_dirty_tiles_system.after(insert_updated_tile));
+            .add_system_to_stage(CoreStage::PostUpdate, insert_updated_tile_system)
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                clear_dirty_tiles_system.after(insert_updated_tile_system),
+            );
     }
 }
 
@@ -222,20 +225,29 @@ fn update_navmesh_affectors_system(
     }
 }
 
-fn insert_updated_tile(
+fn insert_updated_tile_system(
     dirty_tiles: Res<DirtyTiles>,
     poly_meshes: Res<TilePolyMesh>,
     nav_mesh_settings: Res<NavMeshSettings>,
-    mut nav_mesh: ResMut<NavMesh>
+    mut nav_mesh: ResMut<NavMesh>,
 ) {
     for tile in dirty_tiles.0.iter() {
         let Some(poly_mesh) = poly_meshes.map.get(tile) else {
             continue;
         };
-
-        let nav_mesh_tile = create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
+        let nav_mesh_tile =
+            create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
 
         nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
+    }
+
+    if !dirty_tiles.0.is_empty() {
+        for (coord, tile) in nav_mesh.tiles.iter() {
+            info!(
+                "Tile ({},{}): Polygons: {:?}",
+                coord.x, coord.y, tile.polygons
+            );
+        }
     }
 }
 

@@ -1,4 +1,4 @@
-use bevy::prelude::{Res, ResMut};
+use bevy::prelude::{info, Res, ResMut};
 
 use super::{
     get_cell_offset, DirtyTiles, NavMeshSettings, NeighbourConnection, OpenSpan, OpenTile,
@@ -97,7 +97,7 @@ pub(super) fn build_regions_system(
             &nav_mesh_settings,
             tile,
             &mut regions,
-            &distances,
+            &mut distances,
             &mut stack,
         );
 
@@ -176,13 +176,13 @@ fn expand_regions(
         let mut failed = 0;
         dirty_entries.clear();
 
-        for entry in level_stack.iter() {
+        for entry in level_stack.iter_mut() {
             if entry.index < 0 {
                 failed += 1;
                 continue;
             }
 
-            let mut source_region = regions[entry.index as usize];
+            let mut new_region = regions[entry.index as usize];
             let mut distance = u16::MAX;
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
 
@@ -199,15 +199,16 @@ fn expand_regions(
                 let other_region = regions[other_span.tile_index];
                 let other_distance = distances[other_span.tile_index];
                 if other_region > 0 && other_distance + 2 < distance {
-                    source_region = other_region;
+                    new_region = other_region;
                     distance = other_distance + 2;
                 }
             }
 
-            if source_region != 0 {
+            if new_region != 0 {
+                entry.index = -1;
                 dirty_entries.push(DirtyEntry {
                     index: span.tile_index as i32,
-                    region: source_region,
+                    region: new_region,
                     distance,
                 });
             } else {
@@ -236,7 +237,7 @@ fn expand_regions_until_end(
     nav_mesh_settings: &NavMeshSettings,
     tile: &OpenTile,
     regions: &mut [u16],
-    distances: &[u16],
+    distances: &mut [u16],
     level_stack: &mut Vec<LevelStackEntry>,
 ) {
     level_stack.clear();
@@ -259,8 +260,13 @@ fn expand_regions_until_end(
         failed = 0;
         dirty_entries.clear();
 
-        for entry in level_stack.iter() {
-            let mut source_region = regions[entry.index as usize];
+        for entry in level_stack.iter_mut() {
+            if entry.index < 0 {
+                failed += 1;
+                continue;
+            }
+
+            let mut new_region = regions[entry.index as usize];
             let mut distance = u16::MAX;
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
 
@@ -277,15 +283,16 @@ fn expand_regions_until_end(
                 let other_region = regions[other_span.tile_index];
                 let other_distance = distances[other_span.tile_index];
                 if other_region > 0 && other_distance + 2 < distance {
-                    source_region = other_region;
+                    new_region = other_region;
                     distance = other_distance + 2;
                 }
             }
 
-            if source_region != 0 {
+            if new_region != 0 {
+                entry.index = -1;
                 dirty_entries.push(DirtyEntry {
                     index: span.tile_index as i32,
-                    region: source_region,
+                    region: new_region,
                     distance,
                 });
             } else {
@@ -293,9 +300,13 @@ fn expand_regions_until_end(
             }
         }
 
-        // Copy entries that differ between src and st to keep them in sync.
         for entry in dirty_entries.iter() {
             regions[entry.index as usize] = entry.region;
+            distances[entry.index as usize] = entry.distance;
+        }
+
+        if failed == level_stack.len() {
+            break;
         }
     }
 }

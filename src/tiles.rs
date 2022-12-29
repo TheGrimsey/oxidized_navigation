@@ -33,9 +33,6 @@ pub(super) struct NavMeshTile {
     vertices: Vec<Vec3>,
     polygons: Vec<Polygon>,
     edges: Vec<[EdgeConnection; VERTICES_PER_POLYGON]>,
-
-    min_height: u32,
-    max_height: u32,
 }
 
 #[derive(Default, Resource)]
@@ -55,23 +52,67 @@ impl NavMesh {
         };
 
         // Connect neighbours.
+        let step_height = nav_mesh_settings.step_height as f32 * nav_mesh_settings.cell_height;
+        // X-Negative
         if tile_coord.x > 0 {
             let neighbour_coord = UVec2::new(tile_coord.x - 1, tile_coord.y);
 
             if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
-                connect_external_links(&mut tile, neighbour, EdgeConnectionDirection::XNegative, EdgeConnectionDirection::XPositive, previous_tile_existed, nav_mesh_settings.step_height as f32 * nav_mesh_settings.cell_height);
+                let direction = EdgeConnectionDirection::XNegative;
+                let opposite_direction = EdgeConnectionDirection::XPositive;
+
+                connect_external_links(&mut tile, neighbour, direction, opposite_direction, false, step_height);
+                connect_external_links(neighbour, &tile, opposite_direction, direction, previous_tile_existed, step_height);
             }
         }
+        // X-Positive
+        if tile_coord.x < u32::MAX {
+            let neighbour_coord = UVec2::new(tile_coord.x + 1, tile_coord.y);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                let direction = EdgeConnectionDirection::XPositive;
+                let opposite_direction = EdgeConnectionDirection::XNegative;
+                
+                connect_external_links(&mut tile, neighbour, direction, opposite_direction, false, step_height);
+                connect_external_links(neighbour, &tile, opposite_direction, direction, previous_tile_existed, step_height);
+            }
+        }
+        // Z-Negative
+        if tile_coord.y > 0 {
+            let neighbour_coord = UVec2::new(tile_coord.x, tile_coord.y - 1);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                let direction = EdgeConnectionDirection::ZNegative;
+                let opposite_direction = EdgeConnectionDirection::ZPositive;
+                
+                connect_external_links(&mut tile, neighbour, direction, opposite_direction,  false, step_height);
+                connect_external_links(neighbour, &tile, opposite_direction, direction, previous_tile_existed, step_height);
+            }
+        }
+        // Z-Positive
+        if tile_coord.y < u32::MAX {
+            let neighbour_coord = UVec2::new(tile_coord.x, tile_coord.y + 1);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                let direction = EdgeConnectionDirection::ZPositive;
+                let opposite_direction = EdgeConnectionDirection::ZNegative;
+                
+                connect_external_links(&mut tile, neighbour, direction, opposite_direction, false, step_height);
+                connect_external_links(neighbour, &tile, opposite_direction, direction, previous_tile_existed, step_height);
+            }
+        }
+
+        self.tiles.insert(tile_coord, tile);
     }
 }
 
-fn connect_external_links(new_tile: &mut NavMeshTile, neighbour_tile: &mut NavMeshTile, direction: EdgeConnectionDirection, opposite_direction: EdgeConnectionDirection, tile_existed: bool, step_height: f32) {
-    for (poly_index, polygon) in neighbour_tile.polygons.iter_mut().enumerate() { // TODO: What if we just store a list of edge polygons?
-        if tile_existed { // Remove existing links to this tile.
+fn connect_external_links(tile: &mut NavMeshTile, neighbour: &NavMeshTile, neighbour_direction: EdgeConnectionDirection, neighbour_to_self_direction: EdgeConnectionDirection, remove_existing_links: bool, step_height: f32) {
+    for (poly_index, polygon) in tile.polygons.iter_mut().enumerate() { // TODO: What if we just store a list of edge polygons? Allows us to skip majority of polygons.
+        if remove_existing_links { // Remove existing links to neighbour.
             let mut i = 0;
             while i < polygon.links.len() {
                 if let Link::OffMesh { direction, .. } = polygon.links[i] {
-                    if direction == opposite_direction {
+                    if direction == neighbour_direction {
                         polygon.links.swap_remove(i);
                     }
                 }
@@ -80,25 +121,25 @@ fn connect_external_links(new_tile: &mut NavMeshTile, neighbour_tile: &mut NavMe
             }
         }
 
-        for (edge_index, edge) in neighbour_tile.edges[poly_index].iter().enumerate() {
+        for (edge_index, edge) in tile.edges[poly_index].iter().enumerate() {
             let EdgeConnection::OffMesh(edge_direction) = edge else {
                 continue;
             };
-            if *edge_direction != opposite_direction {
+            if *edge_direction != neighbour_direction {
                 continue;
             }
 
-            let vertex_a = neighbour_tile.vertices[polygon.indices[edge_index] as usize];
-            let vertex_b = neighbour_tile.vertices[polygon.indices[(edge_index + 1) % polygon.indices.len()] as usize];
+            let vertex_a = tile.vertices[polygon.indices[edge_index] as usize];
+            let vertex_b = tile.vertices[polygon.indices[(edge_index + 1) % polygon.indices.len()] as usize];
             
-            let (connection_count, connected_polys, connection_areas) = find_connecting_polygons_in_tile(&vertex_a, &vertex_b, new_tile, *edge_direction, step_height);
+            let (connection_count, connected_polys, connection_areas) = find_connecting_polygons_in_tile(&vertex_a, &vertex_b, neighbour, neighbour_to_self_direction, step_height);
         
             polygon.links.reserve(connection_count);
             for i in 0..connection_count {
                 let (neighbour_polygon, edge) = connected_polys[i];
                 let area = connection_areas[i];
 
-                let(bound_min, bound_max) = if direction == EdgeConnectionDirection::XNegative || direction == EdgeConnectionDirection::XPositive {
+                let(bound_min, bound_max) = if neighbour_to_self_direction == EdgeConnectionDirection::XNegative || neighbour_to_self_direction == EdgeConnectionDirection::XPositive {
                     let min = (area.x - vertex_a.z) / (vertex_b.z - vertex_a.z);
                     let max = (area.y - vertex_a.z) / (vertex_b.z - vertex_a.z);
                     
@@ -113,15 +154,15 @@ fn connect_external_links(new_tile: &mut NavMeshTile, neighbour_tile: &mut NavMe
                 let min_byte = (bound_min.clamp(0.0, 1.0) * 255.0).round() as u8;
                 let max_byte = (bound_max.clamp(0.0, 1.0) * 255.0).round() as u8;
 
-                // TODO
                 polygon.links.push(Link::OffMesh {
                     edge,
                     neighbour_polygon,
-                    direction,
+                    direction: neighbour_direction,
                     bound_min: min_byte,
                     bound_max: max_byte,
                 });
             }
+            break; // We can only have one edge parallel to the direction in a triangle.
         }
     }
 }
@@ -256,10 +297,6 @@ fn find_connecting_polygons_in_tile(
 }
 
 pub(super) fn create_nav_mesh_data_from_poly_mesh(mesh: &PolyMesh, tile_coords: UVec2, nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
-    let (min_height, max_height) = mesh.vertices.iter().fold((u32::MAX, 0), |(min, max), val| {
-        (min.min(val.y), max.max(val.y))
-    });
-
     // Slight worry that the compiler won't optimize this but damn, it's cool.
     let polygons = mesh.polygons.iter().zip(mesh.edges.iter()).map(|(indices, edges)| {
         // Pre build internal links.
@@ -294,7 +331,5 @@ pub(super) fn create_nav_mesh_data_from_poly_mesh(mesh: &PolyMesh, tile_coords: 
         vertices,
         edges: mesh.edges.clone(),
         polygons,
-        min_height,
-        max_height,
     }
 }

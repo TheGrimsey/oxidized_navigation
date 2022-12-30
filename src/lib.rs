@@ -9,7 +9,7 @@ use bevy::{
 };
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use smallvec::SmallVec;
-use tiles::{create_nav_mesh_data_from_poly_mesh, NavMesh};
+use tiles::{create_nav_mesh_data_from_poly_mesh, NavMeshTiles};
 
 use self::{
     contour::{build_contours_system, TileContours},
@@ -36,7 +36,7 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(TileContours::default())
             .insert_resource(DirtyTiles::default())
             .insert_resource(TilePolyMesh::default())
-            .insert_resource(NavMesh::default());
+            .insert_resource(NavMeshTiles::default());
 
         app.add_system(update_navmesh_affectors_system)
             .add_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
@@ -72,22 +72,13 @@ pub struct OpenCell {
 *   2: (1, 0),
 *   3: (0, -1)
 */
-#[derive(Default, Clone, Copy, Debug)]
-enum NeighbourConnection {
-    // TODO: This might be overkill and could just be replaced by Option<u16>.
-    #[default]
-    Unconnected,
-    Connected {
-        index: u16, // Index of the span in the neighbour cell.
-    },
-}
 
 // Like a HeightSpan but representing open walkable areas (empty space with floor & height >= walkable_height
 #[derive(Default, Clone, Copy, Debug)]
 struct OpenSpan {
     min: u16,
     max: Option<u16>,
-    neighbours: [NeighbourConnection; 4],
+    neighbours: [Option<u16>; 4],
     tile_index: usize, // The index of this span in the whole tile.
     region: u16, // Region if non-zero. We could use option for this if we had some optimization for size.
 }
@@ -229,19 +220,20 @@ fn insert_updated_tile_system(
     dirty_tiles: Res<DirtyTiles>,
     poly_meshes: Res<TilePolyMesh>,
     nav_mesh_settings: Res<NavMeshSettings>,
-    mut nav_mesh: ResMut<NavMesh>,
+    nav_mesh: ResMut<NavMeshTiles>,
 ) {
-    for tile in dirty_tiles.0.iter() {
-        let Some(poly_mesh) = poly_meshes.map.get(tile) else {
-            continue;
-        };
-        let nav_mesh_tile =
-            create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
-
-        nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
-    }
-
     if !dirty_tiles.0.is_empty() {
+        let mut nav_mesh = nav_mesh.nav_mesh.write().unwrap();
+        for tile in dirty_tiles.0.iter() {
+            let Some(poly_mesh) = poly_meshes.map.get(tile) else {
+                continue;
+            };
+            let nav_mesh_tile =
+                create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
+
+            nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
+        }
+
         for (coord, tile) in nav_mesh.tiles.iter() {
             info!(
                 "Tile ({},{}): Polygons: {:?}",

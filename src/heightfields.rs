@@ -1,14 +1,14 @@
 use std::{cmp::Ordering, ops::Div};
 
 use bevy::{
-    prelude::{info, GlobalTransform, IVec3, Query, Res, ResMut, Resource, UVec2, Vec3, With},
+    prelude::{GlobalTransform, IVec3, Query, Res, ResMut, Resource, UVec2, Vec3, With},
     utils::HashMap,
 };
 use bevy_rapier3d::prelude::Collider;
 
 use super::{
     cell_move_back_column, cell_move_back_row, cell_move_forward_column, cell_move_forward_row,
-    get_cell_offset, DirtyTiles, NavMeshAffector, NavMeshSettings, NeighbourConnection, OpenCell,
+    get_cell_offset, DirtyTiles, NavMeshAffector, NavMeshSettings, OpenCell,
     OpenSpan, OpenTile, TileAffectors, TilesOpen,
 };
 
@@ -279,7 +279,7 @@ fn divide_polygon(
     vertex_count_in: usize,
     clip_line: f32,
     axis: usize,
-) -> (usize, [Vec3; 7], usize, [Vec3; 7]) {
+) -> (usize, [Vec3; 7], usize, [Vec3; 7]) { // TODO: We always use one of these options. Does it make sense to even return the other?
     let mut polygon_a = [Vec3::ZERO; 7];
     let mut polygon_b = [Vec3::ZERO; 7];
 
@@ -487,7 +487,7 @@ pub(super) fn create_neighbour_links_system(
                 let mut neighbours = 0;
                 for (i, x_min) in x_negative.iter().enumerate() {
                     if x_min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                        span.neighbours[0] = NeighbourConnection::Connected { index: i as u16 };
+                        span.neighbours[0] = Some(i as u16);
                         neighbours += 1;
                         break;
                     }
@@ -495,7 +495,7 @@ pub(super) fn create_neighbour_links_system(
 
                 for (i, z_min) in z_positive.iter().enumerate() {
                     if z_min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                        span.neighbours[1] = NeighbourConnection::Connected { index: i as u16 };
+                        span.neighbours[1] = Some(i as u16);
                         neighbours += 1;
                         break;
                     }
@@ -503,7 +503,7 @@ pub(super) fn create_neighbour_links_system(
 
                 for (i, x_min) in x_positive.iter().enumerate() {
                     if x_min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                        span.neighbours[2] = NeighbourConnection::Connected { index: i as u16 };
+                        span.neighbours[2] = Some(i as u16);
                         neighbours += 1;
                         break;
                     }
@@ -511,7 +511,7 @@ pub(super) fn create_neighbour_links_system(
 
                 for (i, z_min) in z_negative.iter().enumerate() {
                     if z_min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                        span.neighbours[3] = NeighbourConnection::Connected { index: i as u16 };
+                        span.neighbours[3] = Some(i as u16);
                         neighbours += 1;
                         break;
                     }
@@ -552,7 +552,7 @@ pub(super) fn create_distance_field_system(
                     let span = &tile.cells[i].spans[span_i];
                     let mut distance = tile.distances[span.tile_index];
 
-                    if let NeighbourConnection::Connected { index } = span.neighbours[0] {
+                    if let Some(index) = span.neighbours[0] {
                         // (-1, 0)
                         let (other_span, other_cell_index) =
                             cell_move_back_column(tile, i, index.into());
@@ -563,7 +563,7 @@ pub(super) fn create_distance_field_system(
                         }
 
                         // (-1, -1)
-                        if let NeighbourConnection::Connected { index } = other_span.neighbours[3] {
+                        if let Some(index) = other_span.neighbours[3] {
                             let (other_span, _) = cell_move_back_row(
                                 tile,
                                 &nav_mesh_settings,
@@ -578,7 +578,7 @@ pub(super) fn create_distance_field_system(
                         }
                     }
 
-                    if let NeighbourConnection::Connected { index } = span.neighbours[3] {
+                    if let Some(index) = span.neighbours[3] {
                         // (0, -1)
                         let (other_span, other_cell_index) =
                             cell_move_back_row(tile, &nav_mesh_settings, i, index.into());
@@ -589,7 +589,7 @@ pub(super) fn create_distance_field_system(
                         }
 
                         // (1, -1)
-                        if let NeighbourConnection::Connected { index } = other_span.neighbours[2] {
+                        if let Some(index) = other_span.neighbours[2] {
                             let (other_span, _) =
                                 cell_move_forward_column(tile, other_cell_index, index.into());
 
@@ -629,7 +629,7 @@ pub(super) fn create_distance_field_system(
                     let span = &tile.cells[i].spans[span_i];
                     let mut distance = tile.distances[span.tile_index];
 
-                    if let NeighbourConnection::Connected { index, .. } = span.neighbours[2] {
+                    if let Some(index) = span.neighbours[2] {
                         // (1, 0)
                         let (other_span, other_cell_index) =
                             cell_move_forward_column(tile, i, index.into());
@@ -640,7 +640,7 @@ pub(super) fn create_distance_field_system(
                         }
 
                         // (1, 1)
-                        if let NeighbourConnection::Connected { index, .. } =
+                        if let Some(index) =
                             other_span.neighbours[1]
                         {
                             let (other_span, _) = cell_move_forward_row(
@@ -657,7 +657,7 @@ pub(super) fn create_distance_field_system(
                         }
                     }
 
-                    if let NeighbourConnection::Connected { index, .. } = span.neighbours[1] {
+                    if let Some(index) = span.neighbours[1] {
                         // (0, 1)
                         let (other_span, other_cell_index) =
                             cell_move_forward_row(tile, &nav_mesh_settings, i, index as usize);
@@ -668,7 +668,7 @@ pub(super) fn create_distance_field_system(
                         }
 
                         // (-1, 1)
-                        if let NeighbourConnection::Connected { index, .. } =
+                        if let Some(index) =
                             other_span.neighbours[0]
                         {
                             let (other_span, _) =
@@ -719,7 +719,7 @@ pub(super) fn create_distance_field_system(
                             distance = threshold;
                         } else {
                             for dir in 0..4 {
-                                let NeighbourConnection::Connected { index } = span.neighbours[dir] else {
+                                let Some(index) = span.neighbours[dir] else {
                                     d += distance * 2;
                                     continue;
                                 };
@@ -733,7 +733,7 @@ pub(super) fn create_distance_field_system(
                                 d += tile.distances[other_span.tile_index];
 
                                 let next_dir = (dir + 1) % 4;
-                                let NeighbourConnection::Connected { index, .. } = span.neighbours[next_dir] else {
+                                let Some(index) = span.neighbours[next_dir] else {
                                     d += distance;
                                     continue;
                                 };

@@ -5,7 +5,7 @@ use bevy::{
     utils::HashMap,
 };
 
-use crate::{get_cell_offset, NeighbourConnection};
+use crate::get_cell_offset;
 
 use super::{
     cell_move_back_column, cell_move_back_row, cell_move_forward_column, cell_move_forward_row,
@@ -67,7 +67,7 @@ pub(super) fn build_contours_system(
 
                 for dir in 0..4 {
                     let mut other_region = 0;
-                    if let NeighbourConnection::Connected { index } = span.neighbours[dir] {
+                    if let Some(index) = span.neighbours[dir] {
                         let other_span = &tile.cells[(cell_index as isize
                             + get_cell_offset(&nav_mesh_settings, dir))
                             as usize]
@@ -413,7 +413,7 @@ fn walk_contour(
                 get_corner_height(cell_index, span, tile, nav_mesh_settings, dir);
 
             let mut bordering_region = 0u32;
-            if let NeighbourConnection::Connected { index } = span.neighbours[dir as usize] {
+            if let Some(index) = span.neighbours[dir as usize] {
                 let other_span = &tile.cells[(cell_index as isize
                     + get_cell_offset(nav_mesh_settings, dir.into()))
                     as usize]
@@ -441,7 +441,7 @@ fn walk_contour(
             dir = (dir + 1) & 0x3; // Rotate clock-wise.
         } else {
             // Direction is connected.
-            if let NeighbourConnection::Connected { index } = span.neighbours[dir as usize] {
+            if let Some(index) = span.neighbours[dir as usize] {
                 span_index = index.into();
             } else {
                 panic!("Incorrectly flagged boundry!");
@@ -472,7 +472,7 @@ fn get_corner_height(
 
     regions[0] = span.region;
 
-    if let NeighbourConnection::Connected { index } = span.neighbours[dir as usize] {
+    if let Some(index) = span.neighbours[dir as usize] {
         let (other_span, other_cell_index) = match dir {
             0 => cell_move_back_column(tile, cell_index, index.into()),
             1 => cell_move_forward_row(tile, nav_mesh_settings, cell_index, index.into()),
@@ -484,7 +484,7 @@ fn get_corner_height(
         height = height.max(other_span.min);
         regions[1] = other_span.region;
 
-        if let NeighbourConnection::Connected { index, .. } =
+        if let Some(index) =
             other_span.neighbours[next_dir as usize]
         {
             let (other_span, _) = match next_dir {
@@ -500,7 +500,7 @@ fn get_corner_height(
         }
     }
 
-    if let NeighbourConnection::Connected { index } = span.neighbours[next_dir as usize] {
+    if let Some(index) = span.neighbours[next_dir as usize] {
         let (other_span, other_cell_index) = match next_dir {
             0 => cell_move_back_column(tile, cell_index, index.into()),
             1 => cell_move_forward_row(tile, nav_mesh_settings, cell_index, index.into()),
@@ -512,7 +512,7 @@ fn get_corner_height(
         height = height.max(other_span.min);
         regions[3] = other_span.region;
 
-        if let NeighbourConnection::Connected { index } = other_span.neighbours[dir as usize] {
+        if let Some(index) = other_span.neighbours[dir as usize] {
             let (other_span, _) = match dir {
                 0 => cell_move_back_column(tile, other_cell_index, index.into()),
                 1 => cell_move_forward_row(tile, nav_mesh_settings, other_cell_index, index.into()),

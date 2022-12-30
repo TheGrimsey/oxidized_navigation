@@ -1,7 +1,7 @@
-use bevy::prelude::{info, Res, ResMut};
+use bevy::prelude::{Res, ResMut};
 
 use super::{
-    get_cell_offset, DirtyTiles, NavMeshSettings, NeighbourConnection, OpenSpan, OpenTile,
+    get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,
     TilesOpen,
 };
 
@@ -187,7 +187,7 @@ fn expand_regions(
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
 
             for dir in 0..4 {
-                let NeighbourConnection::Connected { index } = span.neighbours[dir] else {
+                let Some(index) = span.neighbours[dir] else {
                     continue;
                 };
 
@@ -271,7 +271,7 @@ fn expand_regions_until_end(
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
 
             for dir in 0..4 {
-                let NeighbourConnection::Connected { index } = span.neighbours[dir] else {
+                let Some(index) = span.neighbours[dir] else {
                     continue;
                 };
 
@@ -676,7 +676,7 @@ fn walk_contour(
 
     let span = &tile.cells[cell_index].spans[span_index];
     let mut current_region = 0;
-    if let NeighbourConnection::Connected { index } = span.neighbours[dir] {
+    if let Some(index) = span.neighbours[dir] {
         let other_span = &tile.cells
             [(cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
             .spans[index as usize];
@@ -696,7 +696,7 @@ fn walk_contour(
             source_regions,
         ) {
             let mut r = 0;
-            if let NeighbourConnection::Connected { index } = span.neighbours[dir] {
+            if let Some(index) = span.neighbours[dir] {
                 let other_span = &tile.cells
                     [(cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
                     .spans[index as usize];
@@ -711,7 +711,7 @@ fn walk_contour(
             dir = (dir + 1) & 0x3; // Rotate clock-wise.
         } else {
             // Direction is connected.
-            if let NeighbourConnection::Connected { index } = span.neighbours[dir] {
+            if let Some(index) = span.neighbours[dir] {
                 span_index = index.into();
             } else {
                 return;
@@ -751,7 +751,7 @@ fn is_solid_edge(
     dir: usize,
     source_region: &[u16],
 ) -> bool {
-    if let NeighbourConnection::Connected { index } = span.neighbours[dir] {
+    if let Some(index) = span.neighbours[dir] {
         let other_span = &tile.cells
             [(c_i as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
             .spans[index as usize];
@@ -799,7 +799,7 @@ fn flood_region(
 
         let mut adjecant_region = 0;
         for dir in 0..4 {
-            let NeighbourConnection::Connected { index } = span.neighbours[dir] else {
+            let Some(index) = span.neighbours[dir] else {
                 continue;
             };
 
@@ -814,7 +814,7 @@ fn flood_region(
             }
 
             let next_dir = (dir + 1) & 0x3;
-            if let NeighbourConnection::Connected { index } = span.neighbours[next_dir] {
+            if let Some(index) = span.neighbours[next_dir] {
                 let other_span = &tile.cells[(other_cell_index as isize
                     + get_cell_offset(nav_mesh_settings, next_dir))
                     as usize]
@@ -836,7 +836,7 @@ fn flood_region(
         count += 1;
 
         for dir in 0..4 {
-            let NeighbourConnection::Connected { index } = span.neighbours[dir] else {
+            let Some(index) = span.neighbours[dir] else {
                 continue;
             };
 

@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use bevy::{
     prelude::{Resource, UVec2, Vec2, Vec3},
     utils::HashMap,
@@ -43,6 +45,11 @@ pub(super) struct NavMeshTile {
 }
 
 #[derive(Default, Resource)]
+pub(super) struct NavMeshTiles {
+    pub(super) nav_mesh: Arc<RwLock<NavMesh>>
+}
+
+#[derive(Default)]
 pub(super) struct NavMesh {
     pub(super) tiles: HashMap<UVec2, NavMeshTile>,
 }
@@ -357,7 +364,6 @@ fn find_connecting_polygons_in_tile(
     let mut connection_area = [Vec2::ZERO; MAX_CONNECTING_POLYGONS];
     let mut count = 0;
 
-    // TODO: Calculate line min & max as well as overall position.
     let (in_min, in_max) = calculate_slab_end_points(vertex_a, vertex_b, side);
     let in_pos = get_slab_position(vertex_a, side);
 

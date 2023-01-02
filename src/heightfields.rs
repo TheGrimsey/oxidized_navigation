@@ -427,7 +427,6 @@ pub(super) fn create_neighbour_links_system(
             continue;
         }
 
-        // Then we process neighbouring ones.
         let mut distance_index = 0;
 
         // Work around borrow checker :)
@@ -437,20 +436,21 @@ pub(super) fn create_neighbour_links_system(
         let mut z_negative = Vec::with_capacity(3);
 
         for i in 0..cells_count {
-            let row = i / nav_mesh_settings.tile_width as usize;
-            let column = i % nav_mesh_settings.tile_width as usize;
-
-            let x_positive_contained = column < (nav_mesh_settings.tile_width - 1).into();
-            let x_negative_contained = column > 0;
-            let z_positive_contained = row < (nav_mesh_settings.tile_width - 1).into();
-            let z_negative_contained = row > 0;
-
             {
                 let tile = open_tiles.map.get(tile_coord).unwrap();
 
                 if tile.cells[i].spans.is_empty() {
                     continue;
                 }
+
+                let row = i / nav_mesh_settings.tile_width as usize;
+                let column = i % nav_mesh_settings.tile_width as usize;
+    
+                let x_positive_contained = column < (nav_mesh_settings.tile_width - 1).into();
+                let x_negative_contained = column > 0;
+                let z_positive_contained = row < (nav_mesh_settings.tile_width - 1).into();
+                let z_negative_contained = row > 0;
+    
                 x_positive.clear();
                 x_negative.clear();
                 z_positive.clear();

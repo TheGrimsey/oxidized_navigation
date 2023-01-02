@@ -1,4 +1,4 @@
-use bevy::prelude::{info, IntoSystemDescriptor};
+use bevy::prelude::{info, IntoSystemDescriptor, Vec3};
 use bevy::{
     ecs::system::Resource,
     prelude::{
@@ -26,6 +26,7 @@ mod heightfields;
 mod mesher;
 mod regions;
 mod tiles;
+mod query;
 
 pub struct OxidizedNavigationPlugin;
 impl Plugin for OxidizedNavigationPlugin {
@@ -234,11 +235,10 @@ fn insert_updated_tile_system(
             nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
         }
 
-        for (coord, tile) in nav_mesh.tiles.iter() {
-            info!(
-                "Tile ({},{}): Polygons: {:?}",
-                coord.x, coord.y, tile.polygons
-            );
+        if let Some((tile, polygon, position)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, Vec3::new(5.0, 1.0, 5.0), 10.0) {
+            info!("Closest position: T{},{}, P{}, Pos: {},{},{}", tile.x, tile.y, polygon, position.x, position.y, position.z);
+        } else {
+            info!("Can't find a position :(");
         }
     }
 }

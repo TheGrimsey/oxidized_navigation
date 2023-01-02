@@ -2,12 +2,12 @@ use std::sync::{Arc, RwLock};
 
 use bevy::{
     prelude::{Resource, UVec2, Vec2, Vec3},
-    utils::HashMap,
+    utils::HashMap, math::Vec3Swizzles,
 };
 use smallvec::SmallVec;
 
 use crate::{
-    mesher::{EdgeConnection, EdgeConnectionDirection, VERTICES_PER_POLYGON},
+    mesher::{EdgeConnection, EdgeConnectionDirection, VERTICES_IN_TRIANGLE},
     NavMeshSettings,
 };
 
@@ -30,8 +30,8 @@ pub enum Link {
 
 #[derive(Debug)]
 pub(super) struct Polygon {
-    indices: [u32; VERTICES_PER_POLYGON],
-    links: SmallVec<[Link; VERTICES_PER_POLYGON * 2]>, // This becomes a mess memory wise with a ton of different small objects around.
+    indices: [u32; VERTICES_IN_TRIANGLE],
+    links: SmallVec<[Link; VERTICES_IN_TRIANGLE * 2]>, // This becomes a mess memory wise with a ton of different small objects around.
 }
 
 /*
@@ -41,7 +41,7 @@ pub(super) struct NavMeshTile {
     salt: u32,
     vertices: Vec<Vec3>,
     pub(super) polygons: Vec<Polygon>,
-    edges: Vec<[EdgeConnection; VERTICES_PER_POLYGON]>,
+    edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
 }
 
 #[derive(Default, Resource)]
@@ -179,6 +179,175 @@ impl NavMesh {
 
         self.tiles.insert(tile_coord, tile);
     }
+
+    pub fn find_closest_polygon_in_box(
+        &self,
+        nav_mesh_settings: &NavMeshSettings,
+        center: Vec3,
+        half_extents: f32
+    ) -> Option<(UVec2, usize, Vec3)> {
+        let min = center - half_extents;
+        let max = center + half_extents;
+
+        let min_tile = nav_mesh_settings.get_tile_position(min.xz());
+        let max_tile = nav_mesh_settings.get_tile_position(max.xz());
+
+        let mut out_polygon = None;
+        let mut out_distance = f32::INFINITY;
+        for x in min_tile.x..=max_tile.x {
+            for y in min_tile.y..=max_tile.y {
+                let tile_coords = UVec2::new(x, y);
+                if let Some(tile) = self.tiles.get(&tile_coords) {
+                    for (poly_i, polygon) in tile.polygons.iter().enumerate() {
+                        let closest_point = get_closest_point_in_polygon(tile, polygon, center);
+                        let closest_distance = closest_point.distance_squared(center);
+
+                        if closest_distance < out_distance {
+                            out_distance = closest_distance;
+                            out_polygon = Some((tile_coords, poly_i, closest_point));
+                        }
+                    }
+                }
+            }
+        }
+
+        out_polygon
+    }
+}
+
+fn get_closest_point_in_polygon(
+    tile: &NavMeshTile,
+    polygon: &Polygon,
+    position: Vec3
+) -> Vec3 {
+    let vertices = polygon.indices.map(|index| tile.vertices[index as usize]);
+
+    if let Some(height) = get_height_in_triangle(&vertices, position) {
+        return Vec3::new(position.x, height, position.z);
+    }
+    
+    
+    closest_point_on_edges(&vertices, position)
+}
+
+fn get_height_in_triangle(
+    vertices: &[Vec3; VERTICES_IN_TRIANGLE],
+    position: Vec3,
+) -> Option<f32> {
+    if !in_polygon(vertices, position) {
+        return None;
+    }
+
+    if let Some(height) = closest_height_in_triangle(vertices[0], vertices[1], vertices[2], position) {
+        return Some(height);
+    }
+
+    // We only hit this if we are ON an edge. Unlikely to happen.
+    let closest = closest_point_on_edges(vertices, position);
+
+    Some(closest.y)
+}
+
+fn closest_height_in_triangle(
+    a: Vec3,
+    b: Vec3,
+    c: Vec3,
+    position: Vec3,
+) -> Option<f32> {
+    let v0 = c - a;
+    let v1 = b - a;
+    let v2 = position - a;
+
+    let mut denom = v0.x * v1.z - v0.z * v1.x;
+    const EPS: f32 = 0.000001;
+    if denom.abs() < EPS {
+        return None;
+    }
+
+    let mut u = v1.z * v2.x - v1.x * v2.z;
+    let mut v = v0.x * v2.z - v0.z * v2.x;
+
+    if denom < 0.0 {
+        denom = -denom;
+        u = -u;
+        v = -v;
+    }
+
+    if u >= 0.0 && v >= 0.0 && (u + v) <= denom {
+        return Some(a.y + (v0.y * u + v1.y * v) / denom);
+    }
+
+    None
+}
+
+fn closest_point_on_edges(
+    vertices: &[Vec3; VERTICES_IN_TRIANGLE],
+    position: Vec3,
+) -> Vec3 {
+    let mut d_min = f32::INFINITY;
+    let mut t_min = 0.0;
+
+    let mut edge_min = Vec3::ZERO;
+    let mut edge_max = Vec3::ZERO;
+
+    for i in 0..vertices.len() {
+        let prev = (vertices.len() + i - 1) % vertices.len();
+
+        let (d, t) = distance_point_to_segment_2d(position, vertices[prev], vertices[i]);
+        if d < d_min {
+            d_min = d;
+            t_min = t;
+            edge_min = vertices[prev];
+            edge_max = vertices[i];
+        }
+    }
+
+    edge_min.lerp(edge_max, t_min)
+}
+
+fn distance_point_to_segment_2d(
+    point: Vec3,
+    seg_a: Vec3,
+    seg_b: Vec3,
+) -> (f32, f32) {
+    let bax = seg_b.x - seg_a.x;
+    let baz = seg_b.z - seg_a.z;
+    
+    let dx = point.x - seg_a.x;
+    let dz = point.z - seg_a.z;
+    
+    let d = bax*bax + baz*baz;
+    let mut t = bax*dx + baz*dz;
+    if d > 0.0 {
+        t /= d;
+    }
+    t = t.clamp(0.0, 1.0);
+
+    let dx = seg_a.x + t * bax - point.x;
+    let dz = seg_a.z + t * baz - point.z;
+
+    (dx*dx + dz*dz, t)
+}
+
+fn in_polygon(
+    vertices: &[Vec3; VERTICES_IN_TRIANGLE],
+    position: Vec3,
+) -> bool {
+    let mut inside = false;
+
+    for i in 0..vertices.len() {
+        let prev = (vertices.len() + i - 1) % vertices.len();
+
+        let a = vertices[i];
+        let b = vertices[prev];
+        if ((a.z > position.z) != (b.z > position.z)) && 
+            (position.x < (b.x - a.x) * (position.z - a.z) / (b.z - a.z) + a.x) {
+            
+            inside = !inside;
+        }
+    }
+
+    inside
 }
 
 fn connect_external_links(

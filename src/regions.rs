@@ -1,4 +1,4 @@
-use bevy::prelude::{Res, ResMut};
+use bevy::prelude::{Res, ResMut, info};
 
 use super::{
     get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,
@@ -52,7 +52,8 @@ pub(super) fn build_regions_system(
                 let prev_stack = (stack_id - 1) as usize;
                 let next_stack = stack_id as usize;
                 for i in 0..level_stacks[prev_stack].len() {
-                    if regions[level_stacks[prev_stack][i].index as usize] != 0 {
+                    let index = level_stacks[prev_stack][i].index;
+                    if index < 0 || regions[index as usize] != 0 {
                         continue;
                     }
 

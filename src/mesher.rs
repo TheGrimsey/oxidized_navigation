@@ -10,8 +10,8 @@ use super::{
 #[derive(Default)]
 pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
-    pub polygons: Vec<[u32; VERTICES_PER_POLYGON]>, //
-    pub edges: Vec<[EdgeConnection; VERTICES_PER_POLYGON]>, // For each polygon edge points to a polygon (if any) that shares the edge.
+    pub polygons: Vec<[u32; VERTICES_IN_TRIANGLE]>, //
+    pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
 }
 
 #[derive(Default, Resource)]
@@ -20,7 +20,7 @@ pub(super) struct TilePolyMesh {
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
-pub const VERTICES_PER_POLYGON: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
+pub const VERTICES_IN_TRIANGLE: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
 pub(super) fn build_poly_mesh_system(
     nav_mesh_settings: Res<NavMeshSettings>,
@@ -58,7 +58,7 @@ pub(super) fn build_poly_mesh_system(
 
         let mut indices = Vec::with_capacity(max_verts_per_contour);
         let mut triangles = Vec::with_capacity(max_verts_per_contour * 3);
-        let mut polygons = Vec::with_capacity((max_verts_per_contour + 1) * VERTICES_PER_POLYGON);
+        let mut polygons = Vec::with_capacity((max_verts_per_contour + 1) * VERTICES_IN_TRIANGLE);
 
         for contour in &contour_set.contours {
             if contour.vertices.len() < 3 {
@@ -185,11 +185,11 @@ struct Edge {
 }
 
 fn build_mesh_adjacency(
-    polygons: &[[u32; VERTICES_PER_POLYGON]],
+    polygons: &[[u32; VERTICES_IN_TRIANGLE]],
     vertex_count: usize,
-    in_edges: &mut Vec<[EdgeConnection; VERTICES_PER_POLYGON]>,
+    in_edges: &mut Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
 ) {
-    let max_edge_count = polygons.len() * VERTICES_PER_POLYGON;
+    let max_edge_count = polygons.len() * VERTICES_IN_TRIANGLE;
 
     let mut first_edge = vec![None; vertex_count];
     let mut next_edge = vec![None; max_edge_count];
@@ -231,7 +231,7 @@ fn build_mesh_adjacency(
     }
 
     in_edges.clear();
-    in_edges.resize(polygons.len(), [EdgeConnection::None; VERTICES_PER_POLYGON]);
+    in_edges.resize(polygons.len(), [EdgeConnection::None; VERTICES_IN_TRIANGLE]);
     for edge in edges.iter() {
         if edge.polygon[0] != edge.polygon[1] {
             let polygon_one = edge.polygon[0];

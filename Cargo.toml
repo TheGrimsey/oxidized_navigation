@@ -1,6 +1,6 @@
 [package]
 name = "oxidized_navigation"
-description = "An experimental Nav-Mesh generation plugin based on Recast's Navmesh generation to Bevy Engine in Rust."
+description = "A Nav-Mesh generation plugin for Bevy Engine in Rust."
 version = "0.1.0"
 edition = "2021"
 

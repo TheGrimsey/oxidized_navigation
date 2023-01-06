@@ -1,18 +1,15 @@
-use bevy::prelude::{info, IntoSystemDescriptor, Vec3, error};
+use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel};
 use bevy::{
     ecs::system::Resource,
     prelude::{
-        App, Changed, Component, CoreStage, Entity, GlobalTransform, IVec4, Plugin, Query, Res,
+        App, Changed, Component, Entity, GlobalTransform, IVec4, Plugin, Query, Res,
         ResMut, UVec2, UVec4, Vec2,
     },
     utils::{HashMap, HashSet},
 };
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
-use query::find_path;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_data_from_poly_mesh, NavMeshTiles};
-
-use crate::query::perform_string_pulling_on_path;
 
 use self::{
     contour::{build_contours_system, TileContours},
@@ -28,8 +25,11 @@ mod contour;
 mod heightfields;
 mod mesher;
 mod regions;
-mod tiles;
-mod query;
+pub mod tiles;
+pub mod query;
+
+#[derive(SystemLabel)]
+pub struct OxidizedGeneration;
 
 pub struct OxidizedNavigationPlugin;
 impl Plugin for OxidizedNavigationPlugin {
@@ -42,19 +42,20 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(TilePolyMesh::default())
             .insert_resource(NavMeshTiles::default());
 
-        app.add_system(update_navmesh_affectors_system)
-            .add_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
-            .add_system(construct_open_heightfields_system.after(rebuild_heightfields_system))
-            .add_system(create_neighbour_links_system.after(construct_open_heightfields_system))
-            .add_system(create_distance_field_system.after(create_neighbour_links_system))
-            .add_system(build_regions_system.after(create_distance_field_system))
-            .add_system(build_contours_system.after(build_regions_system))
-            .add_system(build_poly_mesh_system.after(build_contours_system))
-            .add_system_to_stage(CoreStage::PostUpdate, insert_updated_tile_system)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                clear_dirty_tiles_system.after(insert_updated_tile_system),
-            );
+        app.add_system_set(SystemSet::new()
+            .label(OxidizedGeneration)
+            .with_system(update_navmesh_affectors_system)
+            .with_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
+            .with_system(construct_open_heightfields_system.after(rebuild_heightfields_system))
+            .with_system(create_neighbour_links_system.after(construct_open_heightfields_system))
+            .with_system(create_distance_field_system.after(create_neighbour_links_system))
+            .with_system(build_regions_system.after(create_distance_field_system))
+            .with_system(build_contours_system.after(build_regions_system))
+            .with_system(build_poly_mesh_system.after(build_contours_system))
+
+            .with_system(insert_updated_tile_system.after(build_poly_mesh_system))
+            .with_system(clear_dirty_tiles_system.after(insert_updated_tile_system))
+        );
     }
 }
 
@@ -227,27 +228,15 @@ fn insert_updated_tile_system(
     nav_mesh: ResMut<NavMeshTiles>,
 ) {
     if !dirty_tiles.0.is_empty() {
-        {
-            let mut nav_mesh = nav_mesh.nav_mesh.write().unwrap();
-            for tile in dirty_tiles.0.iter() {
-                let Some(poly_mesh) = poly_meshes.map.get(tile) else {
-                    continue;
-                };
-                let nav_mesh_tile =
-                    create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
-    
-                nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
-            }
-        }
-
-        if let Some(path) = find_path(nav_mesh.nav_mesh.clone(), nav_mesh_settings.clone(), Vec3::new(5.0, 2.0, 5.0), Vec3::new(-15.0, 2.0, -15.0)) {
-            info!("Path found: {:?}", path);
-            match perform_string_pulling_on_path(nav_mesh.nav_mesh.clone(), Vec3::new(5.0, 2.0, 5.0), Vec3::new(-15.0, 2.0, -15.0), &path) {
-                Ok(string_path) => info!("String path: {:?}", string_path),
-                Err(error) => error!("Error with string path: {:?}", error),
+        let mut nav_mesh = nav_mesh.nav_mesh.write().unwrap();
+        for tile in dirty_tiles.0.iter() {
+            let Some(poly_mesh) = poly_meshes.map.get(tile) else {
+                continue;
             };
-        } else {
-            info!("No path.. :(");
+            let nav_mesh_tile =
+                create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
+    
+            nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
         }
     }
 }

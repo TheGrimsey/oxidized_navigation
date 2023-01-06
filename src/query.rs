@@ -24,30 +24,36 @@ struct NavMeshNode {
     parent: Option<usize>
 }
 
+pub enum FindPathError {
+    NavMeshUnavailable,
+    NoValidStartPolygon,
+    NoValidEndPolygon,
+}
+
 pub fn find_path(
     nav_mesh: Arc<RwLock<NavMesh>>,
     nav_mesh_settings: NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
-) -> Option<Vec<(UVec2, u16)>> {
+) -> Result<Vec<(UVec2, u16)>, FindPathError> {
     let Ok(nav_mesh) = nav_mesh.read() else {
-        return None;
+        return Err(FindPathError::NavMeshUnavailable);
     };
 
     let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, start_pos, 5.0) else {
-        return None;
+        return Err(FindPathError::NoValidStartPolygon);
     };
 
     let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, end_pos, 5.0) else {
-        return None;
+        return Err(FindPathError::NoValidEndPolygon);
     };
 
     if start_tile == end_tile && start_poly == end_poly {
-        return None;
+        return Ok(vec![(start_tile, start_poly)]);
     }
 
-    let mut nodes = Vec::with_capacity(20);
-    let mut open_list = Vec::with_capacity(5);
+    let mut nodes = Vec::with_capacity(30);
+    let mut open_list = Vec::with_capacity(8);
 
     {
         let start_node = NavMeshNode {
@@ -211,7 +217,7 @@ pub fn find_path(
 
     path.reverse();
 
-    Some(path)
+    Ok(path)
 }
 
 #[derive(Debug)]

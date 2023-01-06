@@ -30,27 +30,27 @@ pub enum Link {
 
 #[derive(Debug)]
 pub(super) struct Polygon {
-    indices: [u32; VERTICES_IN_TRIANGLE],
-    links: SmallVec<[Link; VERTICES_IN_TRIANGLE * 2]>, // This becomes a mess memory wise with a ton of different small objects around.
+    pub(super) indices: [u32; VERTICES_IN_TRIANGLE],
+    pub(super) links: SmallVec<[Link; VERTICES_IN_TRIANGLE * 2]>, // This becomes a mess memory wise with a ton of different small objects around.
 }
 
 /*
 *   Polygons make up a form of graph, linking to other polygons (which could be on another mesh)
 */
-pub(super) struct NavMeshTile {
+pub struct NavMeshTile {
     salt: u32,
-    vertices: Vec<Vec3>,
+    pub(super) vertices: Vec<Vec3>,
     pub(super) polygons: Vec<Polygon>,
     edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
 }
 
 #[derive(Default, Resource)]
-pub(super) struct NavMeshTiles {
-    pub(super) nav_mesh: Arc<RwLock<NavMesh>>
+pub struct NavMeshTiles {
+    pub nav_mesh: Arc<RwLock<NavMesh>>
 }
 
 #[derive(Default)]
-pub(super) struct NavMesh {
+pub struct NavMesh {
     pub(super) tiles: HashMap<UVec2, NavMeshTile>,
 }
 
@@ -185,7 +185,7 @@ impl NavMesh {
         nav_mesh_settings: &NavMeshSettings,
         center: Vec3,
         half_extents: f32
-    ) -> Option<(UVec2, usize, Vec3)> {
+    ) -> Option<(UVec2, u16, Vec3)> {
         let min = center - half_extents;
         let max = center + half_extents;
 
@@ -204,7 +204,7 @@ impl NavMesh {
 
                         if closest_distance < out_distance {
                             out_distance = closest_distance;
-                            out_polygon = Some((tile_coords, poly_i, closest_point));
+                            out_polygon = Some((tile_coords, poly_i as u16, closest_point));
                         }
                     }
                 }
@@ -215,7 +215,7 @@ impl NavMesh {
     }
 }
 
-fn get_closest_point_in_polygon(
+pub(super) fn get_closest_point_in_polygon(
     tile: &NavMeshTile,
     polygon: &Polygon,
     position: Vec3
@@ -310,21 +310,21 @@ fn distance_point_to_segment_2d(
     seg_a: Vec3,
     seg_b: Vec3,
 ) -> (f32, f32) {
-    let bax = seg_b.x - seg_a.x;
-    let baz = seg_b.z - seg_a.z;
+    let ba_x = seg_b.x - seg_a.x;
+    let ba_z = seg_b.z - seg_a.z;
     
     let dx = point.x - seg_a.x;
     let dz = point.z - seg_a.z;
     
-    let d = bax*bax + baz*baz;
-    let mut t = bax*dx + baz*dz;
+    let d = ba_x*ba_x + ba_z*ba_z;
+    let mut t = ba_x*dx + ba_z*dz;
     if d > 0.0 {
         t /= d;
     }
     t = t.clamp(0.0, 1.0);
 
-    let dx = seg_a.x + t * bax - point.x;
-    let dz = seg_a.z + t * baz - point.z;
+    let dx = seg_a.x + t * ba_x - point.x;
+    let dz = seg_a.z + t * ba_z - point.z;
 
     (dx*dx + dz*dz, t)
 }
@@ -400,28 +400,24 @@ fn connect_external_links(
                 let (neighbour_polygon, edge) = connected_polys[i];
                 let area = connection_areas[i];
 
-                let (bound_min, bound_max) = if neighbour_to_self_direction
+                let (mut bound_min, mut bound_max) = if neighbour_to_self_direction
                     == EdgeConnectionDirection::XNegative
                     || neighbour_to_self_direction == EdgeConnectionDirection::XPositive
                 {
-                    let mut min = (area.x - vertex_a.z) / (vertex_b.z - vertex_a.z);
-                    let mut max = (area.y - vertex_a.z) / (vertex_b.z - vertex_a.z);
-
-                    if min > max {
-                        std::mem::swap(&mut min, &mut max);
-                    }
+                    let min = (area.x - vertex_a.z) / (vertex_b.z - vertex_a.z);
+                    let max = (area.y - vertex_a.z) / (vertex_b.z - vertex_a.z);
 
                     (min, max)
                 } else {
-                    let mut min = (area.x - vertex_a.x) / (vertex_b.x - vertex_a.x);
-                    let mut max = (area.y - vertex_a.x) / (vertex_b.x - vertex_a.x);
-
-                    if min > max {
-                        std::mem::swap(&mut min, &mut max);
-                    }
+                    let min = (area.x - vertex_a.x) / (vertex_b.x - vertex_a.x);
+                    let max = (area.y - vertex_a.x) / (vertex_b.x - vertex_a.x);
 
                     (min, max)
                 };
+
+                if bound_min > bound_max {
+                    std::mem::swap(&mut bound_min, &mut bound_max);
+                }
 
                 let min_byte = (bound_min.clamp(0.0, 1.0) * 255.0).round() as u8;
                 let max_byte = (bound_max.clamp(0.0, 1.0) * 255.0).round() as u8;

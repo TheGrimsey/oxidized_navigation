@@ -1,4 +1,4 @@
-use bevy::prelude::{info, IntoSystemDescriptor, Vec3};
+use bevy::prelude::{info, IntoSystemDescriptor, Vec3, error};
 use bevy::{
     ecs::system::Resource,
     prelude::{
@@ -8,8 +8,11 @@ use bevy::{
     utils::{HashMap, HashSet},
 };
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
+use query::find_path;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_data_from_poly_mesh, NavMeshTiles};
+
+use crate::query::perform_string_pulling_on_path;
 
 use self::{
     contour::{build_contours_system, TileContours},
@@ -106,7 +109,7 @@ struct TileAffectors {
 #[derive(Default, Resource)]
 struct DirtyTiles(HashSet<UVec2>);
 
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct NavMeshSettings {
     pub cell_width: f32,  // Recast recommends having this be 1/2 of character radius.
     pub cell_height: f32, // Recast recommends having this be 1/2 of cell_width.
@@ -224,21 +227,27 @@ fn insert_updated_tile_system(
     nav_mesh: ResMut<NavMeshTiles>,
 ) {
     if !dirty_tiles.0.is_empty() {
-        let mut nav_mesh = nav_mesh.nav_mesh.write().unwrap();
-        for tile in dirty_tiles.0.iter() {
-            let Some(poly_mesh) = poly_meshes.map.get(tile) else {
-                continue;
-            };
-            let nav_mesh_tile =
-                create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
-
-            nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
+        {
+            let mut nav_mesh = nav_mesh.nav_mesh.write().unwrap();
+            for tile in dirty_tiles.0.iter() {
+                let Some(poly_mesh) = poly_meshes.map.get(tile) else {
+                    continue;
+                };
+                let nav_mesh_tile =
+                    create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
+    
+                nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
+            }
         }
 
-        if let Some((tile, polygon, position)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, Vec3::new(5.0, 1.0, 5.0), 10.0) {
-            info!("Closest position: T{},{}, P{}, Pos: {},{},{}", tile.x, tile.y, polygon, position.x, position.y, position.z);
+        if let Some(path) = find_path(nav_mesh.nav_mesh.clone(), nav_mesh_settings.clone(), Vec3::new(5.0, 2.0, 5.0), Vec3::new(-15.0, 2.0, -15.0)) {
+            info!("Path found: {:?}", path);
+            match perform_string_pulling_on_path(nav_mesh.nav_mesh.clone(), Vec3::new(5.0, 2.0, 5.0), Vec3::new(-15.0, 2.0, -15.0), &path) {
+                Ok(string_path) => info!("String path: {:?}", string_path),
+                Err(error) => error!("Error with string path: {:?}", error),
+            };
         } else {
-            info!("Can't find a position :(");
+            info!("No path.. :(");
         }
     }
 }

@@ -166,6 +166,16 @@ pub enum EdgeConnectionDirection {
     XPositive,
     ZNegative,
 }
+impl EdgeConnectionDirection {
+    pub fn offset(&self, coordinate: UVec2) -> UVec2 {
+        match self {
+            EdgeConnectionDirection::XNegative => coordinate - UVec2::X,
+            EdgeConnectionDirection::ZPositive => coordinate + UVec2::Y,
+            EdgeConnectionDirection::XPositive => coordinate + UVec2::X,
+            EdgeConnectionDirection::ZNegative => coordinate - UVec2::Y,
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub enum EdgeConnection {
@@ -424,8 +434,8 @@ fn diagonalie(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
     let diagonal_one = vertices[(indices[i] & 0x0fffffff) as usize];
     let diagonal_two = vertices[(indices[j] & 0x0fffffff) as usize];
 
-    for edge in 0..vertices.len() {
-        let next_edge = (edge + 1) % vertices.len();
+    for edge in 0..indices.len() {
+        let next_edge = (edge + 1) % indices.len();
 
         if !(edge == i || next_edge == i || edge == j || next_edge == j) {
             let point_one = vertices[(indices[edge] & 0x0fffffff) as usize];

@@ -18,3 +18,4 @@ categories = ["game-development"]
 bevy = "0.9"
 bevy_rapier3d = { version = "0.19" }
 smallvec ={ version = "1.10", features = [ "union" ]}
+bitflags = "1.3"

@@ -1,4 +1,4 @@
-use bevy::prelude::{Res, ResMut, info};
+use bevy::prelude::{Res, ResMut};
 
 use super::{
     get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,

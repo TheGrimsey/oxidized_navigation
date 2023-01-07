@@ -14,19 +14,19 @@ use super::{
 };
 
 #[derive(Default, Resource)]
-pub(super) struct TileContours {
-    pub(super) map: HashMap<UVec2, ContourSet>,
+pub struct TileContours {
+    pub map: HashMap<UVec2, ContourSet>,
 }
 
 #[derive(Default, Clone, Debug)]
-pub(super) struct Contour {
-    pub(super) vertices: Vec<UVec4>,
-    pub(super) region: u16,
+pub struct Contour {
+    pub vertices: Vec<UVec4>,
+    pub region: u16,
 }
 
 #[derive(Default)]
-pub(super) struct ContourSet {
-    pub(super) contours: Vec<Contour>,
+pub struct ContourSet {
+    pub contours: Vec<Contour>,
 }
 
 #[derive(Default, Clone)]
@@ -685,6 +685,52 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32)
     }
 
     // We don't split long edges. For now... I guess eventually it might be needed. :)
+    // SPLIT LONG EDGES.
+    {
+        let max_edge_len = 16;
+
+        let mut i = 0; 
+        while i < simplified.len() {
+            let a = simplified[i];
+            let b = simplified[(i + 1) % simplified.len()];
+
+            let next_original_point_index = (a.w + 1) as usize % point_count; 
+            let should_tesselate = points[next_original_point_index * 4 + 3] & MASK_CONTOUR_REGION == 0;
+
+            let mut max_i = None;
+            if should_tesselate {
+                let delta_x = b.x.abs_diff(a.x);
+                let delta_z = b.z.abs_diff(a.z);
+
+                if delta_x*delta_x + delta_z*delta_z > max_edge_len*max_edge_len {
+                    let n = if b.w < a.w {
+                        b.w as isize + point_count as isize - a.w as isize
+                    } else {
+                        b.w as isize - a.w as isize
+                    };
+
+                    if n > 1 {
+                        if b.x > a.x || (b.x == a.x && b.z > a.z) {
+                            max_i = Some((a.w as usize + (n/2) as usize) % point_count);
+                        } else {
+                            max_i = Some((a.w as usize + ((n + 1)/2) as usize) % point_count)
+                        }
+                    }
+                }
+            }
+
+            if let Some(max_i) = max_i {
+                simplified.insert(i + 1, UVec4::new(
+                    points[max_i*4],
+                    points[max_i*4+1],
+                    points[max_i*4+2],
+                    max_i as u32
+                ));
+            } else {
+                i += 1;
+            }
+        }
+    }
 
     for point in simplified.iter_mut() {
         let current = point.w;

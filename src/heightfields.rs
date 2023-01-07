@@ -533,229 +533,175 @@ pub(super) fn create_distance_field_system(
     dirty_tiles: Res<DirtyTiles>,
 ) {
     // Pass 1.
-    // Crimes most terrible be committed here, against ye' borrow checkin' machine.
     for tile_coord in dirty_tiles.0.iter() {
-        let tile_cell_count = {
-            let Some(tile) = open_tiles.map.get(tile_coord) else {
-                continue;
-            };
+        let tile = open_tiles.map.get_mut(tile_coord).unwrap();
 
-            tile.cells.len()
-        };
+        for (i, cell) in tile.cells.iter().enumerate() {
+            for span in cell.spans.iter() {
+                let mut distance = tile.distances[span.tile_index];
 
-        for i in 0..tile_cell_count {
-            let cell_span_count = open_tiles.map[tile_coord].cells[i].spans.len();
+                if let Some(index) = span.neighbours[0] {
+                    // (-1, 0)
+                    let (other_span, other_cell_index) =
+                        cell_move_back_column(tile, i, index.into());
 
-            for span_i in 0..cell_span_count {
-                let (distance, distance_index) = {
-                    let tile = &open_tiles.map[tile_coord];
-                    let span = &tile.cells[i].spans[span_i];
-                    let mut distance = tile.distances[span.tile_index];
-
-                    if let Some(index) = span.neighbours[0] {
-                        // (-1, 0)
-                        let (other_span, other_cell_index) =
-                            cell_move_back_column(tile, i, index.into());
-
-                        let other_distance = tile.distances[other_span.tile_index];
-                        if (other_distance + 2) < distance {
-                            distance = other_distance + 2;
-                        }
-
-                        // (-1, -1)
-                        if let Some(index) = other_span.neighbours[3] {
-                            let (other_span, _) = cell_move_back_row(
-                                tile,
-                                &nav_mesh_settings,
-                                other_cell_index,
-                                index.into(),
-                            );
-
-                            let other_other_distance = tile.distances[other_span.tile_index];
-                            if (other_other_distance + 3) < distance {
-                                distance = other_other_distance + 3;
-                            }
-                        }
+                    let other_distance = tile.distances[other_span.tile_index];
+                    if (other_distance + 2) < distance {
+                        distance = other_distance + 2;
                     }
 
-                    if let Some(index) = span.neighbours[3] {
-                        // (0, -1)
-                        let (other_span, other_cell_index) =
-                            cell_move_back_row(tile, &nav_mesh_settings, i, index.into());
+                    // (-1, -1)
+                    if let Some(index) = other_span.neighbours[3] {
+                        let (other_span, _) = cell_move_back_row(
+                            tile,
+                            &nav_mesh_settings,
+                            other_cell_index,
+                            index.into(),
+                        );
 
-                        let other_distance = tile.distances[other_span.tile_index];
-                        if (other_distance + 2) < distance {
-                            distance = other_distance + 2;
-                        }
-
-                        // (1, -1)
-                        if let Some(index) = other_span.neighbours[2] {
-                            let (other_span, _) =
-                                cell_move_forward_column(tile, other_cell_index, index.into());
-
-                            let other_other_distance = tile.distances[other_span.tile_index];
-                            if (other_other_distance + 3) < distance {
-                                distance = other_other_distance + 3;
-                            }
+                        let other_other_distance = tile.distances[other_span.tile_index];
+                        if (other_other_distance + 3) < distance {
+                            distance = other_other_distance + 3;
                         }
                     }
+                }
 
-                    (distance, span.tile_index)
-                };
+                if let Some(index) = span.neighbours[3] {
+                    // (0, -1)
+                    let (other_span, other_cell_index) =
+                        cell_move_back_row(tile, &nav_mesh_settings, i, index.into());
 
+                    let other_distance = tile.distances[other_span.tile_index];
+                    if (other_distance + 2) < distance {
+                        distance = other_distance + 2;
+                    }
+
+                    // (1, -1)
+                    if let Some(index) = other_span.neighbours[2] {
+                        let (other_span, _) =
+                            cell_move_forward_column(tile, other_cell_index, index.into());
+
+                        let other_other_distance = tile.distances[other_span.tile_index];
+                        if (other_other_distance + 3) < distance {
+                            distance = other_other_distance + 3;
+                        }
+                    }
+                }
+                
                 // Apply distance change.
-                let tile = open_tiles.map.get_mut(tile_coord).unwrap();
-                tile.distances[distance_index] = distance;
+                tile.distances[span.tile_index] = distance;
             }
         }
-    }
 
-    // Pass 2
-    for tile_coord in dirty_tiles.0.iter() {
-        let tile_cell_count = {
-            let Some(tile) = open_tiles.map.get(tile_coord) else {
-                continue;
-            };
+        // Pass 2
+        for (i, cell) in tile.cells.iter().enumerate().rev() {
+            for span in cell.spans.iter() {
+                let mut distance = tile.distances[span.tile_index];
 
-            tile.cells.len()
-        };
+                if let Some(index) = span.neighbours[2] {
+                    // (1, 0)
+                    let (other_span, other_cell_index) =
+                        cell_move_forward_column(tile, i, index.into());
 
-        for i in (0..tile_cell_count).rev() {
-            let cell_span_count = open_tiles.map[tile_coord].cells[i].spans.len();
-
-            for span_i in 0..cell_span_count {
-                let (distance, distance_index) = {
-                    let tile = &open_tiles.map[tile_coord];
-                    let span = &tile.cells[i].spans[span_i];
-                    let mut distance = tile.distances[span.tile_index];
-
-                    if let Some(index) = span.neighbours[2] {
-                        // (1, 0)
-                        let (other_span, other_cell_index) =
-                            cell_move_forward_column(tile, i, index.into());
-
-                        let other_distance = tile.distances[other_span.tile_index];
-                        if (other_distance + 2) < distance {
-                            distance = other_distance + 2;
-                        }
-
-                        // (1, 1)
-                        if let Some(index) =
-                            other_span.neighbours[1]
-                        {
-                            let (other_span, _) = cell_move_forward_row(
-                                tile,
-                                &nav_mesh_settings,
-                                other_cell_index,
-                                index as usize,
-                            );
-
-                            let other_other_distance = tile.distances[other_span.tile_index];
-                            if (other_other_distance + 3) < distance {
-                                distance = other_other_distance + 3;
-                            }
-                        }
+                    let other_distance = tile.distances[other_span.tile_index];
+                    if (other_distance + 2) < distance {
+                        distance = other_distance + 2;
                     }
 
-                    if let Some(index) = span.neighbours[1] {
-                        // (0, 1)
-                        let (other_span, other_cell_index) =
-                            cell_move_forward_row(tile, &nav_mesh_settings, i, index as usize);
+                    // (1, 1)
+                    if let Some(index) =
+                        other_span.neighbours[1]
+                    {
+                        let (other_span, _) = cell_move_forward_row(
+                            tile,
+                            &nav_mesh_settings,
+                            other_cell_index,
+                            index as usize,
+                        );
 
-                        let other_distance = tile.distances[other_span.tile_index];
-                        if (other_distance + 2) < distance {
-                            distance = other_distance + 2;
-                        }
-
-                        // (-1, 1)
-                        if let Some(index) =
-                            other_span.neighbours[0]
-                        {
-                            let (other_span, _) =
-                                cell_move_back_column(tile, other_cell_index, index.into());
-
-                            let other_other_distance = tile.distances[other_span.tile_index];
-                            if (other_other_distance + 3) < distance {
-                                distance = other_other_distance + 3;
-                            }
+                        let other_other_distance = tile.distances[other_span.tile_index];
+                        if (other_other_distance + 3) < distance {
+                            distance = other_other_distance + 3;
                         }
                     }
+                }
 
-                    (distance, span.tile_index)
-                };
+                if let Some(index) = span.neighbours[1] {
+                    // (0, 1)
+                    let (other_span, other_cell_index) =
+                        cell_move_forward_row(tile, &nav_mesh_settings, i, index as usize);
+
+                    let other_distance = tile.distances[other_span.tile_index];
+                    if (other_distance + 2) < distance {
+                        distance = other_distance + 2;
+                    }
+
+                    // (-1, 1)
+                    if let Some(index) =
+                        other_span.neighbours[0]
+                    {
+                        let (other_span, _) =
+                            cell_move_back_column(tile, other_cell_index, index.into());
+
+                        let other_other_distance = tile.distances[other_span.tile_index];
+                        if (other_other_distance + 3) < distance {
+                            distance = other_other_distance + 3;
+                        }
+                    }
+                }
 
                 // Apply distance change.
-                let tile = open_tiles.map.get_mut(tile_coord).unwrap();
-                tile.distances[distance_index] = distance;
+                tile.distances[span.tile_index] = distance;
             }
 
-            let tile = open_tiles.map.get_mut(tile_coord).unwrap();
             tile.max_distance = *tile.distances.iter().max().unwrap_or(&0);
-        }
 
-        // Box blur. If you're reading this, why?
-        let threshold = 2;
+            // Box blur. If you're reading this, why?
+            let threshold = 2;
 
-        for tile_coord in dirty_tiles.0.iter() {
-            let tile_cell_count = {
-                let Some(tile) = open_tiles.map.get(tile_coord) else {
-                    continue;
-                };
+            for (i, cell) in tile.cells.iter().enumerate() {
+                for span in cell.spans.iter() {
+                    let mut distance = tile.distances[span.tile_index];
+                    let mut d = distance;
 
-                tile.cells.len()
-            };
+                    if distance <= threshold {
+                        distance = threshold;
+                    } else {
+                        for dir in 0..4 {
+                            let Some(index) = span.neighbours[dir] else {
+                                d += distance * 2;
+                                continue;
+                            };
 
-            for i in 0..tile_cell_count {
-                let cell_span_count = open_tiles.map[tile_coord].cells[i].spans.len();
+                            let other_cell_index = (i as isize
+                                + get_cell_offset(&nav_mesh_settings, dir))
+                                as usize;
+                            let other_span =
+                                &tile.cells[other_cell_index].spans[index as usize];
 
-                for span_i in 0..cell_span_count {
-                    let (distance, distance_index) = {
-                        let tile = &open_tiles.map[tile_coord];
-                        let span = &tile.cells[i].spans[span_i];
-                        let mut distance = tile.distances[span.tile_index];
-                        let mut d = distance;
+                            d += tile.distances[other_span.tile_index];
 
-                        if distance <= threshold {
-                            distance = threshold;
-                        } else {
-                            for dir in 0..4 {
-                                let Some(index) = span.neighbours[dir] else {
-                                    d += distance * 2;
-                                    continue;
-                                };
+                            let next_dir = (dir + 1) % 4;
+                            let Some(index) = other_span.neighbours[next_dir] else {
+                                d += distance;
+                                continue;
+                            };
 
-                                let other_cell_index = (i as isize
-                                    + get_cell_offset(&nav_mesh_settings, dir))
-                                    as usize;
-                                let other_span =
-                                    &tile.cells[other_cell_index].spans[index as usize];
+                            let other_cell_index = (other_cell_index as isize
+                                + get_cell_offset(&nav_mesh_settings, next_dir))
+                                as usize;
 
-                                d += tile.distances[other_span.tile_index];
+                            let other_span =
+                                &tile.cells[other_cell_index].spans[index as usize];
 
-                                let next_dir = (dir + 1) % 4;
-                                let Some(index) = span.neighbours[next_dir] else {
-                                    d += distance;
-                                    continue;
-                                };
-
-                                let other_cell_index = (other_cell_index as isize
-                                    + get_cell_offset(&nav_mesh_settings, next_dir))
-                                    as usize;
-                                let other_span =
-                                    &tile.cells[other_cell_index].spans[index as usize];
-
-                                d += tile.distances[other_span.tile_index];
-                            }
-
-                            distance = (d + 5) / 9;
+                            d += tile.distances[other_span.tile_index];
                         }
 
-                        (distance, span.tile_index)
-                    };
+                        distance = (d + 5) / 9;
+                    }
 
                     // Apply distance change.
-                    let tile = open_tiles.map.get_mut(tile_coord).unwrap();
-                    tile.distances[distance_index] = distance;
+                    tile.distances[span.tile_index] = distance;
                 }
             }
         }

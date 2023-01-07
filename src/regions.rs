@@ -815,7 +815,7 @@ fn flood_region(
             }
 
             let next_dir = (dir + 1) & 0x3;
-            if let Some(index) = span.neighbours[next_dir] {
+            if let Some(index) = other_span.neighbours[next_dir] {
                 let other_span = &tile.cells[(other_cell_index as isize
                     + get_cell_offset(nav_mesh_settings, next_dir))
                     as usize]

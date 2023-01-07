@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use bevy::prelude::{Vec3, UVec2};
+use bevy::prelude::{Vec3, UVec2, info};
 
 use crate::{tiles::{NavMesh, Link, get_closest_point_in_polygon}, NavMeshSettings};
 
@@ -49,6 +49,7 @@ pub fn find_path(
     };
 
     if start_tile == end_tile && start_poly == end_poly {
+        info!("Start & End are the same.");
         return Ok(vec![(start_tile, start_poly)]);
     }
 
@@ -78,7 +79,6 @@ pub fn find_path(
             let node = &mut nodes[best_node_index];
             node.flags.remove(NodeFlags::OPEN);
             node.flags.insert(NodeFlags::CLOSED);
-            
 
             if node.tile == end_tile && node.polygon == end_poly {
                 last_best_node = best_node_index;

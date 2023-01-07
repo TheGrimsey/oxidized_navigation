@@ -73,7 +73,8 @@ pub(super) fn build_poly_mesh_system(
 
             if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
                 info!(
-                    "Triangulation failed, skipping contour for region {}.",
+                    "Triangulation failed, skipping contour for tile {:?}, region {}.",
+                    tile_coord,
                     contour.region
                 );
                 continue;
@@ -151,10 +152,6 @@ pub(super) fn build_poly_mesh_system(
             }
         }
 
-        info!("Mesher Output for {:?}:", tile_coord);
-        info!("Vertices: {:?}", poly_mesh.vertices);
-        info!("Indices: {:?}", poly_mesh.polygons);
-        info!("Edges: {:?}", poly_mesh.edges);
         poly_meshes.map.insert(*tile_coord, poly_mesh);
     }
 }
@@ -303,7 +300,7 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
 
     while indices.len() > 3 {
         let mut min_len = u32::MAX;
-        let mut min_index = usize::MAX;
+        let mut min_index = None;
 
         for i in 0..indices.len() {
             let next = (i + 1) % indices.len();
@@ -318,12 +315,12 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
 
                 if square_length < min_len {
                     min_len = square_length;
-                    min_index = i;
+                    min_index = Some(i);
                 }
             }
         }
 
-        if min_index == usize::MAX {
+        if min_index.is_none() {
             for i in 0..indices.len() {
                 let next = (i + 1) % indices.len();
                 let next_next = (next + 1) % indices.len();
@@ -338,19 +335,19 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
 
                     if square_length < min_len {
                         min_len = square_length;
-                        min_index = i;
+                        min_index = Some(i);
                     }
                 }
             }
 
-            if min_index == usize::MAX {
+            if min_index.is_none() {
                 info!("Failed to triangulate contour. Contour was probably simplified too much.");
                 return false;
             }
         }
 
         let next = {
-            let i = min_index;
+            let i = min_index.unwrap();
             let next = (i + 1) % indices.len();
             let next_next = (next + 1) % indices.len();
 
@@ -399,6 +396,7 @@ fn vec_equal(a: UVec4, b: UVec4) -> bool {
 fn in_cone(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
     let point_i = vertices[(indices[i] & 0x0fffffff) as usize];
     let point_j = vertices[(indices[j] & 0x0fffffff) as usize];
+
     let point_i_next = vertices[(indices[(i + 1) % indices.len()] & 0x0fffffff) as usize];
     let point_i_previous =
         vertices[(indices[(indices.len() + j - 1) % indices.len()] & 0x0fffffff) as usize];
@@ -449,7 +447,7 @@ fn diagonalie(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
                 continue;
             }
 
-            if intersect_prop(
+            if intersect_segment(
                 diagonal_one.as_ivec4(),
                 diagonal_two.as_ivec4(),
                 point_one.as_ivec4(),
@@ -506,8 +504,8 @@ fn diagonalie_loose(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> 
     let diagonal_one = vertices[(indices[i] & 0x0fffffff) as usize];
     let diagonal_two = vertices[(indices[j] & 0x0fffffff) as usize];
 
-    for edge in 0..vertices.len() {
-        let next_edge = (edge + 1) % vertices.len();
+    for edge in 0..indices.len() {
+        let next_edge = (edge + 1) % indices.len();
 
         if !(edge == i || next_edge == i || edge == j || next_edge == j) {
             let point_one = vertices[(indices[edge] & 0x0fffffff) as usize];
@@ -522,7 +520,7 @@ fn diagonalie_loose(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> 
             }
 
             // loose uses prop instead of regular.
-            if intersect_segment(
+            if intersect_prop(
                 diagonal_one.as_ivec4(),
                 diagonal_two.as_ivec4(),
                 point_one.as_ivec4(),

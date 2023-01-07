@@ -29,8 +29,8 @@ pub enum Link {
 }
 
 #[derive(Debug)]
-pub(super) struct Polygon {
-    pub(super) indices: [u32; VERTICES_IN_TRIANGLE],
+pub struct Polygon {
+    pub indices: [u32; VERTICES_IN_TRIANGLE],
     pub(super) links: SmallVec<[Link; VERTICES_IN_TRIANGLE * 2]>, // This becomes a mess memory wise with a ton of different small objects around.
 }
 
@@ -39,8 +39,8 @@ pub(super) struct Polygon {
 */
 pub struct NavMeshTile {
     salt: u32,
-    pub(super) vertices: Vec<Vec3>,
-    pub(super) polygons: Vec<Polygon>,
+    pub vertices: Vec<Vec3>,
+    pub polygons: Vec<Polygon>,
     edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
 }
 
@@ -51,7 +51,7 @@ pub struct NavMeshTiles {
 
 #[derive(Default)]
 pub struct NavMesh {
-    pub(super) tiles: HashMap<UVec2, NavMeshTile>,
+    pub tiles: HashMap<UVec2, NavMeshTile>,
 }
 
 impl NavMesh {

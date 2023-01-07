@@ -21,7 +21,7 @@ use self::{
     regions::build_regions_system,
 };
 
-mod contour;
+pub mod contour;
 mod heightfields;
 mod mesher;
 mod regions;

@@ -1,4 +1,4 @@
-use bevy::prelude::{Res, ResMut};
+use bevy::prelude::{Res, ResMut, info};
 
 use super::{
     get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,
@@ -17,7 +17,7 @@ pub(super) fn build_regions_system(
     mut open_tiles: ResMut<TilesOpen>,
     dirty_tiles: Res<DirtyTiles>,
 ) {
-    let expand_iters = 4 + nav_mesh_settings.walkable_radius * 2;
+    let expand_iters = 8;
 
     const LOG_NB_STACKS: i32 = 3;
     const NB_STACKS: i32 = 1 << LOG_NB_STACKS; // 8.
@@ -114,13 +114,14 @@ pub(super) fn build_regions_system(
 
         tile.max_regions = region_id;
     }
+    
 }
 
 fn sort_cells_by_level(
     start_level: u16,
     open_tile: &OpenTile,
     stacks: &mut [Vec<LevelStackEntry>],
-    nb_stacks: i32, // always NB_STACKS
+    num_stacks: i32, // always NB_STACKS
     regions: &[u16],
 ) {
     let start_level = (start_level >> 1) as i32;
@@ -137,7 +138,7 @@ fn sort_cells_by_level(
 
             let level = (open_tile.distances[span.tile_index] >> 1) as i32;
             let stack_id = (start_level - level).max(0);
-            if stack_id >= nb_stacks {
+            if stack_id >= num_stacks {
                 continue;
             }
 
@@ -318,7 +319,6 @@ struct Region {
     remap: bool,
     visited: bool,
     overlap: bool,
-    is_border_region: bool,
     floors: Vec<u16>,
     connections: Vec<u16>,
 }
@@ -337,20 +337,12 @@ fn merge_regions(
             remap: false,
             visited: false,
             overlap: false,
-            is_border_region: false,
             floors: Vec::new(),
             connections: Vec::new(),
         });
     }
 
     for (c_i, cell) in tile.cells.iter().enumerate() {
-        let row = c_i / nav_mesh_settings.tile_width as usize;
-        let column = c_i % nav_mesh_settings.tile_width as usize;
-        let is_border = row == 0
-            || column == 0
-            || row == (nav_mesh_settings.tile_width - 1) as usize
-            || column == (nav_mesh_settings.tile_width - 1) as usize;
-
         for (s_i, span) in cell.spans.iter().enumerate() {
             let region_id = source_regions[span.tile_index];
             if region_id == 0 || region_id > *max_region_id {
@@ -359,13 +351,12 @@ fn merge_regions(
 
             let region = &mut regions[region_id as usize];
             region.span_count += 1;
-            region.is_border_region |= is_border;
 
             // Update floors
             for other_span in cell
                 .spans
                 .iter()
-                .filter(|a| a.tile_index != span.tile_index)
+                .filter(|other| other.tile_index != span.tile_index)
             {
                 let other_region_id = source_regions[other_span.tile_index];
                 if other_region_id == 0 || other_region_id > *max_region_id {
@@ -375,7 +366,7 @@ fn merge_regions(
                     region.overlap = true;
                 }
 
-                add_unique_floor_region(region, region_id);
+                add_unique_floor_region(region, other_region_id);
             }
 
             // Contour already exists.
@@ -417,15 +408,13 @@ fn merge_regions(
     for i in 0..*max_region_id {
         {
             let region = &mut regions[i as usize];
-            if region.id == 0 || region.span_count == 0 || region.visited || region.is_border_region
+            if region.id == 0 || region.span_count == 0 || region.visited
             {
                 continue;
             }
 
             region.visited = true;
         }
-
-        let mut connects_to_border = false;
 
         stack.clear();
         trace.clear();
@@ -451,17 +440,12 @@ fn merge_regions(
                     continue;
                 }
 
-                if connected_region.is_border_region {
-                    connects_to_border = true;
-                    continue;
-                }
-
                 stack.push(connected_region.id);
                 connected_region.visited = true;
             }
         }
 
-        if span_count < nav_mesh_settings.min_region_area && !connects_to_border {
+        if span_count < nav_mesh_settings.min_region_area {
             for trace in &trace {
                 let region = &mut regions[*trace as usize];
                 region.span_count = 0;
@@ -474,33 +458,29 @@ fn merge_regions(
         let mut merged = false;
 
         for region in 0..regions.len() {
-            {
+            let merge_id = {
                 let region = &regions[region];
                 if region.id == 0
-                    || !region.is_border_region
-                    || !region.overlap
+                    || region.overlap
                     || region.span_count == 0
                 {
                     continue;
                 }
 
                 let connected_to_border = region.connections.contains(&0);
-                if region.span_count > nav_mesh_settings.merge_region_size && connected_to_border {
+                if region.span_count > nav_mesh_settings.merge_region_area && connected_to_border {
                     continue;
                 }
-            }
+                
+                let mut merge_id = None;
+                let mut smallest_region_size = usize::MAX;
 
-            let mut smallest_region_size = usize::MAX;
-            let mut merge_id = None;
-            {
-                let region = &regions[region];
                 for connected in &region.connections {
                     let other_region = &regions[*connected as usize];
-                    if other_region.id == 0 || other_region.is_border_region || other_region.overlap
-                    {
+                    if other_region.id == 0 || other_region.overlap {
                         continue;
                     }
-
+                    
                     if other_region.span_count < smallest_region_size
                         && can_merge_with_region(region, other_region)
                         && can_merge_with_region(other_region, region)
@@ -509,15 +489,18 @@ fn merge_regions(
                         merge_id = Some(other_region.id);
                     }
                 }
-            }
+
+                merge_id
+            };
 
             if let Some(merge_id) = merge_id {
                 let old_id = regions[region].id;
+                info!("Merging {} into {}", old_id, merge_id);
 
                 if merge_regions_i(&mut regions, region, merge_id as usize) {
                     // Fix up regions pointing to this region.
                     for region in regions.iter_mut() {
-                        if region.id == 0 || region.is_border_region {
+                        if region.id == 0 {
                             continue;
                         }
 
@@ -529,6 +512,7 @@ fn merge_regions(
                     }
 
                     merged = true;
+                    info!("Merged region {} into {}", old_id, merge_id);
                 }
             }
         }
@@ -540,7 +524,7 @@ fn merge_regions(
 
     // Compress region ids.
     for region in regions.iter_mut() {
-        region.remap = !(region.id == 0 || region.is_border_region);
+        region.remap = region.id != 0;
     }
 
     let mut region_id_gen = 0;
@@ -561,6 +545,7 @@ fn merge_regions(
         }
     }
     // TODO: set max region id
+    *max_region_id = region_id_gen;
 
     // Remap regions.
     for cell in tile.cells.iter() {
@@ -659,7 +644,17 @@ fn remove_adjacent_connection_duplicates(region: &mut Region) {
 }
 
 fn can_merge_with_region(a: &Region, b: &Region) -> bool {
-    !(b.connections.contains(&a.id) || a.floors.contains(&b.id))
+    let mut n = 0;
+    for region in a.connections.iter() {
+        if *region == b.id {
+            n += 1;
+        }
+    }
+    if n > 1 {
+        return false;
+    }
+    
+    !a.floors.contains(&b.id)
 }
 
 fn walk_contour(
@@ -728,14 +723,12 @@ fn walk_contour(
     }
 
     // Remove adjacent duplicates.
-    if contour.len() > 2 {
+    if contour.len() > 1 {
         let mut i = 0;
         while i < contour.len() {
             let next_index = (i + 1) % contour.len();
-            let current = contour[i];
-            let next = contour[next_index];
 
-            if current == next {
+            if contour[i] == contour[next_index] {
                 contour.remove(next_index);
             } else {
                 i += 1;
@@ -752,15 +745,16 @@ fn is_solid_edge(
     dir: usize,
     source_region: &[u16],
 ) -> bool {
+    let mut region = 0;
     if let Some(index) = span.neighbours[dir] {
         let other_span = &tile.cells
             [(c_i as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
             .spans[index as usize];
 
-        return source_region[other_span.tile_index] != source_region[span.tile_index];
+        region = source_region[other_span.tile_index];
     }
 
-    true
+    region != source_region[span.tile_index]
 }
 
 fn add_unique_floor_region(region: &mut Region, region_id: u16) {
@@ -790,6 +784,7 @@ fn flood_region(
         index,
     });
 
+    let lev = if level >= 2 { level - 2} else { 0 };
     regions[index as usize] = region_id;
     distances[index as usize] = 0;
 
@@ -809,7 +804,7 @@ fn flood_region(
             let other_span = &tile.cells[other_cell_index].spans[index as usize];
             let other_region = regions[other_span.tile_index];
 
-            if other_region != 0 {
+            if other_region != 0 && other_region != region_id {
                 adjecant_region = other_region;
                 break;
             }
@@ -822,7 +817,7 @@ fn flood_region(
                     .spans[index as usize];
                 let other_region = regions[other_span.tile_index];
 
-                if other_region != 0 {
+                if other_region != 0 && other_region != region_id {
                     adjecant_region = other_region;
                     break;
                 }
@@ -845,7 +840,7 @@ fn flood_region(
                 (entry.cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize;
             let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
-            if tile.distances[other_span.tile_index] >= level && regions[other_span.tile_index] == 0
+            if tile.distances[other_span.tile_index] >= lev && regions[other_span.tile_index] == 0
             {
                 regions[other_span.tile_index] = region_id;
                 distances[other_span.tile_index] = 0;

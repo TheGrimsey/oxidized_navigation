@@ -7,7 +7,6 @@ use bevy::{
 use bevy_rapier3d::prelude::Collider;
 
 use super::{
-    cell_move_back_column, cell_move_back_row, cell_move_forward_column, cell_move_forward_row,
     get_cell_offset, DirtyTiles, NavMeshAffector, NavMeshSettings, OpenCell,
     OpenSpan, OpenTile, TileAffectors, TilesOpen,
 };
@@ -542,9 +541,9 @@ pub(super) fn create_distance_field_system(
 
                 if let Some(index) = span.neighbours[0] {
                     // (-1, 0)
-                    let (other_span, other_cell_index) =
-                        cell_move_back_column(tile, i, index.into());
-
+                    let other_cell_index = i - 1;
+                    let other_span = &tile.cells[other_cell_index].spans[index as usize];
+                    
                     let other_distance = tile.distances[other_span.tile_index];
                     if (other_distance + 2) < distance {
                         distance = other_distance + 2;
@@ -552,12 +551,8 @@ pub(super) fn create_distance_field_system(
 
                     // (-1, -1)
                     if let Some(index) = other_span.neighbours[3] {
-                        let (other_span, _) = cell_move_back_row(
-                            tile,
-                            &nav_mesh_settings,
-                            other_cell_index,
-                            index.into(),
-                        );
+                        let other_cell_index = other_cell_index - nav_mesh_settings.tile_width as usize;
+                        let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                         let other_other_distance = tile.distances[other_span.tile_index];
                         if (other_other_distance + 3) < distance {
@@ -568,8 +563,8 @@ pub(super) fn create_distance_field_system(
 
                 if let Some(index) = span.neighbours[3] {
                     // (0, -1)
-                    let (other_span, other_cell_index) =
-                        cell_move_back_row(tile, &nav_mesh_settings, i, index.into());
+                    let other_cell_index = i - nav_mesh_settings.tile_width as usize;
+                    let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                     let other_distance = tile.distances[other_span.tile_index];
                     if (other_distance + 2) < distance {
@@ -578,8 +573,8 @@ pub(super) fn create_distance_field_system(
 
                     // (1, -1)
                     if let Some(index) = other_span.neighbours[2] {
-                        let (other_span, _) =
-                            cell_move_forward_column(tile, other_cell_index, index.into());
+                        let other_cell_index = other_cell_index + 1;
+                        let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                         let other_other_distance = tile.distances[other_span.tile_index];
                         if (other_other_distance + 3) < distance {
@@ -600,8 +595,8 @@ pub(super) fn create_distance_field_system(
 
                 if let Some(index) = span.neighbours[2] {
                     // (1, 0)
-                    let (other_span, other_cell_index) =
-                        cell_move_forward_column(tile, i, index.into());
+                    let other_cell_index = i + 1;
+                    let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                     let other_distance = tile.distances[other_span.tile_index];
                     if (other_distance + 2) < distance {
@@ -612,12 +607,8 @@ pub(super) fn create_distance_field_system(
                     if let Some(index) =
                         other_span.neighbours[1]
                     {
-                        let (other_span, _) = cell_move_forward_row(
-                            tile,
-                            &nav_mesh_settings,
-                            other_cell_index,
-                            index as usize,
-                        );
+                        let other_cell_index = other_cell_index + nav_mesh_settings.tile_width as usize;
+                        let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                         let other_other_distance = tile.distances[other_span.tile_index];
                         if (other_other_distance + 3) < distance {
@@ -628,8 +619,8 @@ pub(super) fn create_distance_field_system(
 
                 if let Some(index) = span.neighbours[1] {
                     // (0, 1)
-                    let (other_span, other_cell_index) =
-                        cell_move_forward_row(tile, &nav_mesh_settings, i, index as usize);
+                    let other_cell_index = i + nav_mesh_settings.tile_width as usize;
+                    let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                     let other_distance = tile.distances[other_span.tile_index];
                     if (other_distance + 2) < distance {
@@ -640,8 +631,8 @@ pub(super) fn create_distance_field_system(
                     if let Some(index) =
                         other_span.neighbours[0]
                     {
-                        let (other_span, _) =
-                            cell_move_back_column(tile, other_cell_index, index.into());
+                        let other_cell_index = other_cell_index - 1;
+                        let other_span = &tile.cells[other_cell_index].spans[index as usize];
 
                         let other_other_distance = tile.distances[other_span.tile_index];
                         if (other_other_distance + 3) < distance {
@@ -659,51 +650,53 @@ pub(super) fn create_distance_field_system(
             // Box blur. If you're reading this, why?
             let threshold = 2;
 
+            let mut blurred = vec![0; tile.distances.len()];
+
             for (i, cell) in tile.cells.iter().enumerate() {
                 for span in cell.spans.iter() {
-                    let mut distance = tile.distances[span.tile_index];
-                    let mut d = distance;
-
+                    let distance = tile.distances[span.tile_index];
                     if distance <= threshold {
-                        distance = threshold;
-                    } else {
-                        for dir in 0..4 {
-                            let Some(index) = span.neighbours[dir] else {
-                                d += distance * 2;
-                                continue;
-                            };
+                        blurred[span.tile_index] = threshold;
+                        continue;
+                    }
 
-                            let other_cell_index = (i as isize
-                                + get_cell_offset(&nav_mesh_settings, dir))
-                                as usize;
-                            let other_span =
-                                &tile.cells[other_cell_index].spans[index as usize];
+                    let mut d = distance;
+                    for dir in 0..4 {
+                        let Some(index) = span.neighbours[dir] else {
+                            d += distance * 2;
+                            continue;
+                        };
 
-                            d += tile.distances[other_span.tile_index];
+                        let other_cell_index = (i as isize
+                            + get_cell_offset(&nav_mesh_settings, dir))
+                            as usize;
+                        let other_span =
+                            &tile.cells[other_cell_index].spans[index as usize];
 
-                            let next_dir = (dir + 1) % 4;
-                            let Some(index) = other_span.neighbours[next_dir] else {
-                                d += distance;
-                                continue;
-                            };
+                        d += tile.distances[other_span.tile_index];
 
-                            let other_cell_index = (other_cell_index as isize
-                                + get_cell_offset(&nav_mesh_settings, next_dir))
-                                as usize;
+                        let next_dir = (dir + 1) % 4;
+                        let Some(index) = other_span.neighbours[next_dir] else {
+                            d += distance;
+                            continue;
+                        };
 
-                            let other_span =
-                                &tile.cells[other_cell_index].spans[index as usize];
+                        let other_cell_index = (other_cell_index as isize
+                            + get_cell_offset(&nav_mesh_settings, next_dir))
+                            as usize;
 
-                            d += tile.distances[other_span.tile_index];
-                        }
+                        let other_span =
+                            &tile.cells[other_cell_index].spans[index as usize];
 
-                        distance = (d + 5) / 9;
+                        d += tile.distances[other_span.tile_index];
                     }
 
                     // Apply distance change.
-                    tile.distances[span.tile_index] = distance;
+                    blurred[span.tile_index] = (d + 5) / 9;
                 }
             }
+
+            tile.distances = blurred;
         }
         // End Box Blur
     }

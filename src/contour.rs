@@ -115,6 +115,7 @@ pub(super) fn build_contours_system(
                     &vertices,
                     &mut simplified_vertices,
                     nav_mesh_settings.max_contour_simplification_error,
+                    nav_mesh_settings.max_edge_length
                 );
 
                 // Remove degenerate segments.
@@ -546,7 +547,7 @@ fn get_corner_height(
     (height, is_border_vertex)
 }
 
-fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32) {
+fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32, max_edge_len: u32) {
     let has_connections = {
         let mut has_connections = false;
 
@@ -687,8 +688,6 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32)
     // We don't split long edges. For now... I guess eventually it might be needed. :)
     // SPLIT LONG EDGES.
     {
-        let max_edge_len = 16;
-
         let mut i = 0; 
         while i < simplified.len() {
             let a = simplified[i];

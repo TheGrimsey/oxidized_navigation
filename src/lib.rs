@@ -126,8 +126,9 @@ pub struct NavMeshSettings {
     pub step_height: u16, // Maximum height difference that is still considered traversable. (Think, stair steps)
 
     pub min_region_area: usize, // Minimum area of a region for it to not be removed in cells.
-    pub merge_region_size: usize, // Maximum size of a region to merge other regions into.
+    pub merge_region_area: usize, // Maximum size of a region to merge other regions into.
 
+    pub max_edge_length: u32,
     pub max_contour_simplification_error: f32, // Maximum difference allowed for the contour generation on the XZ-plane in cell_widths. Recast suggests keeping this in the range of [1.1, 1.5]
 }
 impl NavMeshSettings {

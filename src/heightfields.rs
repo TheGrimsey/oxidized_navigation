@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, ops::Div};
 
 use bevy::{
-    prelude::{GlobalTransform, IVec3, Query, Res, ResMut, Resource, UVec2, Vec3, With},
+    prelude::{GlobalTransform, IVec3, Query, Res, ResMut, Resource, UVec2, Vec3, With, info},
     utils::HashMap,
 };
 use bevy_rapier3d::prelude::Collider;
@@ -483,11 +483,9 @@ pub(super) fn create_neighbour_links_system(
             for span in tile.cells[i].spans.iter_mut() {
                 // TODO: Also check if we won't hit our head when stepping up or down. Height of lower needs to be at least (walkable_height + difference in minimum)
 
-                let mut neighbours = 0;
                 for (i, x_min) in x_negative.iter().enumerate() {
                     if x_min.abs_diff(span.min) < nav_mesh_settings.step_height {
                         span.neighbours[0] = Some(i as u16);
-                        neighbours += 1;
                         break;
                     }
                 }
@@ -495,7 +493,6 @@ pub(super) fn create_neighbour_links_system(
                 for (i, z_min) in z_positive.iter().enumerate() {
                     if z_min.abs_diff(span.min) < nav_mesh_settings.step_height {
                         span.neighbours[1] = Some(i as u16);
-                        neighbours += 1;
                         break;
                     }
                 }
@@ -503,7 +500,6 @@ pub(super) fn create_neighbour_links_system(
                 for (i, x_min) in x_positive.iter().enumerate() {
                     if x_min.abs_diff(span.min) < nav_mesh_settings.step_height {
                         span.neighbours[2] = Some(i as u16);
-                        neighbours += 1;
                         break;
                     }
                 }
@@ -511,14 +507,10 @@ pub(super) fn create_neighbour_links_system(
                 for (i, z_min) in z_negative.iter().enumerate() {
                     if z_min.abs_diff(span.min) < nav_mesh_settings.step_height {
                         span.neighbours[3] = Some(i as u16);
-                        neighbours += 1;
                         break;
                     }
                 }
 
-                if neighbours != 4 {
-                    tile.distances[distance_index] = 0;
-                }
                 span.tile_index = distance_index;
                 distance_index += 1;
             }
@@ -534,6 +526,17 @@ pub(super) fn create_distance_field_system(
     // Pass 1.
     for tile_coord in dirty_tiles.0.iter() {
         let tile = open_tiles.map.get_mut(tile_coord).unwrap();
+
+        // Mark boundary cells.
+        for cell in tile.cells.iter() {
+            for span in cell.spans.iter() {
+                let neighbours = span.neighbours.iter().filter(|neighbour| neighbour.is_some()).count();
+
+                if neighbours != 4 {
+                    tile.distances[span.tile_index] = 0;
+                }
+            }
+        }
 
         for (i, cell) in tile.cells.iter().enumerate() {
             for span in cell.spans.iter() {
@@ -656,7 +659,7 @@ pub(super) fn create_distance_field_system(
                 for span in cell.spans.iter() {
                     let distance = tile.distances[span.tile_index];
                     if distance <= threshold {
-                        blurred[span.tile_index] = threshold;
+                        blurred[span.tile_index] = distance;
                         continue;
                     }
 
@@ -675,7 +678,7 @@ pub(super) fn create_distance_field_system(
 
                         d += tile.distances[other_span.tile_index];
 
-                        let next_dir = (dir + 1) % 4;
+                        let next_dir = (dir + 1) & 0x3;
                         let Some(index) = other_span.neighbours[next_dir] else {
                             d += distance;
                             continue;

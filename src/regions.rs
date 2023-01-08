@@ -1,4 +1,4 @@
-use bevy::prelude::{Res, ResMut, info};
+use bevy::prelude::{Res, ResMut};
 
 use super::{
     get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,
@@ -173,7 +173,7 @@ fn expand_regions(
     }
 
     let mut iter = 0;
-    let mut dirty_entries = Vec::new();
+    let mut dirty_entries = Vec::with_capacity(8);
     loop {
         let mut failed = 0;
         dirty_entries.clear();
@@ -345,7 +345,7 @@ fn merge_regions(
     for (c_i, cell) in tile.cells.iter().enumerate() {
         for (s_i, span) in cell.spans.iter().enumerate() {
             let region_id = source_regions[span.tile_index];
-            if region_id == 0 || region_id > *max_region_id {
+            if region_id == 0 || region_id >= *max_region_id {
                 continue;
             }
 
@@ -359,7 +359,7 @@ fn merge_regions(
                 .filter(|other| other.tile_index != span.tile_index)
             {
                 let other_region_id = source_regions[other_span.tile_index];
-                if other_region_id == 0 || other_region_id > *max_region_id {
+                if other_region_id == 0 || other_region_id >= *max_region_id {
                     continue;
                 }
                 if other_region_id == region_id {
@@ -467,8 +467,7 @@ fn merge_regions(
                     continue;
                 }
 
-                let connected_to_border = region.connections.contains(&0);
-                if region.span_count > nav_mesh_settings.merge_region_area && connected_to_border {
+                if region.span_count > nav_mesh_settings.merge_region_area && region.connections.contains(&0) {
                     continue;
                 }
                 
@@ -495,7 +494,6 @@ fn merge_regions(
 
             if let Some(merge_id) = merge_id {
                 let old_id = regions[region].id;
-                info!("Merging {} into {}", old_id, merge_id);
 
                 if merge_regions_i(&mut regions, region, merge_id as usize) {
                     // Fix up regions pointing to this region.
@@ -512,7 +510,6 @@ fn merge_regions(
                     }
 
                     merged = true;
-                    info!("Merged region {} into {}", old_id, merge_id);
                 }
             }
         }
@@ -588,13 +585,11 @@ fn merge_regions_i(regions: &mut [Region], a: usize, b: usize) -> bool {
 
         let mut merged_connections =
             Vec::with_capacity(a.connections.len() + b.connections.len() - 2);
-        let size = a.connections.len() - 1;
-        for i in 0..size {
-            merged_connections.push(a.connections[(insert_point_a + 1 + i) % size]);
+        for i in 0..a.connections.len() - 1 {
+            merged_connections.push(a.connections[(insert_point_a + 1 + i) % a.connections.len()]);
         }
-        let size = b.connections.len() - 1;
-        for i in 0..size {
-            merged_connections.push(b.connections[(insert_point_b + 1 + i) % size]);
+        for i in 0..b.connections.len() - 1 {
+            merged_connections.push(b.connections[(insert_point_b + 1 + i) % b.connections.len()]);
         }
 
         merged_connections

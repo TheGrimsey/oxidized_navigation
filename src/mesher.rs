@@ -4,7 +4,7 @@ use bevy::{
 };
 
 use super::{
-    intersect_prop, intersect_segment, left, left_on, DirtyTiles, NavMeshSettings, TileContours,
+    intersect_prop, intersect, left, left_on, DirtyTiles, NavMeshSettings, TileContours,
 };
 
 #[derive(Default)]
@@ -73,11 +73,9 @@ pub(super) fn build_poly_mesh_system(
 
             if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
                 info!(
-                    "Triangulation failed, skipping contour for tile {:?}, region {}.",
-                    tile_coord,
-                    contour.region
+                    "Triangulation failed for contour in tile {}.",
+                    tile_coord
                 );
-                continue;
             }
 
             for vertex in contour.vertices.iter() {
@@ -306,7 +304,7 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
             let next = (i + 1) % indices.len();
             if indices[next] & 0x80000000 != 0 {
                 let point = vertices[(indices[i] & 0x0fffffff) as usize];
-                let point_next = vertices[(indices[next] & 0x0fffffff) as usize];
+                let point_next = vertices[(indices[(next + 1) % indices.len()] & 0x0fffffff) as usize];
 
                 let delta_x = point_next.x.abs_diff(point.x);
                 let delta_z = point_next.z.abs_diff(point.z);
@@ -326,7 +324,7 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
                 let next_next = (next + 1) % indices.len();
                 if diagonal_loose(i, next_next, vertices, indices) {
                     let point = vertices[(indices[i] & 0x0fffffff) as usize];
-                    let point_next = vertices[(indices[next] & 0x0fffffff) as usize];
+                    let point_next = vertices[(indices[(next_next + 1) % indices.len()] & 0x0fffffff) as usize];
 
                     let delta_x = point_next.x.abs_diff(point.x);
                     let delta_z = point_next.z.abs_diff(point.z);
@@ -341,7 +339,6 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
             }
 
             if min_index.is_none() {
-                info!("Failed to triangulate contour. Contour was probably simplified too much.");
                 return false;
             }
         }
@@ -399,7 +396,7 @@ fn in_cone(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
 
     let point_i_next = vertices[(indices[(i + 1) % indices.len()] & 0x0fffffff) as usize];
     let point_i_previous =
-        vertices[(indices[(indices.len() + j - 1) % indices.len()] & 0x0fffffff) as usize];
+        vertices[(indices[(indices.len() + i - 1) % indices.len()] & 0x0fffffff) as usize];
 
     if left_on(
         point_i_previous.as_ivec4(),
@@ -447,7 +444,7 @@ fn diagonalie(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
                 continue;
             }
 
-            if intersect_segment(
+            if intersect(
                 diagonal_one.as_ivec4(),
                 diagonal_two.as_ivec4(),
                 point_one.as_ivec4(),
@@ -470,7 +467,7 @@ fn in_cone_loose(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> boo
     let point_j = vertices[(indices[j] & 0x0fffffff) as usize];
     let point_i_next = vertices[(indices[(i + 1) % indices.len()] & 0x0fffffff) as usize];
     let point_i_previous =
-        vertices[(indices[(indices.len() + j - 1) % indices.len()] & 0x0fffffff) as usize];
+        vertices[(indices[(indices.len() + i - 1) % indices.len()] & 0x0fffffff) as usize];
 
     if left_on(
         point_i_previous.as_ivec4(),
@@ -500,29 +497,29 @@ fn in_cone_loose(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> boo
     )
 }
 
-fn diagonalie_loose(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
-    let diagonal_one = vertices[(indices[i] & 0x0fffffff) as usize];
-    let diagonal_two = vertices[(indices[j] & 0x0fffffff) as usize];
+fn diagonalie_loose(a: usize, b: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
+    let diagonal_a = vertices[(indices[a] & 0x0fffffff) as usize];
+    let diagonal_b = vertices[(indices[b] & 0x0fffffff) as usize];
 
     for edge in 0..indices.len() {
         let next_edge = (edge + 1) % indices.len();
 
-        if !(edge == i || next_edge == i || edge == j || next_edge == j) {
+        if !(edge == a || next_edge == a || edge == b || next_edge == b) {
             let point_one = vertices[(indices[edge] & 0x0fffffff) as usize];
             let point_two = vertices[(indices[next_edge] & 0x0fffffff) as usize];
 
-            if vec_equal(diagonal_one, point_one)
-                || vec_equal(diagonal_two, point_one)
-                || vec_equal(diagonal_one, point_two)
-                || vec_equal(diagonal_two, point_two)
+            if vec_equal(diagonal_a, point_one)
+                || vec_equal(diagonal_b, point_one)
+                || vec_equal(diagonal_a, point_two)
+                || vec_equal(diagonal_b, point_two)
             {
                 continue;
             }
 
             // loose uses prop instead of regular.
             if intersect_prop(
-                diagonal_one.as_ivec4(),
-                diagonal_two.as_ivec4(),
+                diagonal_a.as_ivec4(),
+                diagonal_b.as_ivec4(),
                 point_one.as_ivec4(),
                 point_two.as_ivec4(),
             ) {

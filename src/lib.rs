@@ -310,13 +310,13 @@ fn between(a: IVec4, b: IVec4, c: IVec4) -> bool {
     }
 
     if a.x != b.x {
-        return a.x <= c.x && c.x <= b.x || a.x >= c.x && c.x >= b.x;
+        return (a.x <= c.x && c.x <= b.x) || (a.x >= c.x && c.x >= b.x);
     }
 
-    a.z <= c.z && c.z <= b.z || a.z >= c.z && c.z >= b.z
+    (a.z <= c.z && c.z <= b.z) || (a.z >= c.z && c.z >= b.z)
 }
 
-fn intersect_segment(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
+fn intersect(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
     intersect_prop(a, b, c, d)
         || between(a, b, c)
         || between(a, b, d)

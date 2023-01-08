@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use bevy::{
-    prelude::{warn, IVec2, Res, ResMut, Resource, UVec2, UVec4},
+    prelude::{warn, IVec2, Res, ResMut, Resource, UVec2, UVec4, info},
     utils::HashMap,
 };
 
@@ -9,7 +9,7 @@ use crate::get_cell_offset;
 
 use super::{
     cell_move_back_column, cell_move_back_row, cell_move_forward_column, cell_move_forward_row,
-    in_cone, intersect_segment, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile, TilesOpen,
+    in_cone, intersect, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile, TilesOpen,
     FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION,
 };
 
@@ -211,7 +211,7 @@ fn merge_region_holes(region: &mut ContourRegion) {
         + region
             .holes
             .iter()
-            .fold(0, |value, contour| value + contour.contour.vertices.len());
+            .fold(0, |value, hole| value + hole.contour.vertices.len());
 
     let mut diagonals = Vec::with_capacity(max_vertices);
 
@@ -343,7 +343,7 @@ fn intersect_segment_contour(
             continue;
         }
 
-        if intersect_segment(
+        if intersect(
             point.as_ivec4(),
             corner.as_ivec4(),
             point_i.as_ivec4(),
@@ -374,7 +374,7 @@ fn intersect_segment_contour_no_vertex(
             continue;
         }
 
-        if intersect_segment(
+        if intersect(
             point.as_ivec4(),
             corner.as_ivec4(),
             point_i.as_ivec4(),
@@ -732,8 +732,8 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32,
     }
 
     for point in simplified.iter_mut() {
-        let current = point.w;
         let next = (point.w + 1) % point_count as u32;
+        let current = point.w;
         point.w = (points[(next * 4 + 3) as usize] & MASK_CONTOUR_REGION)
             | (points[(current * 4 + 3) as usize] & FLAG_BORDER_VERTEX);
     }

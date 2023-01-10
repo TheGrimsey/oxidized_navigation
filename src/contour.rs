@@ -1,14 +1,13 @@
 use std::cmp::Ordering;
 
 use bevy::{
-    prelude::{warn, IVec2, Res, ResMut, Resource, UVec2, UVec4, info},
+    prelude::{warn, IVec2, Res, ResMut, Resource, UVec2, UVec4},
     utils::HashMap,
 };
 
 use crate::get_cell_offset;
 
 use super::{
-    cell_move_back_column, cell_move_back_row, cell_move_forward_column, cell_move_forward_row,
     in_cone, intersect, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile, TilesOpen,
     FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION,
 };
@@ -67,11 +66,9 @@ pub(super) fn build_contours_system(
 
                 for dir in 0..4 {
                     let mut other_region = 0;
-                    if let Some(index) = span.neighbours[dir] {
-                        let other_span = &tile.cells[(cell_index as isize
-                            + get_cell_offset(&nav_mesh_settings, dir))
-                            as usize]
-                            .spans[index as usize];
+                    if let Some(span_index) = span.neighbours[dir] {
+                        let other_span = &tile.cells[get_cell_offset(&nav_mesh_settings, cell_index, dir)]
+                            .spans[span_index as usize];
                         other_region = other_span.region;
                     }
 
@@ -410,19 +407,13 @@ fn walk_contour(
         let span = &tile.cells[cell_index].spans[span_index];
         if boundry_flags[span.tile_index] & (1 << dir) > 0 {
             // Check if this direction is unconnected.
-            let (height, is_border_vertex) =
-                get_corner_height(cell_index, span, tile, nav_mesh_settings, dir);
+            let height = get_corner_height(cell_index, span, tile, nav_mesh_settings, dir);
 
             let mut bordering_region = 0u32;
-            if let Some(index) = span.neighbours[dir as usize] {
-                let other_span = &tile.cells[(cell_index as isize
-                    + get_cell_offset(nav_mesh_settings, dir.into()))
-                    as usize]
-                    .spans[index as usize];
+            if let Some(span_index) = span.neighbours[dir as usize] {
+                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir.into())]
+                    .spans[span_index as usize];
                 bordering_region = other_span.region.into();
-            }
-            if is_border_vertex {
-                bordering_region |= FLAG_BORDER_VERTEX;
             }
 
             let px = match dir {
@@ -448,8 +439,7 @@ fn walk_contour(
                 panic!("Incorrectly flagged boundry!");
             }
 
-            cell_index =
-                (cell_index as isize + get_cell_offset(nav_mesh_settings, dir.into())) as usize;
+            cell_index = get_cell_offset(nav_mesh_settings, cell_index, dir.into());
             dir = (dir + 3) & 0x3; // Rotate COUNTER clock-wise.
         }
 
@@ -465,7 +455,7 @@ fn get_corner_height(
     tile: &OpenTile,
     nav_mesh_settings: &NavMeshSettings,
     dir: u8,
-) -> (u16, bool) {
+) -> u16 {
     let next_dir = (dir + 1) & 0x3;
     let mut regions = [0; 4];
 
@@ -473,78 +463,41 @@ fn get_corner_height(
 
     regions[0] = span.region;
 
-    if let Some(index) = span.neighbours[dir as usize] {
-        let (other_span, other_cell_index) = match dir {
-            0 => cell_move_back_column(tile, cell_index, index.into()),
-            1 => cell_move_forward_row(tile, nav_mesh_settings, cell_index, index.into()),
-            2 => cell_move_forward_column(tile, cell_index, index.into()),
-            3 => cell_move_back_row(tile, nav_mesh_settings, cell_index, index.into()),
-            _ => panic!("Invalid direction."),
-        };
-
+    if let Some(span_index) = span.neighbours[dir as usize] {
+        let other_cell_index = get_cell_offset(nav_mesh_settings, cell_index, dir.into());
+        let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
+        
         height = height.max(other_span.min);
         regions[1] = other_span.region;
 
-        if let Some(index) =
+        if let Some(span_index) =
             other_span.neighbours[next_dir as usize]
         {
-            let (other_span, _) = match next_dir {
-                0 => cell_move_back_column(tile, other_cell_index, index.into()),
-                1 => cell_move_forward_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                2 => cell_move_forward_column(tile, other_cell_index, index.into()),
-                3 => cell_move_back_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                _ => panic!("Invalid direction."),
-            };
-
+            let other_cell_index = get_cell_offset(nav_mesh_settings, other_cell_index, dir.into());
+            let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
+            
             height = height.max(other_span.min);
             regions[2] = other_span.region;
         }
     }
 
-    if let Some(index) = span.neighbours[next_dir as usize] {
-        let (other_span, other_cell_index) = match next_dir {
-            0 => cell_move_back_column(tile, cell_index, index.into()),
-            1 => cell_move_forward_row(tile, nav_mesh_settings, cell_index, index.into()),
-            2 => cell_move_forward_column(tile, cell_index, index.into()),
-            3 => cell_move_back_row(tile, nav_mesh_settings, cell_index, index.into()),
-            _ => panic!("Invalid direction."),
-        };
+    if let Some(span_index) = span.neighbours[next_dir as usize] {
+        let other_cell_index = get_cell_offset(nav_mesh_settings, cell_index, next_dir.into());
+        let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
         height = height.max(other_span.min);
         regions[3] = other_span.region;
 
-        if let Some(index) = other_span.neighbours[dir as usize] {
-            let (other_span, _) = match dir {
-                0 => cell_move_back_column(tile, other_cell_index, index.into()),
-                1 => cell_move_forward_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                2 => cell_move_forward_column(tile, other_cell_index, index.into()),
-                3 => cell_move_back_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                _ => panic!("Invalid direction."),
-            };
+        if let Some(span_index) = other_span.neighbours[dir as usize] {
+            let other_cell_index = get_cell_offset(nav_mesh_settings, other_cell_index, dir.into());
+            let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);
             regions[2] = other_span.region;
         }
     }
 
-    // Check for special edge vertex these will be removed later.
-    let mut is_border_vertex = false;
-    for i in 0..4 {
-        let a = regions[i];
-        let b = regions[(i + 1) & 0x3];
-        let c = regions[(i + 2) & 0x3];
-        let d = regions[(i + 3) & 0x3];
-
-        let two_same_exteriors = a == b;
-        let no_zero = a != 0 && b != 0 && c != 0 && d != 0;
-
-        if two_same_exteriors && no_zero {
-            is_border_vertex = true;
-            break;
-        }
-    }
-
-    (height, is_border_vertex)
+    height
 }
 
 fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32, max_edge_len: u32) {

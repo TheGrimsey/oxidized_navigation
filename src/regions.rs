@@ -1,4 +1,4 @@
-use bevy::prelude::{Res, ResMut};
+use bevy::prelude::{Res, ResMut, info};
 
 use super::{
     get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,
@@ -36,7 +36,7 @@ pub(super) fn build_regions_system(
         }
         let mut stack = Vec::with_capacity(256);
 
-        let mut region_id = 1u16;
+        let mut region_id = 1;
         let mut level = (tile.max_distance + 1) & !1u16; // Rounded.
 
         let mut stack_id = -1;
@@ -77,9 +77,7 @@ pub(super) fn build_regions_system(
                     && regions[entry.index as usize] == 0
                     && flood_region(
                         &nav_mesh_settings,
-                        entry.cell_index,
-                        entry.span_index,
-                        entry.index,
+                        *entry,
                         level,
                         region_id,
                         tile,
@@ -103,6 +101,7 @@ pub(super) fn build_regions_system(
         );
 
         // Merge regions and filter out small ones.
+        info!("Merging tile {},{}", tile_coord.x, tile_coord.y);
         merge_regions(&nav_mesh_settings, &mut regions, &mut region_id, tile);
 
         // Write results into spans.
@@ -189,14 +188,12 @@ fn expand_regions(
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
 
             for dir in 0..4 {
-                let Some(index) = span.neighbours[dir] else {
+                let Some(span_index) = span.neighbours[dir] else {
                     continue;
                 };
 
-                let other_span = &tile.cells[(entry.cell_index as isize
-                    + get_cell_offset(nav_mesh_settings, dir))
-                    as usize]
-                    .spans[index as usize];
+                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir)]
+                    .spans[span_index as usize];
 
                 let other_region = regions[other_span.tile_index];
                 let other_distance = distances[other_span.tile_index];
@@ -277,9 +274,7 @@ fn expand_regions_until_end(
                     continue;
                 };
 
-                let other_span = &tile.cells[(entry.cell_index as isize
-                    + get_cell_offset(nav_mesh_settings, dir))
-                    as usize]
+                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir)]
                     .spans[index as usize];
 
                 let other_region = regions[other_span.tile_index];
@@ -436,7 +431,7 @@ fn merge_regions(
             for connected_region in &connections {
                 let connected_region = &mut regions[*connected_region as usize];
 
-                if connected_region.visited {
+                if connected_region.visited || connected_region.id == 0 {
                     continue;
                 }
 
@@ -454,6 +449,7 @@ fn merge_regions(
         }
     }
 
+    // Merge regions into neighbour.
     loop {
         let mut merged = false;
 
@@ -510,6 +506,8 @@ fn merge_regions(
                     }
 
                     merged = true;
+
+                    info!("Merged {} into {}", old_id, merge_id);
                 }
             }
         }
@@ -541,7 +539,6 @@ fn merge_regions(
             }
         }
     }
-    // TODO: set max region id
     *max_region_id = region_id_gen;
 
     // Remap regions.
@@ -667,10 +664,9 @@ fn walk_contour(
 
     let span = &tile.cells[cell_index].spans[span_index];
     let mut current_region = 0;
-    if let Some(index) = span.neighbours[dir] {
-        let other_span = &tile.cells
-            [(cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
-            .spans[index as usize];
+    if let Some(span_index) = span.neighbours[dir] {
+        let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir)]
+            .spans[span_index as usize];
 
         current_region = source_regions[other_span.tile_index];
     }
@@ -687,10 +683,9 @@ fn walk_contour(
             source_regions,
         ) {
             let mut r = 0;
-            if let Some(index) = span.neighbours[dir] {
-                let other_span = &tile.cells
-                    [(cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
-                    .spans[index as usize];
+            if let Some(span_index) = span.neighbours[dir] {
+                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir)]
+                    .spans[span_index as usize];
 
                 r = source_regions[other_span.tile_index];
             }
@@ -708,7 +703,7 @@ fn walk_contour(
                 return;
             }
 
-            cell_index = (cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize;
+            cell_index = get_cell_offset(nav_mesh_settings, cell_index, dir);
             dir = (dir + 3) & 0x3; // Rotate COUNTER clock-wise.
         }
 
@@ -741,10 +736,9 @@ fn is_solid_edge(
     source_region: &[u16],
 ) -> bool {
     let mut region = 0;
-    if let Some(index) = span.neighbours[dir] {
-        let other_span = &tile.cells
-            [(c_i as isize + get_cell_offset(nav_mesh_settings, dir)) as usize]
-            .spans[index as usize];
+    if let Some(span_index) = span.neighbours[dir] {
+        let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, c_i, dir)]
+            .spans[span_index as usize];
 
         region = source_region[other_span.tile_index];
     }
@@ -762,78 +756,68 @@ fn add_unique_floor_region(region: &mut Region, region_id: u16) {
 
 fn flood_region(
     nav_mesh_settings: &NavMeshSettings,
-    cell_index: u32,
-    span_index: u32,
-    index: i32,
+    entry: LevelStackEntry,
     level: u16,
     region_id: u16,
-    tile: &mut OpenTile,
+    tile: &OpenTile,
     regions: &mut [u16],
     distances: &mut [u16],
     stack: &mut Vec<LevelStackEntry>,
 ) -> bool {
     stack.clear();
-    stack.push(LevelStackEntry {
-        cell_index,
-        span_index,
-        index,
-    });
+    stack.push(entry);
 
-    let lev = if level >= 2 { level - 2} else { 0 };
-    regions[index as usize] = region_id;
-    distances[index as usize] = 0;
-
-    let mut count = 0;
+    regions[entry.index as usize] = region_id;
+    distances[entry.index as usize] = 0;
+    
+    let lev = if level >= 2 { level - 2 } else { 0 };
+    let mut expanded_any = false;
 
     while let Some(entry) = stack.pop() {
         let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
 
-        let mut adjecant_region = 0;
+        let mut has_adjecant_region = false;
         for dir in 0..4 {
-            let Some(index) = span.neighbours[dir] else {
+            let Some(span_index) = span.neighbours[dir] else {
                 continue;
             };
 
-            let other_cell_index =
-                (entry.cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize;
-            let other_span = &tile.cells[other_cell_index].spans[index as usize];
+            let other_cell_index = get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir);
+            let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
             let other_region = regions[other_span.tile_index];
 
             if other_region != 0 && other_region != region_id {
-                adjecant_region = other_region;
+                has_adjecant_region = true;
                 break;
             }
 
             let next_dir = (dir + 1) & 0x3;
-            if let Some(index) = other_span.neighbours[next_dir] {
-                let other_span = &tile.cells[(other_cell_index as isize
-                    + get_cell_offset(nav_mesh_settings, next_dir))
-                    as usize]
-                    .spans[index as usize];
+            if let Some(span_index) = other_span.neighbours[next_dir] {
+                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, other_cell_index, next_dir)]
+                    .spans[span_index as usize];
                 let other_region = regions[other_span.tile_index];
 
                 if other_region != 0 && other_region != region_id {
-                    adjecant_region = other_region;
+                    has_adjecant_region = true;
                     break;
                 }
             }
         }
 
-        if adjecant_region != 0 {
+        if has_adjecant_region {
             regions[entry.index as usize] = 0;
             continue;
         }
 
-        count += 1;
+        expanded_any = true;
 
         for dir in 0..4 {
-            let Some(index) = span.neighbours[dir] else {
+            let Some(span_index) = span.neighbours[dir] else {
                 continue;
             };
 
-            let other_cell_index =
-                (entry.cell_index as isize + get_cell_offset(nav_mesh_settings, dir)) as usize;
-            let other_span = &tile.cells[other_cell_index].spans[index as usize];
+            let other_cell_index = get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir);
+            let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             if tile.distances[other_span.tile_index] >= lev && regions[other_span.tile_index] == 0
             {
@@ -841,12 +825,12 @@ fn flood_region(
                 distances[other_span.tile_index] = 0;
                 stack.push(LevelStackEntry {
                     cell_index: other_cell_index as u32,
-                    span_index: index.into(),
+                    span_index: span_index.into(),
                     index: other_span.tile_index as i32,
                 })
             }
         }
     }
 
-    count > 0
+    expanded_any
 }

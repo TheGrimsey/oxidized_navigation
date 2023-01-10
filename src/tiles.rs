@@ -37,6 +37,7 @@ pub struct Polygon {
 /*
 *   Polygons make up a form of graph, linking to other polygons (which could be on another mesh)
 */
+#[derive(Debug)]
 pub struct NavMeshTile {
     salt: u32,
     pub vertices: Vec<Vec3>,
@@ -225,7 +226,6 @@ pub(super) fn get_closest_point_in_polygon(
     if let Some(height) = get_height_in_triangle(&vertices, position) {
         return Vec3::new(position.x, height, position.z);
     }
-    
     
     closest_point_on_edges(&vertices, position)
 }
@@ -442,24 +442,24 @@ fn calculate_slab_end_points(
 ) -> (Vec2, Vec2) {
     if side == EdgeConnectionDirection::XNegative || side == EdgeConnectionDirection::XPositive {
         if vertex_a.z < vertex_b.z {
-            let min = Vec2::new(vertex_a.z, vertex_a.y);
-            let max = Vec2::new(vertex_b.z, vertex_b.y);
+            let min = vertex_a.zy();
+            let max = vertex_b.zy();
 
             (min, max)
         } else {
-            let min = Vec2::new(vertex_b.z, vertex_b.y);
-            let max = Vec2::new(vertex_a.z, vertex_a.y);
+            let min = vertex_b.zy();
+            let max = vertex_a.zy();
 
             (min, max)
         }
-    } else if vertex_a.z < vertex_b.z {
-        let min = Vec2::new(vertex_a.x, vertex_a.y);
-        let max = Vec2::new(vertex_b.x, vertex_b.y);
+    } else if vertex_a.x < vertex_b.x {
+        let min = vertex_a.xy();
+        let max = vertex_b.xy();
 
         (min, max)
     } else {
-        let min = Vec2::new(vertex_b.x, vertex_b.y);
-        let max = Vec2::new(vertex_a.x, vertex_a.y);
+        let min = vertex_b.xy();
+        let max = vertex_a.xy();
 
         (min, max)
     }
@@ -488,10 +488,10 @@ fn check_slabs_overlap(
         return false;
     }
 
-    let a_d = (a_max.y - a_min.y) / (a_max.x - a_max.y);
+    let a_d = (a_max.y - a_min.y) / (a_max.x - a_min.x);
     let a_k = a_min.y - a_d * a_min.x;
 
-    let b_d = (b_max.y - b_min.y) / (b_max.x - b_max.y);
+    let b_d = (b_max.y - b_min.y) / (b_max.x - b_min.x);
     let b_k = b_min.y - a_d * b_min.x;
 
     let a_min_y = a_d * min_edge + a_k;
@@ -504,7 +504,7 @@ fn check_slabs_overlap(
     let delta_max = b_max_y - a_max_y;
 
     if delta_min * delta_max < 0.0 {
-        return false;
+        return true;
     }
 
     let threshold = (allowed_step * 2.0).powi(2);
@@ -553,7 +553,7 @@ fn find_connecting_polygons_in_tile(
             }
             let (edge_min, edge_max) = calculate_slab_end_points(&vertex_c, &vertex_d, side);
 
-            if check_slabs_overlap(in_min, in_max, edge_min, edge_max, 0.01, step_height) {
+            if !check_slabs_overlap(in_min, in_max, edge_min, edge_max, 0.01, step_height) {
                 continue;
             }
 

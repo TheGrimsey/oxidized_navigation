@@ -112,48 +112,67 @@ struct DirtyTiles(HashSet<UVec2>);
 
 #[derive(Resource, Clone)]
 pub struct NavMeshSettings {
-    pub cell_width: f32,  // Recast recommends having this be 1/2 of character radius.
-    pub cell_height: f32, // Recast recommends having this be 1/2 of cell_width.
+    // Suggestion: Set this to 1/2 of character radius.
+    pub cell_width: f32,
+    // Suggestion: Set this to 1/2 of cell_width.
+    pub cell_height: f32,
 
-    pub tile_width: u16, // As a multiple of cell_width
+    // Length of a tile size in cells.
+    // Higher means more to update each time something within the tile changes, smaller means you will have more overhead from connecting the edges to other tiles & generating the tile itself.
+    pub tile_width: u16, 
+    
+    // Set this to a value that keeps the entirety of the world you wish to cover with navmesh within it as measured from the world origin (0,0).
+    // This is added onto any calculation to figure out which tile we are in. Exists because without it we'd be in a big mess around 0,0.
+    pub world_half_extents: f32,
+    // Minium Y position of anything in the world that should be covered by the nav mesh.
+    pub world_bottom_bound: f32,
+    
+    // Maximum slope traversable when navigating in radians.
+    pub max_traversable_slope_radians: f32,
+    // Minimum open height for an area to be considered walkable in cell_height(s).
+    pub walkable_height: u16,
+    // Theoretically minimum width of an area to be considered walkable, not quite used for that yet, in cell_width(s). 
+    pub walkable_radius: u16,
+    // Maximum height difference that is still considered traversable in cell_height(s). (Think, stair steps)
+    pub step_height: u16,
 
-    pub world_bound: f32, // Keep this as small as possible whilst fitting your world between -world_bound & world_bound on X & Z. This is added onto any calculation to figure out which tile we are in. Exists because without it we'd be in a big mess around 0,0.
-    pub world_bottom_bound: f32, // Minium height of anything in the world: For example: -100.
+    // Minimum size of a region, anything smaller than this will be removed. This is used to filter out smaller regions that might appear on tables.
+    pub min_region_area: usize,
+    // Maximum size of a region to merge other regions into.
+    pub merge_region_area: usize,
 
-    pub max_traversable_slope: f32, // In Radians.
-    pub walkable_height: u16, // Minimum open height for a cell to be considered walkable. Size in cell_height(s).
-    pub walkable_radius: u16, // Theoretically minimum width of an area to be considered walkable, not quite used for that yet. Size in cell_widths.
-    pub step_height: u16, // Maximum height difference that is still considered traversable. (Think, stair steps)
-
-    pub min_region_area: usize, // Minimum area of a region for it to not be removed in cells.
-    pub merge_region_area: usize, // Maximum size of a region to merge other regions into.
-
+    // Maximum length of an edge before it's split. Suggestion: Start high and reduce it if there are issues.
     pub max_edge_length: u32,
-    pub max_contour_simplification_error: f32, // Maximum difference allowed for the contour generation on the XZ-plane in cell_widths. Recast suggests keeping this in the range of [1.1, 1.5]
+    // Maximum difference allowed for simplified contour generation on the XZ-plane. Suggested value range: [1.1, 1.5]
+    pub max_contour_simplification_error: f32, 
 }
 impl NavMeshSettings {
+    #[inline]
     pub fn get_tile_size(&self) -> f32 {
         self.cell_width * self.tile_width as f32
     }
 
+    #[inline]
     pub fn get_tile_position(&self, world_pos: Vec2) -> UVec2 {
         let tile_size = self.get_tile_size();
 
-        let offset_world = world_pos + self.world_bound;
+        let offset_world = world_pos + self.world_half_extents;
 
         (offset_world / tile_size).as_uvec2()
     }
 
+    #[inline]
     pub fn get_tile_min_bound(&self, tile: UVec2) -> Vec2 {
         let tile_size = self.get_tile_size();
 
-        tile.as_vec2() * tile_size - self.world_bound
+        tile.as_vec2() * tile_size - self.world_half_extents
     }
 
+    #[inline]
     pub fn get_tile_bounds(&self, tile: UVec2) -> (Vec2, Vec2) {
         let tile_size = self.get_tile_size();
 
-        let min_bound = tile.as_vec2() * tile_size - self.world_bound;
+        let min_bound = tile.as_vec2() * tile_size - self.world_half_extents;
         let max_bound = min_bound + tile_size;
 
         (min_bound, max_bound)
@@ -246,52 +265,12 @@ fn clear_dirty_tiles_system(mut dirty_tiles: ResMut<DirtyTiles>) {
     dirty_tiles.0.clear();
 }
 
-fn cell_move_back_row<'a>(
-    tile: &'a OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&'a OpenSpan, usize) {
-    let other_cell_index = cell_index - nav_mesh_settings.tile_width as usize;
-    let other_cell = &tile.cells[other_cell_index];
-    (&other_cell.spans[target_span_index], other_cell_index)
-}
-
-fn cell_move_forward_row<'a>(
-    tile: &'a OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&'a OpenSpan, usize) {
-    let other_cell_index = cell_index + nav_mesh_settings.tile_width as usize;
-    let other_cell = &tile.cells[other_cell_index];
-    (&other_cell.spans[target_span_index], other_cell_index)
-}
-
-fn cell_move_back_column(
-    tile: &OpenTile,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&OpenSpan, usize) {
-    let other_cell = &tile.cells[cell_index - 1];
-    (&other_cell.spans[target_span_index], cell_index - 1)
-}
-
-fn cell_move_forward_column(
-    tile: &OpenTile,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&OpenSpan, usize) {
-    let other_cell = &tile.cells[cell_index + 1];
-    (&other_cell.spans[target_span_index], cell_index + 1)
-}
-
-fn get_cell_offset(nav_mesh_settings: &NavMeshSettings, dir: usize) -> isize {
+fn get_cell_offset(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
     match dir {
-        0 => -1,
-        1 => nav_mesh_settings.tile_width as isize,
-        2 => 1,
-        3 => -(nav_mesh_settings.tile_width as isize),
+        0 => index - 1,
+        1 => index + nav_mesh_settings.tile_width as usize,
+        2 => index + 1,
+        3 => index - nav_mesh_settings.tile_width as usize,
         _ => panic!("Not a valid direction"),
     }
 }
@@ -325,7 +304,7 @@ fn intersect(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
 }
 
 fn area_sqr(a: IVec4, b: IVec4, c: IVec4) -> i32 {
-    (b.x - a.x) * (c.z - a.z) * (c.x - a.x) * (b.z - a.z)
+    (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)
 }
 
 fn collinear(a: IVec4, b: IVec4, c: IVec4) -> bool {

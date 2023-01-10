@@ -69,7 +69,7 @@ pub(super) fn build_poly_mesh_system(
             triangles.clear();
             polygons.clear();
 
-            indices.extend((0..contour.vertices.len()).map(|val| val as u32));
+            indices.extend(0..contour.vertices.len() as u32);
 
             if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
                 info!(
@@ -126,6 +126,7 @@ pub(super) fn build_poly_mesh_system(
                     continue;
                 };
 
+                info!("I{}, {:?}", index, indices);
                 let vertex_a = poly_mesh.vertices[indices[index] as usize];
                 let vertex_b = poly_mesh.vertices[indices[(index + 1) % indices.len()] as usize];
 
@@ -395,18 +396,18 @@ fn in_cone(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
     let point_j = vertices[(indices[j] & 0x0fffffff) as usize];
 
     let point_i_next = vertices[(indices[(i + 1) % indices.len()] & 0x0fffffff) as usize];
-    let point_i_previous =
+    let point_i_prev =
         vertices[(indices[(indices.len() + i - 1) % indices.len()] & 0x0fffffff) as usize];
 
     if left_on(
-        point_i_previous.as_ivec4(),
+        point_i_prev.as_ivec4(),
         point_i.as_ivec4(),
         point_i_next.as_ivec4(),
     ) {
         return left(
             point_i.as_ivec4(),
             point_j.as_ivec4(),
-            point_i_previous.as_ivec4(),
+            point_i_prev.as_ivec4(),
         ) && left(
             point_j.as_ivec4(),
             point_i.as_ivec4(),
@@ -414,15 +415,15 @@ fn in_cone(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
         );
     }
 
-    !left_on(
+    !(left_on(
         point_i.as_ivec4(),
         point_j.as_ivec4(),
         point_i_next.as_ivec4(),
     ) && left_on(
         point_j.as_ivec4(),
         point_i.as_ivec4(),
-        point_i_previous.as_ivec4(),
-    )
+        point_i_prev.as_ivec4(),
+    ))
 }
 
 fn diagonalie(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
@@ -462,39 +463,39 @@ fn diagonal(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
     in_cone(i, j, vertices, indices) && diagonalie(i, j, vertices, indices)
 }
 
-fn in_cone_loose(i: usize, j: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
-    let point_i = vertices[(indices[i] & 0x0fffffff) as usize];
-    let point_j = vertices[(indices[j] & 0x0fffffff) as usize];
-    let point_i_next = vertices[(indices[(i + 1) % indices.len()] & 0x0fffffff) as usize];
-    let point_i_previous =
-        vertices[(indices[(indices.len() + i - 1) % indices.len()] & 0x0fffffff) as usize];
+fn in_cone_loose(a: usize, b: usize, vertices: &[UVec4], indices: &[u32]) -> bool {
+    let point_a = vertices[(indices[a] & 0x0fffffff) as usize];
+    let point_b = vertices[(indices[b] & 0x0fffffff) as usize];
+    let point_a_next = vertices[(indices[(a + 1) % indices.len()] & 0x0fffffff) as usize];
+    let point_a_prev =
+        vertices[(indices[(indices.len() + a - 1) % indices.len()] & 0x0fffffff) as usize];
 
     if left_on(
-        point_i_previous.as_ivec4(),
-        point_i.as_ivec4(),
-        point_i_next.as_ivec4(),
+        point_a_prev.as_ivec4(),
+        point_a.as_ivec4(),
+        point_a_next.as_ivec4(),
     ) {
         // only difference between in_cone is this being left_on instead of left:
         return left_on(
-            point_i.as_ivec4(),
-            point_j.as_ivec4(),
-            point_i_previous.as_ivec4(),
+            point_a.as_ivec4(),
+            point_b.as_ivec4(),
+            point_a_prev.as_ivec4(),
         ) && left_on(
-            point_j.as_ivec4(),
-            point_i.as_ivec4(),
-            point_i_next.as_ivec4(),
+            point_b.as_ivec4(),
+            point_a.as_ivec4(),
+            point_a_next.as_ivec4(),
         );
     }
 
-    !left_on(
-        point_i.as_ivec4(),
-        point_j.as_ivec4(),
-        point_i_next.as_ivec4(),
+    !(left_on(
+        point_a.as_ivec4(),
+        point_b.as_ivec4(),
+        point_a_next.as_ivec4(),
     ) && left_on(
-        point_j.as_ivec4(),
-        point_i.as_ivec4(),
-        point_i_previous.as_ivec4(),
-    )
+        point_b.as_ivec4(),
+        point_a.as_ivec4(),
+        point_a_prev.as_ivec4(),
+    ))
 }
 
 fn diagonalie_loose(a: usize, b: usize, vertices: &[UVec4], indices: &[u32]) -> bool {

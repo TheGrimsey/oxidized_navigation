@@ -269,7 +269,7 @@ pub fn perform_string_pulling_on_path(
     let start_pos = get_closest_point_in_polygon(start_tile, &start_tile.polygons[path[0].1 as usize], start_pos);
     let end_pos = get_closest_point_in_polygon(end_tile, &end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
 
-    let mut string_path = Vec::with_capacity(path.len());
+    let mut string_path = Vec::with_capacity(path.len() + 2);
     string_path.push(start_pos);
 
     if path.len() > 1 {
@@ -277,7 +277,6 @@ pub fn perform_string_pulling_on_path(
         let mut portal_left = start_pos;
         let mut portal_right = start_pos;
 
-        let mut apex_index = 0;
         let mut left_index = 0;
         let mut right_index = 0;
         
@@ -329,7 +328,6 @@ pub fn perform_string_pulling_on_path(
                     right_index = i;
                 } else {
                     portal_apex = portal_left;
-                    apex_index = left_index;
 
                     if *string_path.last().unwrap() != portal_apex {
                         string_path.push(portal_apex);
@@ -337,10 +335,9 @@ pub fn perform_string_pulling_on_path(
 
                     portal_left = portal_apex;
                     portal_right = portal_apex;
-                    left_index = apex_index;
-                    right_index = apex_index;
+                    right_index = left_index;
 
-                    i = apex_index + 1;
+                    i = left_index + 1;
                     continue;
                 }
             }
@@ -352,18 +349,15 @@ pub fn perform_string_pulling_on_path(
                     left_index = i;
                 } else {
                     portal_apex = portal_right;
-                    apex_index = right_index;
-
                     if *string_path.last().unwrap() != portal_apex {
                         string_path.push(portal_apex);
                     }
 
                     portal_left = portal_apex;
                     portal_right = portal_apex;
-                    left_index = apex_index;
-                    right_index = apex_index;
+                    left_index = right_index;
 
-                    i = apex_index + 1;
+                    i = right_index + 1;
                     continue;
                 }
             }

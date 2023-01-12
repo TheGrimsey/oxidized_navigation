@@ -31,7 +31,7 @@ pub enum Link {
 #[derive(Debug)]
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
-    pub(super) links: SmallVec<[Link; VERTICES_IN_TRIANGLE * 2]>, // This becomes a mess memory wise with a ton of different small objects around.
+    pub(super) links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
 }
 
 /*
@@ -39,7 +39,6 @@ pub struct Polygon {
 */
 #[derive(Debug)]
 pub struct NavMeshTile {
-    salt: u32,
     pub vertices: Vec<Vec3>,
     pub polygons: Vec<Polygon>,
     edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
@@ -53,6 +52,7 @@ pub struct NavMeshTiles {
 #[derive(Default)]
 pub struct NavMesh {
     pub tiles: HashMap<UVec2, NavMeshTile>,
+    pub tile_generations: HashMap<UVec2, u64>
 }
 
 impl NavMesh {
@@ -62,14 +62,7 @@ impl NavMesh {
         mut tile: NavMeshTile,
         nav_mesh_settings: &NavMeshSettings,
     ) {
-        // Get an incremented salt.
-        let previous_tile_existed = if let Some(old_tile) = self.tiles.get(&tile_coord) {
-            tile.salt = old_tile.salt + 1;
-            true
-        } else {
-            tile.salt = 0;
-            false
-        };
+        let previous_tile_existed = self.tiles.contains_key(&tile_coord);
 
         // Connect neighbours.
         let step_height = nav_mesh_settings.step_height as f32 * nav_mesh_settings.cell_height;
@@ -177,7 +170,8 @@ impl NavMesh {
                 );
             }
         }
-
+        
+        // Insert tile.
         self.tiles.insert(tile_coord, tile);
     }
 
@@ -571,15 +565,15 @@ fn find_connecting_polygons_in_tile(
 }
 
 pub(super) fn create_nav_mesh_data_from_poly_mesh(
-    mesh: &PolyMesh,
-    tile_coords: UVec2,
+    poly_mesh: &PolyMesh,
+    tile_coord: UVec2,
     nav_mesh_settings: &NavMeshSettings,
 ) -> NavMeshTile {
     // Slight worry that the compiler won't optimize this but damn, it's cool.
-    let polygons = mesh
+    let polygons = poly_mesh
         .polygons
         .iter()
-        .zip(mesh.edges.iter())
+        .zip(poly_mesh.edges.iter())
         .map(|(indices, edges)| {
             // Pre build internal links.
             let links = edges
@@ -604,8 +598,8 @@ pub(super) fn create_nav_mesh_data_from_poly_mesh(
         })
         .collect();
 
-    let tile_min_bound = nav_mesh_settings.get_tile_min_bound(tile_coords);
-    let vertices = mesh
+    let tile_min_bound = nav_mesh_settings.get_tile_min_bound(tile_coord);
+    let vertices = poly_mesh
         .vertices
         .iter()
         .map(|vertex| {
@@ -619,9 +613,8 @@ pub(super) fn create_nav_mesh_data_from_poly_mesh(
         .collect();
 
     NavMeshTile {
-        salt: 0,
         vertices,
-        edges: mesh.edges.clone(),
+        edges: poly_mesh.edges.clone(),
         polygons,
     }
 }

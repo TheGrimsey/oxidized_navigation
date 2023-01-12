@@ -1,10 +1,9 @@
-use bevy::{
-    prelude::{info, Res, ResMut, Resource, UVec2, UVec3, UVec4},
-    utils::HashMap,
-};
+use bevy::prelude::{info, UVec2, UVec3, UVec4};
+
+use crate::contour::ContourSet;
 
 use super::{
-    intersect_prop, intersect, left, left_on, DirtyTiles, NavMeshSettings, TileContours,
+    intersect_prop, intersect, left, left_on, NavMeshSettings,
 };
 
 #[derive(Default)]
@@ -14,145 +13,131 @@ pub struct PolyMesh {
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
 }
 
-#[derive(Default, Resource)]
-pub(super) struct TilePolyMesh {
-    pub(super) map: HashMap<UVec2, PolyMesh>,
-}
-
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
 pub const VERTICES_IN_TRIANGLE: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
-pub(super) fn build_poly_mesh_system(
-    nav_mesh_settings: Res<NavMeshSettings>,
-    contours: Res<TileContours>,
-    mut poly_meshes: ResMut<TilePolyMesh>,
-    dirty_tiles: Res<DirtyTiles>,
-) {
-    for tile_coord in dirty_tiles.0.iter() {
-        let Some(contour_set) = contours.map.get(tile_coord) else {
+pub fn build_poly_mesh(
+    contour_set: &ContourSet,
+    nav_mesh_settings: &NavMeshSettings,
+) -> PolyMesh {
+    let mut max_vertices = 0;
+    let mut max_tris = 0;
+    let mut max_verts_per_contour = 0;
+
+    for contour in &contour_set.contours {
+        if contour.vertices.len() < 3 {
             continue;
-        };
-
-        let mut max_vertices = 0;
-        let mut max_tris = 0;
-        let mut max_verts_per_contour = 0;
-
-        for contour in &contour_set.contours {
-            if contour.vertices.len() < 3 {
-                continue;
-            }
-
-            max_vertices += contour.vertices.len();
-            max_tris += contour.vertices.len() - 2;
-            max_verts_per_contour = contour.vertices.len().max(max_verts_per_contour);
         }
 
-        let mut poly_mesh = PolyMesh {
-            vertices: Vec::with_capacity(max_vertices),
-            polygons: Vec::with_capacity(max_tris),
-            edges: Vec::with_capacity(max_tris),
-        };
-
-        let mut first_vertex = vec![-1; VERTEX_BUCKET_COUNT];
-        let mut next_vertex = vec![0; max_vertices];
-
-        let mut indices = Vec::with_capacity(max_verts_per_contour);
-        let mut triangles = Vec::with_capacity(max_verts_per_contour * 3);
-        let mut polygons = Vec::with_capacity((max_verts_per_contour + 1) * VERTICES_IN_TRIANGLE);
-
-        for contour in &contour_set.contours {
-            if contour.vertices.len() < 3 {
-                continue;
-            }
-
-            indices.clear();
-            triangles.clear();
-            polygons.clear();
-
-            indices.extend(0..contour.vertices.len() as u32);
-
-            if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
-                info!(
-                    "Triangulation failed for contour in tile {}.",
-                    tile_coord
-                );
-            }
-
-            for vertex in contour.vertices.iter() {
-                let index = add_vertex(
-                    vertex.truncate(),
-                    &mut poly_mesh.vertices,
-                    &mut first_vertex,
-                    &mut next_vertex,
-                );
-                indices.push(index);
-            }
-
-            let triangle_count = triangles.len() / 3;
-            for i in 0..triangle_count {
-                let a = triangles[i * 3];
-                let b = triangles[i * 3 + 1];
-                let c = triangles[i * 3 + 2];
-
-                if a != b && a != c && b != c {
-                    polygons.push([
-                        indices[a as usize],
-                        indices[b as usize],
-                        indices[c as usize],
-                    ]);
-                }
-            }
-
-            if polygons.is_empty() {
-                continue;
-            }
-
-            // Store polygons.
-            poly_mesh.polygons.extend(polygons.iter());
-        }
-
-        // For each edge, find other polygon that shares that edge.
-        build_mesh_adjacency(
-            &poly_mesh.polygons,
-            poly_mesh.vertices.len(),
-            &mut poly_mesh.edges,
-        );
-
-        // Fix portal edges.
-        for (i, indices) in poly_mesh.polygons.iter().enumerate() {
-            for index in 0..indices.len() {
-                // Connect to edges that don't have an internal edge connection.
-                let EdgeConnection::None = poly_mesh.edges[i][index] else {
-                    continue;
-                };
-
-                info!("I{}, {:?}", index, indices);
-                let vertex_a = poly_mesh.vertices[indices[index] as usize];
-                let vertex_b = poly_mesh.vertices[indices[(index + 1) % indices.len()] as usize];
-
-                // Only edges parallel to the tile edge.
-                if vertex_a.x == 0 && vertex_b.x == 0 {
-                    poly_mesh.edges[i][index] =
-                        EdgeConnection::OffMesh(EdgeConnectionDirection::XNegative);
-                } else if vertex_a.z == nav_mesh_settings.tile_width as u32
-                    && vertex_b.z == nav_mesh_settings.tile_width as u32
-                {
-                    poly_mesh.edges[i][index] =
-                        EdgeConnection::OffMesh(EdgeConnectionDirection::ZPositive);
-                } else if vertex_a.x == nav_mesh_settings.tile_width as u32
-                    && vertex_b.x == nav_mesh_settings.tile_width as u32
-                {
-                    poly_mesh.edges[i][index] =
-                        EdgeConnection::OffMesh(EdgeConnectionDirection::XPositive);
-                } else if vertex_a.z == 0 && vertex_b.z == 0 {
-                    poly_mesh.edges[i][index] =
-                        EdgeConnection::OffMesh(EdgeConnectionDirection::ZNegative);
-                }
-            }
-        }
-
-        poly_meshes.map.insert(*tile_coord, poly_mesh);
+        max_vertices += contour.vertices.len();
+        max_tris += contour.vertices.len() - 2;
+        max_verts_per_contour = contour.vertices.len().max(max_verts_per_contour);
     }
+
+    let mut poly_mesh = PolyMesh {
+        vertices: Vec::with_capacity(max_vertices),
+        polygons: Vec::with_capacity(max_tris),
+        edges: Vec::with_capacity(max_tris),
+    };
+
+    let mut first_vertex = vec![-1; VERTEX_BUCKET_COUNT];
+    let mut next_vertex = vec![0; max_vertices];
+
+    let mut indices = Vec::with_capacity(max_verts_per_contour);
+    let mut triangles = Vec::with_capacity(max_verts_per_contour * 3);
+    let mut polygons = Vec::with_capacity((max_verts_per_contour + 1) * VERTICES_IN_TRIANGLE);
+
+    for contour in &contour_set.contours {
+        if contour.vertices.len() < 3 {
+            continue;
+        }
+
+        indices.clear();
+        triangles.clear();
+        polygons.clear();
+
+        indices.extend(0..contour.vertices.len() as u32);
+
+        if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
+            info!(
+                "Triangulation failed for contour."
+            );
+        }
+
+        for vertex in contour.vertices.iter() {
+            let index = add_vertex(
+                vertex.truncate(),
+                &mut poly_mesh.vertices,
+                &mut first_vertex,
+                &mut next_vertex,
+            );
+            indices.push(index);
+        }
+
+        let triangle_count = triangles.len() / 3;
+        for i in 0..triangle_count {
+            let a = triangles[i * 3];
+            let b = triangles[i * 3 + 1];
+            let c = triangles[i * 3 + 2];
+
+            if a != b && a != c && b != c {
+                polygons.push([
+                    indices[a as usize],
+                    indices[b as usize],
+                    indices[c as usize],
+                ]);
+            }
+        }
+
+        if polygons.is_empty() {
+            continue;
+        }
+
+        // Store polygons.
+        poly_mesh.polygons.extend(polygons.iter());
+    }
+
+    // For each edge, find other polygon that shares that edge.
+    build_mesh_adjacency(
+        &poly_mesh.polygons,
+        poly_mesh.vertices.len(),
+        &mut poly_mesh.edges,
+    );
+
+    // Fix portal edges.
+    for (i, indices) in poly_mesh.polygons.iter().enumerate() {
+        for index in 0..indices.len() {
+            // Connect to edges that don't have an internal edge connection.
+            let EdgeConnection::None = poly_mesh.edges[i][index] else {
+                continue;
+            };
+
+            info!("I{}, {:?}", index, indices);
+            let vertex_a = poly_mesh.vertices[indices[index] as usize];
+            let vertex_b = poly_mesh.vertices[indices[(index + 1) % indices.len()] as usize];
+
+            // Only edges parallel to the tile edge.
+            if vertex_a.x == 0 && vertex_b.x == 0 {
+                poly_mesh.edges[i][index] =
+                    EdgeConnection::OffMesh(EdgeConnectionDirection::XNegative);
+            } else if vertex_a.z == nav_mesh_settings.tile_width as u32
+                && vertex_b.z == nav_mesh_settings.tile_width as u32
+            {
+                poly_mesh.edges[i][index] =
+                    EdgeConnection::OffMesh(EdgeConnectionDirection::ZPositive);
+            } else if vertex_a.x == nav_mesh_settings.tile_width as u32
+                && vertex_b.x == nav_mesh_settings.tile_width as u32
+            {
+                poly_mesh.edges[i][index] =
+                    EdgeConnection::OffMesh(EdgeConnectionDirection::XPositive);
+            } else if vertex_a.z == 0 && vertex_b.z == 0 {
+                poly_mesh.edges[i][index] =
+                    EdgeConnection::OffMesh(EdgeConnectionDirection::ZNegative);
+            }
+        }
+    }
+
+    poly_mesh
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

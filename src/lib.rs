@@ -1,4 +1,7 @@
-use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel};
+use std::sync::{Arc, RwLock};
+
+use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error};
+use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
     ecs::system::Resource,
     prelude::{
@@ -7,19 +10,14 @@ use bevy::{
     },
     utils::{HashMap, HashSet},
 };
+use bevy_rapier3d::prelude::ColliderView;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
+use contour::build_contours;
+use heightfields::{build_heightfield_tile, build_open_heightfield_tile, link_neighbours, calculate_distance_field};
+use mesher::build_poly_mesh;
+use regions::build_regions;
 use smallvec::SmallVec;
-use tiles::{create_nav_mesh_data_from_poly_mesh, NavMeshTiles};
-
-use self::{
-    contour::{build_contours_system, TileContours},
-    heightfields::{
-        construct_open_heightfields_system, create_distance_field_system,
-        create_neighbour_links_system, rebuild_heightfields_system, TilesVoxelized,
-    },
-    mesher::{build_poly_mesh_system, TilePolyMesh},
-    regions::build_regions_system,
-};
+use tiles::{create_nav_mesh_data_from_poly_mesh, NavMeshTiles, NavMesh};
 
 pub mod contour;
 mod heightfields;
@@ -34,27 +32,17 @@ pub struct OxidizedGeneration;
 pub struct OxidizedNavigationPlugin;
 impl Plugin for OxidizedNavigationPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TilesVoxelized::default())
+        app
             .insert_resource(TileAffectors::default())
-            .insert_resource(TilesOpen::default())
-            .insert_resource(TileContours::default())
             .insert_resource(DirtyTiles::default())
-            .insert_resource(TilePolyMesh::default())
-            .insert_resource(NavMeshTiles::default());
+            .insert_resource(NavMeshTiles::default())
+            .insert_resource(GenerationTicker::default());
 
         app.add_system_set(SystemSet::new()
             .label(OxidizedGeneration)
             .with_system(update_navmesh_affectors_system)
-            .with_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
-            .with_system(construct_open_heightfields_system.after(rebuild_heightfields_system))
-            .with_system(create_neighbour_links_system.after(construct_open_heightfields_system))
-            .with_system(create_distance_field_system.after(create_neighbour_links_system))
-            .with_system(build_regions_system.after(create_distance_field_system))
-            .with_system(build_contours_system.after(build_regions_system))
-            .with_system(build_poly_mesh_system.after(build_contours_system))
-
-            .with_system(insert_updated_tile_system.after(build_poly_mesh_system))
-            .with_system(clear_dirty_tiles_system.after(insert_updated_tile_system))
+            .with_system(send_tile_rebuild_tasks_system.after(update_navmesh_affectors_system))
+            .with_system(clear_dirty_tiles_system.after(send_tile_rebuild_tasks_system))
         );
     }
 }
@@ -69,6 +57,7 @@ pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
 pub struct OpenCell {
     spans: Vec<OpenSpan>,
 }
+
 
 /*
 *   Neighbours:
@@ -98,9 +87,7 @@ pub struct OpenTile {
 }
 
 #[derive(Default, Resource)]
-struct TilesOpen {
-    map: HashMap<UVec2, OpenTile>,
-}
+struct GenerationTicker(u64);
 
 #[derive(Default, Resource)]
 struct TileAffectors {
@@ -241,23 +228,105 @@ fn update_navmesh_affectors_system(
     }
 }
 
-fn insert_updated_tile_system(
-    dirty_tiles: Res<DirtyTiles>,
-    poly_meshes: Res<TilePolyMesh>,
+fn send_tile_rebuild_tasks_system(
     nav_mesh_settings: Res<NavMeshSettings>,
-    nav_mesh: ResMut<NavMeshTiles>,
+    nav_mesh: Res<NavMeshTiles>,
+    tile_affectors: Res<TileAffectors>,
+    dirty_tiles: Res<DirtyTiles>,
+    collider_query: Query<(&Collider, &GlobalTransform), With<NavMeshAffector>>,
+    mut generation_ticker: ResMut<GenerationTicker>,
 ) {
-    if !dirty_tiles.0.is_empty() {
-        let mut nav_mesh = nav_mesh.nav_mesh.write().unwrap();
-        for tile in dirty_tiles.0.iter() {
-            let Some(poly_mesh) = poly_meshes.map.get(tile) else {
-                continue;
-            };
-            let nav_mesh_tile =
-                create_nav_mesh_data_from_poly_mesh(poly_mesh, *tile, &nav_mesh_settings);
-    
-            nav_mesh.add_tile(*tile, nav_mesh_tile, &nav_mesh_settings);
+    let thread_pool = AsyncComputeTaskPool::get();
+
+    for tile_coord in dirty_tiles.0.iter() {
+        let Some(affectors) = tile_affectors.map.get(tile_coord) else {
+            // TODO: Remove tile.
+            continue;
+        };
+        if affectors.is_empty() {
+            // TODO: Remove tile.
+            continue;
         }
+
+        // Step 1: Gather data.
+        let mut triangle_collections = Vec::with_capacity(affectors.len());
+        
+        let mut collider_iter = collider_query.iter_many(affectors.iter());
+        while let Some((collider, transform)) = collider_iter.fetch_next() {
+            let (raw_vertices, raw_triangles) = match collider.as_typed_shape() {
+                ColliderView::Ball(ball) => ball.raw.to_trimesh(5, 5),
+                ColliderView::Cuboid(cuboid) => cuboid.raw.to_trimesh(),
+                ColliderView::Capsule(capsule) => capsule.raw.to_trimesh(5, 5),
+                ColliderView::TriMesh(trimesh) => (trimesh.raw.vertices().to_vec(), trimesh.indices().to_vec()),
+                ColliderView::HeightField(heightfield) => heightfield.raw.to_trimesh(),
+                ColliderView::ConvexPolyhedron(polyhedron) => polyhedron.raw.to_trimesh(),
+                ColliderView::Cylinder(cylinder) => cylinder.raw.to_trimesh(5),
+                ColliderView::Cone(cone) => cone.raw.to_trimesh(5),
+                ColliderView::RoundCuboid(round_cuboid) => round_cuboid.raw.inner_shape.to_trimesh(),
+                ColliderView::RoundCylinder(round_cylinder) => round_cylinder.raw.inner_shape.to_trimesh(5),
+                ColliderView::RoundCone(round_cone) => round_cone.raw.inner_shape.to_trimesh(5),
+                ColliderView::RoundConvexPolyhedron(round_polyhedron) => round_polyhedron.raw.inner_shape.to_trimesh(),
+                // TODO: All the following ones are more complicated :)
+                ColliderView::Triangle(_) => todo!(), /* ??? */
+                ColliderView::RoundTriangle(_) => todo!(), /* ??? */
+                ColliderView::Compound(_) => todo!(), /* ??? */
+                // These ones do not make sense in this.
+                ColliderView::HalfSpace(_) => continue, /* This is like an infinite plane? We don't care. */
+                ColliderView::Polyline(_) => continue, /* This is a line. */
+                ColliderView::Segment(_) => continue, /* This is a line segment. */
+            };
+
+            let raw_vertices = raw_vertices.iter().map(|point| Vec3::new(point.x, point.y, point.z)).collect();
+
+            triangle_collections.push((transform.clone(), raw_vertices, raw_triangles));
+        }
+
+        // Step 2: Acquire generation & nav_mesh lock
+        generation_ticker.0 += 1;
+        let generation = generation_ticker.0;
+        let nav_mesh = nav_mesh.nav_mesh.clone();
+
+        // Step 3: Make it a task.
+        let task = thread_pool.spawn(build_tile(generation, *tile_coord, nav_mesh_settings.clone(), triangle_collections, nav_mesh));
+        task.detach();
+
+    }
+}
+
+async fn build_tile(
+    generation: u64,
+    tile_coord: UVec2,
+    nav_mesh_settings: NavMeshSettings,
+    triangle_collections: Vec<(GlobalTransform, Vec<Vec3>, Vec<[u32; 3]>)>,
+    nav_mesh: Arc<RwLock<NavMesh>>
+) {
+    let voxelized_tile = build_heightfield_tile(tile_coord, triangle_collections, &nav_mesh_settings);
+    
+    let mut open_tile = build_open_heightfield_tile(&voxelized_tile, &nav_mesh_settings);
+    std::mem::drop(voxelized_tile);
+    
+    link_neighbours(&mut open_tile, &nav_mesh_settings);
+    calculate_distance_field(&mut open_tile, &nav_mesh_settings);
+    build_regions(&mut open_tile, &nav_mesh_settings);
+
+    let contour_set = build_contours(&open_tile, &nav_mesh_settings);
+    std::mem::drop(open_tile);
+
+    let poly_mesh = build_poly_mesh(&contour_set, &nav_mesh_settings);
+    std::mem::drop(contour_set);
+
+    let nav_mesh_tile = create_nav_mesh_data_from_poly_mesh(&poly_mesh, tile_coord, &nav_mesh_settings);
+    std::mem::drop(poly_mesh);
+
+    let Ok(mut nav_mesh) = nav_mesh.write() else {
+        error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
+        return;
+    };
+    
+    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
+        nav_mesh.tile_generations.insert(tile_coord, generation);
+
+        nav_mesh.add_tile(tile_coord, nav_mesh_tile, &nav_mesh_settings);
     }
 }
 

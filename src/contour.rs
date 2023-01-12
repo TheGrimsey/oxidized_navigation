@@ -1,21 +1,15 @@
 use std::cmp::Ordering;
 
 use bevy::{
-    prelude::{warn, IVec2, Res, ResMut, Resource, UVec2, UVec4},
-    utils::HashMap,
+    prelude::{warn, IVec2, UVec2, UVec4},
 };
 
 use crate::get_cell_offset;
 
 use super::{
-    in_cone, intersect, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile, TilesOpen,
+    in_cone, intersect, NavMeshSettings, OpenSpan, OpenTile,
     FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION,
 };
-
-#[derive(Default, Resource)]
-pub struct TileContours {
-    pub map: HashMap<UVec2, ContourSet>,
-}
 
 #[derive(Default, Clone, Debug)]
 pub struct Contour {
@@ -42,139 +36,131 @@ struct ContourRegion {
     holes: Vec<ContourHole>,
 }
 
-pub(super) fn build_contours_system(
-    nav_mesh_settings: Res<NavMeshSettings>,
-    open_tiles: Res<TilesOpen>,
-    mut contours: ResMut<TileContours>,
-    dirty_tiles: Res<DirtyTiles>,
-) {
-    for tile_coord in dirty_tiles.0.iter() {
-        let Some(tile) = open_tiles.map.get(tile_coord) else {
-            continue;
-        };
+pub fn build_contours(
+    open_tile: &OpenTile,
+    nav_mesh_settings: &NavMeshSettings,
+) -> ContourSet {
+    let max_contours = open_tile.max_regions.max(8);
+    let mut contour_set = ContourSet {
+        contours: Vec::with_capacity(max_contours.into()),
+    };
 
-        let max_contours = tile.max_regions.max(8);
-        let mut contour_set = ContourSet {
-            contours: Vec::with_capacity(max_contours.into()),
-        };
+    // Mark boundaries.
+    let mut boundry_flags = vec![0u8; open_tile.span_count];
+    for (cell_index, cell) in open_tile.cells.iter().enumerate() {
+        for span in cell.spans.iter() {
+            let mut res = 0;
 
-        // Mark boundaries.
-        let mut boundry_flags = vec![0u8; tile.span_count];
-        for (cell_index, cell) in tile.cells.iter().enumerate() {
-            for span in cell.spans.iter() {
-                let mut res = 0;
-
-                for dir in 0..4 {
-                    let mut other_region = 0;
-                    if let Some(span_index) = span.neighbours[dir] {
-                        let other_span = &tile.cells[get_cell_offset(&nav_mesh_settings, cell_index, dir)]
-                            .spans[span_index as usize];
-                        other_region = other_span.region;
-                    }
-
-                    if span.region == other_region {
-                        res |= 1 << dir;
-                    }
+            for dir in 0..4 {
+                let mut other_region = 0;
+                if let Some(span_index) = span.neighbours[dir] {
+                    let other_span = &open_tile.cells[get_cell_offset(&nav_mesh_settings, cell_index, dir)]
+                        .spans[span_index as usize];
+                    other_region = other_span.region;
                 }
 
-                boundry_flags[span.tile_index] = res ^ 0b1111; // Flip so we mark unconnected sides.
+                if span.region == other_region {
+                    res |= 1 << dir;
+                }
             }
+
+            boundry_flags[span.tile_index] = res ^ 0b1111; // Flip so we mark unconnected sides.
         }
-
-        let mut vertices = Vec::with_capacity(256);
-        let mut simplified_vertices = Vec::with_capacity(64);
-
-        for (cell_index, cell) in tile.cells.iter().enumerate() {
-            for (span_index, span) in cell.spans.iter().enumerate() {
-                if boundry_flags[span.tile_index] == 0 || boundry_flags[span.tile_index] == 0b1111 {
-                    boundry_flags[span.tile_index] = 0;
-                    continue;
-                }
-                if span.region == 0 {
-                    continue;
-                }
-
-                vertices.clear();
-                simplified_vertices.clear();
-
-                // Walk contour
-                walk_contour(
-                    cell_index,
-                    span_index,
-                    tile,
-                    &nav_mesh_settings,
-                    &mut boundry_flags,
-                    &mut vertices,
-                );
-
-                // Simplify contour
-                simplify_contour(
-                    &vertices,
-                    &mut simplified_vertices,
-                    nav_mesh_settings.max_contour_simplification_error,
-                    nav_mesh_settings.max_edge_length
-                );
-
-                // Remove degenerate segments.
-                remove_denegerate_segments(&mut simplified_vertices);
-
-                if simplified_vertices.len() >= 3 {
-                    let new_contour = Contour {
-                        vertices: simplified_vertices.clone(),
-                        region: span.region,
-                    };
-
-                    contour_set.contours.push(new_contour);
-                }
-            }
-        }
-
-        // handle holes.
-        if !contour_set.contours.is_empty() {
-            let mut winding = vec![0; contour_set.contours.len()];
-            let mut num_holes = 0;
-            for (i, contour) in contour_set.contours.iter().enumerate() {
-                let contour_winding = calc_area_of_polygon_2d(&contour.vertices);
-
-                if contour_winding < 0 {
-                    num_holes += 1;
-                    winding[i] = -1;
-                } else {
-                    winding[i] = 1;
-                }
-            }
-
-            if num_holes > 0 {
-                let num_regions = tile.max_regions + 1;
-                let mut regions = vec![ContourRegion::default(); num_regions.into()];
-
-                for (i, contour) in contour_set.contours.iter().enumerate() {
-                    if winding[i] > 0 {
-                        // Outline
-                        regions[contour.region as usize].outline = Some(contour.clone());
-                    } else {
-                        // Hole
-                        regions[contour.region as usize].holes.push(ContourHole {
-                            contour: contour.clone(),
-                            min_x: contour.vertices[0].x,
-                            min_z: contour.vertices[0].z,
-                            left_most_vertex: 0,
-                        });
-                    }
-                }
-
-                for region in regions.iter_mut().filter(|region| !region.holes.is_empty()) {
-                    if region.outline.is_none() {
-                        continue;
-                    };
-
-                    merge_region_holes(region);
-                }
-            }
-        }
-
-        contours.map.insert(*tile_coord, contour_set);
     }
+
+    let mut vertices = Vec::with_capacity(256);
+    let mut simplified_vertices = Vec::with_capacity(64);
+
+    for (cell_index, cell) in open_tile.cells.iter().enumerate() {
+        for (span_index, span) in cell.spans.iter().enumerate() {
+            if boundry_flags[span.tile_index] == 0 || boundry_flags[span.tile_index] == 0b1111 {
+                boundry_flags[span.tile_index] = 0;
+                continue;
+            }
+            if span.region == 0 {
+                continue;
+            }
+
+            vertices.clear();
+            simplified_vertices.clear();
+
+            // Walk contour
+            walk_contour(
+                cell_index,
+                span_index,
+                open_tile,
+                &nav_mesh_settings,
+                &mut boundry_flags,
+                &mut vertices,
+            );
+
+            // Simplify contour
+            simplify_contour(
+                &vertices,
+                &mut simplified_vertices,
+                nav_mesh_settings.max_contour_simplification_error,
+                nav_mesh_settings.max_edge_length
+            );
+
+            // Remove degenerate segments.
+            remove_denegerate_segments(&mut simplified_vertices);
+
+            if simplified_vertices.len() >= 3 {
+                let new_contour = Contour {
+                    vertices: simplified_vertices.clone(),
+                    region: span.region,
+                };
+
+                contour_set.contours.push(new_contour);
+            }
+        }
+    }
+
+    // handle holes.
+    if !contour_set.contours.is_empty() {
+        let mut winding = vec![0; contour_set.contours.len()];
+        let mut num_holes = 0;
+        for (i, contour) in contour_set.contours.iter().enumerate() {
+            let contour_winding = calc_area_of_polygon_2d(&contour.vertices);
+
+            if contour_winding < 0 {
+                num_holes += 1;
+                winding[i] = -1;
+            } else {
+                winding[i] = 1;
+            }
+        }
+
+        if num_holes > 0 {
+            let num_regions = open_tile.max_regions + 1;
+            let mut regions = vec![ContourRegion::default(); num_regions.into()];
+
+            for (i, contour) in contour_set.contours.iter().enumerate() {
+                if winding[i] > 0 {
+                    // Outline
+                    regions[contour.region as usize].outline = Some(contour.clone());
+                } else {
+                    // Hole
+                    regions[contour.region as usize].holes.push(ContourHole {
+                        contour: contour.clone(),
+                        min_x: contour.vertices[0].x,
+                        min_z: contour.vertices[0].z,
+                        left_most_vertex: 0,
+                    });
+                }
+            }
+
+            for region in regions.iter_mut().filter(|region| !region.holes.is_empty()) {
+                if region.outline.is_none() {
+                    continue;
+                };
+
+                merge_region_holes(region);
+            }
+        }
+    }
+
+    contour_set
 }
 
 #[derive(Default, Clone, Copy)]

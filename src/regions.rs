@@ -1,8 +1,7 @@
-use bevy::prelude::{Res, ResMut, info};
+use bevy::prelude::info;
 
 use super::{
-    get_cell_offset, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile,
-    TilesOpen,
+    get_cell_offset, NavMeshSettings, OpenSpan, OpenTile,
 };
 
 #[derive(Default, Clone, Copy)]
@@ -12,108 +11,98 @@ struct LevelStackEntry {
     index: i32,
 }
 
-pub(super) fn build_regions_system(
-    nav_mesh_settings: Res<NavMeshSettings>,
-    mut open_tiles: ResMut<TilesOpen>,
-    dirty_tiles: Res<DirtyTiles>,
+const EXPAND_ITERS: u16 = 8;
+const LOG_NB_STACKS: i32 = 3;
+const NB_STACKS: i32 = 1 << LOG_NB_STACKS; // 8.
+
+pub fn build_regions(
+    open_tile: &mut OpenTile,
+    nav_mesh_settings: &NavMeshSettings,
 ) {
-    let expand_iters = 8;
+    let mut regions = vec![0; open_tile.span_count];
+    let mut distances = vec![0; open_tile.span_count];
 
-    const LOG_NB_STACKS: i32 = 3;
-    const NB_STACKS: i32 = 1 << LOG_NB_STACKS; // 8.
+    let mut level_stacks: [Vec<LevelStackEntry>; NB_STACKS as usize] = Default::default();
+    for stack in level_stacks.iter_mut() {
+        stack.reserve(256);
+    }
+    let mut stack = Vec::with_capacity(256);
 
-    for tile_coord in dirty_tiles.0.iter() {
-        let Some(tile) = open_tiles.map.get_mut(tile_coord) else {
-            continue;
-        };
+    let mut region_id = 1;
+    let mut level = (open_tile.max_distance + 1) & !1u16; // Rounded.
 
-        let mut regions = vec![0; tile.span_count];
-        let mut distances = vec![0; tile.span_count];
+    let mut stack_id = -1;
+    while level > 0 {
+        level = if level >= 2 { level - 2 } else { 0 };
+        stack_id = (stack_id + 1) & (NB_STACKS - 1);
 
-        let mut level_stacks: [Vec<LevelStackEntry>; NB_STACKS as usize] = Default::default();
-        for stack in level_stacks.iter_mut() {
-            stack.reserve(256);
-        }
-        let mut stack = Vec::with_capacity(256);
-
-        let mut region_id = 1;
-        let mut level = (tile.max_distance + 1) & !1u16; // Rounded.
-
-        let mut stack_id = -1;
-        while level > 0 {
-            level = if level >= 2 { level - 2 } else { 0 };
-            stack_id = (stack_id + 1) & (NB_STACKS - 1);
-
-            if stack_id == 0 {
-                // Sort cells by level.
-                sort_cells_by_level(level, tile, &mut level_stacks, NB_STACKS, &regions);
-            } else {
-                // append stacks
-                let prev_stack = (stack_id - 1) as usize;
-                let next_stack = stack_id as usize;
-                for i in 0..level_stacks[prev_stack].len() {
-                    let index = level_stacks[prev_stack][i].index;
-                    if index < 0 || regions[index as usize] != 0 {
-                        continue;
-                    }
-
-                    level_stacks[next_stack].push(level_stacks[prev_stack][i]);
+        if stack_id == 0 {
+            // Sort cells by level.
+            sort_cells_by_level(level, open_tile, &mut level_stacks, NB_STACKS, &regions);
+        } else {
+            // append stacks
+            let prev_stack = (stack_id - 1) as usize;
+            let next_stack = stack_id as usize;
+            for i in 0..level_stacks[prev_stack].len() {
+                let index = level_stacks[prev_stack][i].index;
+                if index < 0 || regions[index as usize] != 0 {
+                    continue;
                 }
-            }
 
-            // expand regions.
-            expand_regions(
-                &nav_mesh_settings,
-                expand_iters,
-                tile,
-                &mut regions,
-                &mut distances,
-                &mut level_stacks[stack_id as usize],
-            );
-
-            // Mark new regions with IDs.
-            for entry in level_stacks[stack_id as usize].iter() {
-                if entry.index >= 0
-                    && regions[entry.index as usize] == 0
-                    && flood_region(
-                        &nav_mesh_settings,
-                        *entry,
-                        level,
-                        region_id,
-                        tile,
-                        &mut regions,
-                        &mut distances,
-                        &mut stack,
-                    )
-                {
-                    region_id += 1;
-                }
+                level_stacks[next_stack].push(level_stacks[prev_stack][i]);
             }
         }
 
-        // Expand regions until no empty connected cells are found.
-        expand_regions_until_end(
+        // expand regions.
+        expand_regions(
             &nav_mesh_settings,
-            tile,
+            EXPAND_ITERS,
+            open_tile,
             &mut regions,
             &mut distances,
-            &mut stack,
+            &mut level_stacks[stack_id as usize],
         );
 
-        // Merge regions and filter out small ones.
-        info!("Merging tile {},{}", tile_coord.x, tile_coord.y);
-        merge_regions(&nav_mesh_settings, &mut regions, &mut region_id, tile);
-
-        // Write results into spans.
-        for cell in tile.cells.iter_mut() {
-            for span in cell.spans.iter_mut() {
-                span.region = regions[span.tile_index];
+        // Mark new regions with IDs.
+        for entry in level_stacks[stack_id as usize].iter() {
+            if entry.index >= 0
+                && regions[entry.index as usize] == 0
+                && flood_region(
+                    &nav_mesh_settings,
+                    *entry,
+                    level,
+                    region_id,
+                    open_tile,
+                    &mut regions,
+                    &mut distances,
+                    &mut stack,
+                )
+            {
+                region_id += 1;
             }
         }
-
-        tile.max_regions = region_id;
     }
-    
+
+    // Expand regions until no empty connected cells are found.
+    expand_regions_until_end(
+        &nav_mesh_settings,
+        open_tile,
+        &mut regions,
+        &mut distances,
+        &mut stack,
+    );
+
+    // Merge regions and filter out small ones.
+    merge_regions(&nav_mesh_settings, &mut regions, &mut region_id, open_tile);
+
+    // Write results into spans.
+    for cell in open_tile.cells.iter_mut() {
+        for span in cell.spans.iter_mut() {
+            span.region = regions[span.tile_index];
+        }
+    }
+
+    open_tile.max_regions = region_id;
 }
 
 fn sort_cells_by_level(
@@ -332,8 +321,8 @@ fn merge_regions(
             remap: false,
             visited: false,
             overlap: false,
-            floors: Vec::new(),
-            connections: Vec::new(),
+            floors: Vec::with_capacity(4),
+            connections: Vec::with_capacity(4),
         });
     }
 
@@ -357,9 +346,7 @@ fn merge_regions(
                 if other_region_id == 0 || other_region_id >= *max_region_id {
                     continue;
                 }
-                if other_region_id == region_id {
-                    region.overlap = true;
-                }
+                region.overlap |= other_region_id == region_id;
 
                 add_unique_floor_region(region, other_region_id);
             }

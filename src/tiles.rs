@@ -176,6 +176,49 @@ impl NavMesh {
         self.tiles.insert(tile_coord, tile);
     }
 
+    pub fn remove_tile(
+        &mut self,
+        tile_coord: UVec2,
+    ) {
+        if tile_coord.x > 0 {
+            let direction = EdgeConnectionDirection::XNegative;
+            let neighbour_coord = direction.offset(tile_coord);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                remove_links_to_direction(neighbour, EdgeConnectionDirection::XPositive);
+            }
+        }
+        
+        if tile_coord.x < u32::MAX {
+            let direction = EdgeConnectionDirection::XPositive;
+            let neighbour_coord = direction.offset(tile_coord);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                remove_links_to_direction(neighbour, EdgeConnectionDirection::XNegative);
+            }
+        }
+        
+        if tile_coord.y > 0 {
+            let direction = EdgeConnectionDirection::ZNegative;
+            let neighbour_coord = direction.offset(tile_coord);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                remove_links_to_direction(neighbour, EdgeConnectionDirection::ZPositive);
+            }
+        }
+        
+        if tile_coord.y < u32::MAX {
+            let direction = EdgeConnectionDirection::ZPositive;
+            let neighbour_coord = direction.offset(tile_coord);
+
+            if let Some(neighbour) = self.tiles.get_mut(&neighbour_coord) {
+                remove_links_to_direction(neighbour, EdgeConnectionDirection::ZNegative);
+            }
+        }
+
+        self.tiles.remove(&tile_coord);
+    }
+
     pub fn find_closest_polygon_in_box(
         &self,
         nav_mesh_settings: &NavMeshSettings,
@@ -345,6 +388,24 @@ fn in_polygon(
     inside
 }
 
+fn remove_links_to_direction(
+    tile: &mut NavMeshTile,
+    remove_direction: EdgeConnectionDirection
+) {
+    for polygon in tile.polygons.iter_mut() {
+        let mut i = 0;
+        while i < polygon.links.len() {
+            if let Link::OffMesh { direction, .. } = polygon.links[i] {
+                if direction == remove_direction {
+                    polygon.links.swap_remove(i);
+                }
+            } else {
+                i += 1;
+            }
+        }
+    }
+}
+
 fn connect_external_links(
     tile: &mut NavMeshTile,
     neighbour: &NavMeshTile,
@@ -363,9 +424,9 @@ fn connect_external_links(
                     if direction == neighbour_direction {
                         polygon.links.swap_remove(i);
                     }
+                } else {
+                    i += 1;
                 }
-
-                i += 1;
             }
         }
 

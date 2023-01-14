@@ -7,7 +7,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error};
+use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error, Deref, DerefMut};
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
     ecs::system::Resource,
@@ -76,10 +76,8 @@ pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
 #[derive(Default, Resource)]
 struct GenerationTicker(u64);
 
-#[derive(Default, Resource)]
-struct TileAffectors {
-    map: HashMap<UVec2, HashSet<Entity>>,
-}
+#[derive(Default, Resource, Deref, DerefMut)]
+struct TileAffectors(HashMap<UVec2, HashSet<Entity>>);
 
 /// Set of all tiles that need to be rebuilt.
 #[derive(Default, Resource)]
@@ -218,7 +216,7 @@ fn update_navmesh_affectors_system(
                 || max_tile.x < tile_coord.x
                 || max_tile.y < tile_coord.y
         }) {
-            if let Some(affectors) = tile_affectors.map.get_mut(old_tile) {
+            if let Some(affectors) = tile_affectors.get_mut(old_tile) {
                 affectors.remove(&e);
                 dirty_tiles.0.insert(*old_tile);
             }
@@ -229,11 +227,11 @@ fn update_navmesh_affectors_system(
             for y in min_tile.y..=max_tile.y {
                 let tile_coord = UVec2::new(x, y);
 
-                if !tile_affectors.map.contains_key(&tile_coord) {
-                    tile_affectors.map.insert(tile_coord, HashSet::default());
+                if !tile_affectors.contains_key(&tile_coord) {
+                    tile_affectors.insert(tile_coord, HashSet::default());
                 }
 
-                let affectors = tile_affectors.map.get_mut(&tile_coord).unwrap();
+                let affectors = tile_affectors.get_mut(&tile_coord).unwrap();
                 affectors.insert(e);
 
                 affector.0.push(tile_coord);
@@ -254,12 +252,14 @@ fn send_tile_rebuild_tasks_system(
     let thread_pool = AsyncComputeTaskPool::get();
 
     for tile_coord in dirty_tiles.0.iter() {
-        let Some(affectors) = tile_affectors.map.get(tile_coord) else {
-            // TODO: Remove tile.
+        let Some(affectors) = tile_affectors.get(tile_coord) else {
+            // Spawn task to remove tile.
+            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.nav_mesh.clone())).detach();
             continue;
         };
         if affectors.is_empty() {
-            // TODO: Remove tile.
+            // Spawn task to remove tile.
+            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.nav_mesh.clone())).detach();
             continue;
         }
 
@@ -305,6 +305,21 @@ fn send_tile_rebuild_tasks_system(
         let task = thread_pool.spawn(build_tile(generation, *tile_coord, nav_mesh_settings.clone(), triangle_collections, nav_mesh));
         task.detach();
 
+    }
+}
+
+async fn remove_tile(
+    max_generation: u64, // This is the max generation we remove. Should we somehow strangely be executing this after a new tile has arrived we won't remove it.
+    tile_coord: UVec2,
+    nav_mesh: Arc<RwLock<NavMesh>>
+) {
+    let Ok(mut nav_mesh) = nav_mesh.write() else {
+        error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
+        return;
+    };
+    
+    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &max_generation {
+        nav_mesh.remove_tile(tile_coord);
     }
 }
 

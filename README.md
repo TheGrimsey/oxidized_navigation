@@ -1,11 +1,8 @@
 # Oxidized Navigation
 
-### This is in no way production ready. You can't navigate with this.
+Tiled **Runtime** Nav-mesh generation for 3D worlds in [Bevy](https://bevyengine.org/). Based on [Recast's Nav-mesh generation](https://github.com/recastnavigation/recastnavigation/) but in Rust. *This is not a 1:1 port of Recast but should produce close enough results.*
 
-An experimental Nav-Mesh generation plugin based on [Recast's Nav-mesh generation](https://github.com/recastnavigation/recastnavigation/) for [Bevy](https://bevyengine.org/). *This is not a 1:1 port of Recast but should produce close enough results.*
-
-One of the main ideas is that this should allow runtime generation of tiled navigation meshes. It will gather all entities within a 2D grid square and rasterize their Rapier3D colliders into a poly mesh. 
-
+Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``.
 ## Non-exhaustive TODO-list:
 
 - [X] Generate poly meshes for single tiles.
@@ -13,21 +10,21 @@ One of the main ideas is that this should allow runtime generation of tiled navi
 - [X] Pathfinding across tiles.
 - [X] Generate tiles asynchronously
 - [X] Clean up intermediate representations when we finish processing a tile (Voxelized, Open cells, etc. Only keeping polymesh).
+- [ ] Quick "How to use" guide.
 - [ ] Implement areas allowing to specify differing cost of traveling.
-- [ ] Mark areas too close to walls as unwalkable
+- [ ] Mark areas too close to walls as unwalkable based on character width.
+- [ ] Allow creating nav-mesh from meshes (probably add an option to ``NavMeshAffector``).
+- [ ] Switch to the Bevy 0.9 plugin settings system.
+- [ ] Code Tests.
+- [ ] Benchmarks for tile generation & pathfinding. 
 - [ ] Optimize linking tiles. (At a cost of memory we can save a lot of time finding OffMesh links by just... saving indices of the polygons with OffMesh links)
 - [ ] Adjust memory representation for cache usage. (Some data we only need when linking tiles and not pathfinding)
-- [ ] Switch to more Rust-y implementations where it makes sense (Option<>, enums, etc).
-- [ ] Switch to the Bevy 0.9 plugin settings system.
-- [ ] Quick "How to use" guide.
 
 ## How to use:
 
-### This is in no way production ready. You can't navigate with this.
-
 1. Add a ``NavMeshSettings`` resource.
 2. Add the ``OxidizedNavigationPlugin`` plugin.
-3. Attach a ``NavMeshAffector`` to any entity that should affect the Nav-Mesh, this will make sure that the Nav-Mesh is updated.
+3. Attach a ``NavMeshAffector`` to any entity that should affect the Nav-Mesh, the Nav-mesh will automatically update when this entity moves.
 
 ## Nav Mesh Tiles.
 

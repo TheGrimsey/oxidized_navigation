@@ -1,13 +1,18 @@
-//! Tiled Nav-mesh Generation for 3D worlds in [Bevy].
+//! Tiled **Runtime** Nav-mesh Generation for 3D worlds in [Bevy].
 //! 
-//! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and asynchronously generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
+//! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
+//! 
+//! ### Quick Start:
+//! 1. Insert an instance of [NavMeshSettings] into your Bevy app.
+//! 2. Add [OxidizedNavigationPlugin] as a plugin.
+//! 3. Attach a [NavMeshAffector] component and a rapier collider to any entity you want to affect the nav-mesh.
 //! 
 //! [Bevy]: https://crates.io/crates/bevy
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, LockResult, RwLockReadGuard};
 
-use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error, Deref, DerefMut};
+use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error, Deref, DerefMut, info, Or};
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
     ecs::system::Resource,
@@ -24,7 +29,7 @@ use heightfields::{build_heightfield_tile, build_open_heightfield_tile, link_nei
 use mesher::build_poly_mesh;
 use regions::build_regions;
 use smallvec::SmallVec;
-use tiles::{create_nav_mesh_data_from_poly_mesh, NavMeshTiles, NavMesh};
+use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 
 pub mod contour;
 mod heightfields;
@@ -43,7 +48,7 @@ impl Plugin for OxidizedNavigationPlugin {
         app
             .insert_resource(TileAffectors::default())
             .insert_resource(DirtyTiles::default())
-            .insert_resource(NavMeshTiles::default())
+            .insert_resource(NavMesh::default())
             .insert_resource(GenerationTicker::default());
 
         app.add_system_set(SystemSet::new()
@@ -72,7 +77,7 @@ pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
 
 /// Generation ticker for tiles. 
 /// 
-/// Used to keep track of if the existing tile is newer than the one we are trying to insert in [build_tile]
+/// Used to keep track of if the existing tile is newer than the one we are trying to insert in [build_tile]. This could happen if we go from having a lot of triangles to very few.
 #[derive(Default, Resource)]
 struct GenerationTicker(u64);
 
@@ -179,13 +184,28 @@ impl NavMeshSettings {
     }
 }
 
+
+/// Wrapper around the nav-mesh data.
+/// 
+/// The actual nav-mesh data must be retrieved using [NavMesh::get]
+#[derive(Default, Resource)]
+pub struct NavMesh(Arc<RwLock<NavMeshTiles>>);
+
+impl NavMesh {
+    /// Returns a read lock containing [NavMeshTiles].
+    pub fn get(&self) -> LockResult<RwLockReadGuard<NavMeshTiles>> {
+        self.0.read()
+    }
+}
+
+
 fn update_navmesh_affectors_system(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
     mut dirty_tiles: ResMut<DirtyTiles>,
     mut query: Query<
         (Entity, &mut NavMeshAffector, &Collider, &GlobalTransform),
-        Changed<GlobalTransform>,
+        Or<(Changed<GlobalTransform>, Changed<Collider>)>,
     >,
 ) {
     for (e, mut affector, collider, global_transform) in query.iter_mut() {
@@ -243,7 +263,7 @@ fn update_navmesh_affectors_system(
 
 fn send_tile_rebuild_tasks_system(
     nav_mesh_settings: Res<NavMeshSettings>,
-    nav_mesh: Res<NavMeshTiles>,
+    nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
     dirty_tiles: Res<DirtyTiles>,
     collider_query: Query<(&Collider, &GlobalTransform), With<NavMeshAffector>>,
@@ -254,12 +274,14 @@ fn send_tile_rebuild_tasks_system(
     for tile_coord in dirty_tiles.0.iter() {
         let Some(affectors) = tile_affectors.get(tile_coord) else {
             // Spawn task to remove tile.
-            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.nav_mesh.clone())).detach();
+            generation_ticker.0 += 1;
+            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.0.clone())).detach();
             continue;
         };
         if affectors.is_empty() {
             // Spawn task to remove tile.
-            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.nav_mesh.clone())).detach();
+            generation_ticker.0 += 1;
+            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.0.clone())).detach();
             continue;
         }
 
@@ -281,10 +303,19 @@ fn send_tile_rebuild_tasks_system(
                 ColliderView::RoundCylinder(round_cylinder) => round_cylinder.raw.inner_shape.to_trimesh(5),
                 ColliderView::RoundCone(round_cone) => round_cone.raw.inner_shape.to_trimesh(5),
                 ColliderView::RoundConvexPolyhedron(round_polyhedron) => round_polyhedron.raw.inner_shape.to_trimesh(),
-                // TODO: All the following ones are more complicated :)
-                ColliderView::Triangle(_) => todo!(), /* ??? */
-                ColliderView::RoundTriangle(_) => todo!(), /* ??? */
-                ColliderView::Compound(_) => todo!(), /* ??? */
+                // TODO: All the following ones require me to think.
+                ColliderView::Triangle(_) => {
+                    info!("Triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    continue;
+                },
+                ColliderView::RoundTriangle(_) => {
+                    info!("Rounded triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    continue;
+                },
+                ColliderView::Compound(_) => {
+                    info!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    continue;
+                },
                 // These ones do not make sense in this.
                 ColliderView::HalfSpace(_) => continue, /* This is like an infinite plane? We don't care. */
                 ColliderView::Polyline(_) => continue, /* This is a line. */
@@ -299,7 +330,7 @@ fn send_tile_rebuild_tasks_system(
         // Step 2: Acquire generation & nav_mesh lock
         generation_ticker.0 += 1;
         let generation = generation_ticker.0;
-        let nav_mesh = nav_mesh.nav_mesh.clone();
+        let nav_mesh = nav_mesh.0.clone();
 
         // Step 3: Make it a task.
         let task = thread_pool.spawn(build_tile(generation, *tile_coord, nav_mesh_settings.clone(), triangle_collections, nav_mesh));
@@ -309,16 +340,17 @@ fn send_tile_rebuild_tasks_system(
 }
 
 async fn remove_tile(
-    max_generation: u64, // This is the max generation we remove. Should we somehow strangely be executing this after a new tile has arrived we won't remove it.
+    generation: u64, // This is the max generation we remove. Should we somehow strangely be executing this after a new tile has arrived we won't remove it.
     tile_coord: UVec2,
-    nav_mesh: Arc<RwLock<NavMesh>>
+    nav_mesh: Arc<RwLock<NavMeshTiles>>
 ) {
     let Ok(mut nav_mesh) = nav_mesh.write() else {
         error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
         return;
     };
     
-    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &max_generation {
+    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
+        nav_mesh.tile_generations.insert(tile_coord, generation);
         nav_mesh.remove_tile(tile_coord);
     }
 }
@@ -328,7 +360,7 @@ async fn build_tile(
     tile_coord: UVec2,
     nav_mesh_settings: NavMeshSettings,
     triangle_collections: Vec<(GlobalTransform, Vec<Vec3>, Vec<[u32; 3]>)>,
-    nav_mesh: Arc<RwLock<NavMesh>>
+    nav_mesh: Arc<RwLock<NavMeshTiles>>
 ) {
     let voxelized_tile = build_heightfield_tile(tile_coord, triangle_collections, &nav_mesh_settings);
     
@@ -345,7 +377,7 @@ async fn build_tile(
     let poly_mesh = build_poly_mesh(&contour_set, &nav_mesh_settings);
     std::mem::drop(contour_set);
 
-    let nav_mesh_tile = create_nav_mesh_data_from_poly_mesh(&poly_mesh, tile_coord, &nav_mesh_settings);
+    let nav_mesh_tile = create_nav_mesh_tile_from_poly_mesh(&poly_mesh, tile_coord, &nav_mesh_settings);
     std::mem::drop(poly_mesh);
 
     let Ok(mut nav_mesh) = nav_mesh.write() else {

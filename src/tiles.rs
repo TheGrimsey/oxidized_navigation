@@ -1,7 +1,6 @@
-use std::sync::{Arc, RwLock};
 
 use bevy::{
-    prelude::{Resource, UVec2, Vec2, Vec3},
+    prelude::{UVec2, Vec2, Vec3},
     utils::HashMap, math::Vec3Swizzles,
 };
 use smallvec::SmallVec;
@@ -13,21 +12,30 @@ use crate::{
 
 use super::mesher::PolyMesh;
 
+/// Representation of a link between different polygons either internal to the tile or external (crossing over to another tile).
 #[derive(Clone, Copy, Debug)]
 pub enum Link {
     Internal {
+        /// Edge on self polygon.
         edge: u8,
+        /// Index of polygon this polygon is linked to.
         neighbour_polygon: u16,
     },
-    OffMesh {
+    External {
+        /// Edge on self polygon.
         edge: u8,
+        /// Index of polygon this polygon is linked to.
         neighbour_polygon: u16,
-        direction: EdgeConnectionDirection, // Knowing the direction of the other tile is enough to figure out the tile from our tile.
+        /// Direction toward the neighbour polygon's tile.
+        direction: EdgeConnectionDirection,
+        /// Min % of this edge that connects to the linked polygon.
         bound_min: u8,                      // % bound of edge that links to this.
+        // MAx % of this edge that connects to the linked polygon.
         bound_max: u8, // For example: 10% -> 50% = the connected edge covers 10% from vertex A to B to 50%.
     },
 }
 
+/// A polygon within a nav-mesh tile. 
 #[derive(Debug)]
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
@@ -38,25 +46,38 @@ pub struct Polygon {
 *   Polygons make up a form of graph, linking to other polygons (which could be on another mesh)
 */
 
+/// A single nav-mesh tile.
 #[derive(Debug)]
 pub struct NavMeshTile {
     pub vertices: Vec<Vec3>,
     pub polygons: Vec<Polygon>,
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
 }
-
-#[derive(Default, Resource)]
-pub struct NavMeshTiles {
-    pub nav_mesh: Arc<RwLock<NavMesh>>
+impl NavMeshTile {
+    /// Returns the closest point on ``polygon`` to ``position``.
+    pub fn get_closest_point_in_polygon(
+        &self,
+        polygon: &Polygon,
+        position: Vec3
+    ) -> Vec3 {
+        let vertices = polygon.indices.map(|index| self.vertices[index as usize]);
+    
+        if let Some(height) = get_height_in_triangle(&vertices, position) {
+            return Vec3::new(position.x, height, position.z);
+        }
+        
+        closest_point_on_edges(&vertices, position)
+    }
 }
 
+/// Container for all nav-mesh tiles. Used for pathfinding queries.
 #[derive(Default)]
-pub struct NavMesh {
+pub struct NavMeshTiles {
     pub tiles: HashMap<UVec2, NavMeshTile>,
     pub(super) tile_generations: HashMap<UVec2, u64>
 }
 
-impl NavMesh {
+impl NavMeshTiles {
     pub(super) fn add_tile(
         &mut self,
         tile_coord: UVec2,
@@ -176,7 +197,7 @@ impl NavMesh {
         self.tiles.insert(tile_coord, tile);
     }
 
-    pub fn remove_tile(
+    pub(super) fn remove_tile(
         &mut self,
         tile_coord: UVec2,
     ) {
@@ -219,6 +240,7 @@ impl NavMesh {
         self.tiles.remove(&tile_coord);
     }
 
+    /// Returns the closest polygon in a box around ``center`` as a tuple of (tile coordinate, polygon index, position on triangle).
     pub fn find_closest_polygon_in_box(
         &self,
         nav_mesh_settings: &NavMeshSettings,
@@ -238,7 +260,7 @@ impl NavMesh {
                 let tile_coords = UVec2::new(x, y);
                 if let Some(tile) = self.tiles.get(&tile_coords) {
                     for (poly_i, polygon) in tile.polygons.iter().enumerate() {
-                        let closest_point = get_closest_point_in_polygon(tile, polygon, center);
+                        let closest_point = tile.get_closest_point_in_polygon(polygon, center);
                         let closest_distance = closest_point.distance_squared(center);
 
                         if closest_distance < out_distance {
@@ -252,20 +274,6 @@ impl NavMesh {
 
         out_polygon
     }
-}
-
-pub(super) fn get_closest_point_in_polygon(
-    tile: &NavMeshTile,
-    polygon: &Polygon,
-    position: Vec3
-) -> Vec3 {
-    let vertices = polygon.indices.map(|index| tile.vertices[index as usize]);
-
-    if let Some(height) = get_height_in_triangle(&vertices, position) {
-        return Vec3::new(position.x, height, position.z);
-    }
-    
-    closest_point_on_edges(&vertices, position)
 }
 
 fn get_height_in_triangle(
@@ -395,7 +403,7 @@ fn remove_links_to_direction(
     for polygon in tile.polygons.iter_mut() {
         let mut i = 0;
         while i < polygon.links.len() {
-            if let Link::OffMesh { direction, .. } = polygon.links[i] {
+            if let Link::External { direction, .. } = polygon.links[i] {
                 if direction == remove_direction {
                     polygon.links.swap_remove(i);
                 }
@@ -415,12 +423,11 @@ fn connect_external_links(
     step_height: f32,
 ) {
     for (poly_index, polygon) in tile.polygons.iter_mut().enumerate() {
-        // TODO: What if we just store a list of edge polygons? Allows us to skip majority of polygons.
         if remove_existing_links {
             // Remove existing links to neighbour.
             let mut i = 0;
             while i < polygon.links.len() {
-                if let Link::OffMesh { direction, .. } = polygon.links[i] {
+                if let Link::External { direction, .. } = polygon.links[i] {
                     if direction == neighbour_direction {
                         polygon.links.swap_remove(i);
                     }
@@ -431,7 +438,7 @@ fn connect_external_links(
         }
 
         for (edge_index, edge) in tile.edges[poly_index].iter().enumerate() {
-            let EdgeConnection::OffMesh(edge_direction) = edge else {
+            let EdgeConnection::External(edge_direction) = edge else {
                 continue;
             };
             if *edge_direction != neighbour_direction {
@@ -478,7 +485,7 @@ fn connect_external_links(
                 let min_byte = (bound_min.clamp(0.0, 1.0) * 255.0).round() as u8;
                 let max_byte = (bound_max.clamp(0.0, 1.0) * 255.0).round() as u8;
 
-                polygon.links.push(Link::OffMesh {
+                polygon.links.push(Link::External {
                     edge: edge_index as u8,
                     neighbour_polygon,
                     direction: neighbour_direction,
@@ -589,9 +596,8 @@ fn find_connecting_polygons_in_tile(
     let in_pos = get_slab_position(vertex_a, side);
 
     for (poly_index, polygon) in tile.polygons.iter().enumerate() {
-        // TODO: What if we just store a list of edge polygons?
         for (edge_index, edge) in tile.edges[poly_index].iter().enumerate() {
-            let EdgeConnection::OffMesh(direction) = edge else {
+            let EdgeConnection::External(direction) = edge else {
                 continue;
             };
             if *direction != side {
@@ -626,7 +632,7 @@ fn find_connecting_polygons_in_tile(
     (count, connecting_polys, connection_area)
 }
 
-pub(super) fn create_nav_mesh_data_from_poly_mesh(
+pub(super) fn create_nav_mesh_tile_from_poly_mesh(
     poly_mesh: &PolyMesh,
     tile_coord: UVec2,
     nav_mesh_settings: &NavMeshSettings,

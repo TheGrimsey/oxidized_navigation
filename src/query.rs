@@ -1,10 +1,9 @@
 
 //! Module for querying the nav-mesh
-use std::sync::{Arc, RwLock};
 
 use bevy::prelude::{Vec3, UVec2};
 
-use crate::{tiles::{NavMesh, Link, get_closest_point_in_polygon}, NavMeshSettings};
+use crate::{tiles::{NavMeshTiles, Link}, NavMeshSettings};
 
 const HEURISTIC_SCALE: f32 = 0.999;
 
@@ -46,16 +45,12 @@ pub enum FindPathError {
 /// * ``end_pos`` - Destination position for the path, i.e where you want to go.
 /// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
 pub fn find_path(
-    nav_mesh: Arc<RwLock<NavMesh>>,
+    nav_mesh: &NavMeshTiles,
     nav_mesh_settings: NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
     position_search_radius: Option<f32>
 ) -> Result<Vec<(UVec2, u16)>, FindPathError> {
-    let Ok(nav_mesh) = nav_mesh.read() else {
-        return Err(FindPathError::NavMeshUnavailable);
-    };
-
     let search_radius = position_search_radius.unwrap_or(5.0);
 
     let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, start_pos, search_radius) else {
@@ -110,7 +105,7 @@ pub fn find_path(
         for link in node_tile.polygons[best_polygon as usize].links.iter() {
             let (link_tile, link_polygon) = match link {
                 Link::Internal { neighbour_polygon, .. } => (best_tile, *neighbour_polygon),
-                Link::OffMesh { neighbour_polygon, direction, .. } => (direction.offset(best_tile), *neighbour_polygon),
+                Link::External { neighbour_polygon, direction, .. } => (direction.offset(best_tile), *neighbour_polygon),
             };
 
             // Don't go back to our parent.
@@ -133,7 +128,7 @@ pub fn find_path(
 
                         a.lerp(b, 0.5)
                     },
-                    Link::OffMesh { edge, bound_min, bound_max, .. } => {
+                    Link::External { edge, bound_min, bound_max, .. } => {
                         // The mid point of the current-edge sliced by bound_min & bound_max.
                         let indices = &node_tile.polygons[best_polygon as usize].indices;
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
@@ -249,7 +244,6 @@ pub fn find_path(
 #[derive(Debug)]
 pub enum StringPullingError {
     PathEmpty,
-    NavMeshUnavailable,
     MissingStartTile,
     MissingEndTile,
     MissingNodeTile,
@@ -260,7 +254,7 @@ pub enum StringPullingError {
 /// 
 /// Returns the path as Vec<Vec3> or [StringPullingError]
 pub fn perform_string_pulling_on_path(
-    nav_mesh: Arc<RwLock<NavMesh>>,
+    nav_mesh: &NavMeshTiles,
     start_pos: Vec3,
     end_pos: Vec3,
     path: &[(UVec2, u16)]
@@ -268,10 +262,6 @@ pub fn perform_string_pulling_on_path(
     if path.is_empty() {
         return Err(StringPullingError::PathEmpty);
     }
-    
-    let Ok(nav_mesh) = nav_mesh.read() else {
-        return Err(StringPullingError::NavMeshUnavailable);
-    };
 
     let Some(start_tile) = nav_mesh.tiles.get(&path[0].0) else {
         return Err(StringPullingError::MissingStartTile);
@@ -280,8 +270,8 @@ pub fn perform_string_pulling_on_path(
         return Err(StringPullingError::MissingEndTile);
     };
 
-    let start_pos = get_closest_point_in_polygon(start_tile, &start_tile.polygons[path[0].1 as usize], start_pos);
-    let end_pos = get_closest_point_in_polygon(end_tile, &end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
+    let start_pos = start_tile.get_closest_point_in_polygon(&start_tile.polygons[path[0].1 as usize], start_pos);
+    let end_pos = end_tile.get_closest_point_in_polygon(&end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
 
     let mut string_path = Vec::with_capacity(path.len() + 2);
     string_path.push(start_pos);
@@ -306,7 +296,7 @@ pub fn perform_string_pulling_on_path(
                 let Some(link) = node_tile.polygons[current.1 as usize].links.iter().find(|link| { // This is a mess :)))
                     match link {
                         Link::Internal { neighbour_polygon, .. } => is_internal && next.1 == *neighbour_polygon,
-                        Link::OffMesh { neighbour_polygon, direction, .. } => direction.offset(current.0) == next.0 && next.1 == *neighbour_polygon,
+                        Link::External { neighbour_polygon, direction, .. } => direction.offset(current.0) == next.0 && next.1 == *neighbour_polygon,
                     }
                 }) else {
                     return Err(StringPullingError::NoLinkBetweenPathPoints);
@@ -320,7 +310,7 @@ pub fn perform_string_pulling_on_path(
 
                         (a, b)
                     },
-                    Link::OffMesh { edge, bound_min, bound_max, .. } => {
+                    Link::External { edge, bound_min, bound_max, .. } => {
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
                         let b = node_tile.vertices[indices[(*edge + 1) as usize % indices.len()] as usize];
 

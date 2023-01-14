@@ -118,20 +118,20 @@ pub fn build_poly_mesh(
             // Only edges parallel to the tile edge.
             if vertex_a.x == 0 && vertex_b.x == 0 {
                 poly_mesh.edges[i][index] =
-                    EdgeConnection::OffMesh(EdgeConnectionDirection::XNegative);
+                    EdgeConnection::External(EdgeConnectionDirection::XNegative);
             } else if vertex_a.z == nav_mesh_settings.tile_width as u32
                 && vertex_b.z == nav_mesh_settings.tile_width as u32
             {
                 poly_mesh.edges[i][index] =
-                    EdgeConnection::OffMesh(EdgeConnectionDirection::ZPositive);
+                    EdgeConnection::External(EdgeConnectionDirection::ZPositive);
             } else if vertex_a.x == nav_mesh_settings.tile_width as u32
                 && vertex_b.x == nav_mesh_settings.tile_width as u32
             {
                 poly_mesh.edges[i][index] =
-                    EdgeConnection::OffMesh(EdgeConnectionDirection::XPositive);
+                    EdgeConnection::External(EdgeConnectionDirection::XPositive);
             } else if vertex_a.z == 0 && vertex_b.z == 0 {
                 poly_mesh.edges[i][index] =
-                    EdgeConnection::OffMesh(EdgeConnectionDirection::ZNegative);
+                    EdgeConnection::External(EdgeConnectionDirection::ZNegative);
             }
         }
     }
@@ -161,7 +161,7 @@ impl EdgeConnectionDirection {
 pub enum EdgeConnection {
     None,
     Internal(u16),
-    OffMesh(EdgeConnectionDirection),
+    External(EdgeConnectionDirection),
 }
 
 #[derive(Debug)]

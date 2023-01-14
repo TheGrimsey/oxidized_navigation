@@ -387,8 +387,6 @@ pub fn link_neighbours(
         }
 
         for span in open_tile.cells[i].spans.iter_mut() {
-            // TODO: Also check if we won't hit our head when stepping up or down. Height of lower needs to be at least (walkable_height + difference in minimum)
-
             for (i, (min, max)) in x_negative.iter().enumerate() {
                 if max.is_some() && span.max.is_some() {
                     let max = max.unwrap();

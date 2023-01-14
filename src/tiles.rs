@@ -31,7 +31,7 @@ pub enum Link {
 #[derive(Debug)]
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
-    pub(super) links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
+    pub links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
 }
 
 /*
@@ -41,7 +41,7 @@ pub struct Polygon {
 pub struct NavMeshTile {
     pub vertices: Vec<Vec3>,
     pub polygons: Vec<Polygon>,
-    edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
+    pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
 }
 
 #[derive(Default, Resource)]
@@ -391,7 +391,7 @@ fn connect_external_links(
 
             polygon.links.reserve(connection_count);
             for i in 0..connection_count {
-                let (neighbour_polygon, edge) = connected_polys[i];
+                let neighbour_polygon = connected_polys[i];
                 let area = connection_areas[i];
 
                 let (mut bound_min, mut bound_max) = if neighbour_to_self_direction
@@ -417,7 +417,7 @@ fn connect_external_links(
                 let max_byte = (bound_max.clamp(0.0, 1.0) * 255.0).round() as u8;
 
                 polygon.links.push(Link::OffMesh {
-                    edge,
+                    edge: edge_index as u8,
                     neighbour_polygon,
                     direction: neighbour_direction,
                     bound_min: min_byte,
@@ -516,10 +516,10 @@ fn find_connecting_polygons_in_tile(
     step_height: f32,
 ) -> (
     usize,
-    [(u16, u8); MAX_CONNECTING_POLYGONS],
+    [u16; MAX_CONNECTING_POLYGONS],
     [Vec2; MAX_CONNECTING_POLYGONS],
 ) {
-    let mut connecting_polys = [(0, 0); MAX_CONNECTING_POLYGONS];
+    let mut connecting_polys = [0; MAX_CONNECTING_POLYGONS];
     let mut connection_area = [Vec2::ZERO; MAX_CONNECTING_POLYGONS];
     let mut count = 0;
 
@@ -552,7 +552,7 @@ fn find_connecting_polygons_in_tile(
             }
 
             if count < connecting_polys.len() {
-                connecting_polys[count] = (poly_index as u16, edge_index as u8);
+                connecting_polys[count] = poly_index as u16;
                 connection_area[count] =
                     Vec2::new(in_min.x.max(edge_min.x), in_max.x.min(edge_max.x));
                 count += 1;

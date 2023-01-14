@@ -1,5 +1,3 @@
-use bevy::prelude::info;
-
 use super::{
     get_cell_offset, NavMeshSettings, OpenSpan, OpenTile,
 };
@@ -55,7 +53,7 @@ pub fn build_regions(
 
         // expand regions.
         expand_regions(
-            &nav_mesh_settings,
+            nav_mesh_settings,
             EXPAND_ITERS,
             open_tile,
             &mut regions,
@@ -68,7 +66,7 @@ pub fn build_regions(
             if entry.index >= 0
                 && regions[entry.index as usize] == 0
                 && flood_region(
-                    &nav_mesh_settings,
+                    nav_mesh_settings,
                     *entry,
                     level,
                     region_id,
@@ -85,7 +83,7 @@ pub fn build_regions(
 
     // Expand regions until no empty connected cells are found.
     expand_regions_until_end(
-        &nav_mesh_settings,
+        nav_mesh_settings,
         open_tile,
         &mut regions,
         &mut distances,
@@ -93,7 +91,7 @@ pub fn build_regions(
     );
 
     // Merge regions and filter out small ones.
-    merge_regions(&nav_mesh_settings, &mut regions, &mut region_id, open_tile);
+    merge_regions(nav_mesh_settings, &mut regions, &mut region_id, open_tile);
 
     // Write results into spans.
     for cell in open_tile.cells.iter_mut() {
@@ -493,8 +491,6 @@ fn merge_regions(
                     }
 
                     merged = true;
-
-                    info!("Merged {} into {}", old_id, merge_id);
                 }
             }
         }

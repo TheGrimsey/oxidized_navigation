@@ -112,7 +112,6 @@ pub fn build_poly_mesh(
                 continue;
             };
 
-            info!("I{}, {:?}", index, indices);
             let vertex_a = poly_mesh.vertices[indices[index] as usize];
             let vertex_b = poly_mesh.vertices[indices[(index + 1) % indices.len()] as usize];
 

@@ -278,7 +278,7 @@ fn send_tile_rebuild_tasks_system(
 
             let raw_vertices = raw_vertices.iter().map(|point| Vec3::new(point.x, point.y, point.z)).collect();
 
-            triangle_collections.push((transform.clone(), raw_vertices, raw_triangles));
+            triangle_collections.push((*transform, raw_vertices, raw_triangles));
         }
 
         // Step 2: Acquire generation & nav_mesh lock

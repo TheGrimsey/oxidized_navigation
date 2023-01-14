@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use bevy::prelude::{Vec3, UVec2, info};
+use bevy::prelude::{Vec3, UVec2};
 
 use crate::{tiles::{NavMesh, Link, get_closest_point_in_polygon}, NavMeshSettings};
 
@@ -48,11 +48,6 @@ pub fn find_path(
     let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, end_pos, 5.0) else {
         return Err(FindPathError::NoValidEndPolygon);
     };
-    {
-        info!("Start: {:?}, End: {:?}", start_pos, end_pos);
-        let start_tile = nav_mesh.tiles.get(&start_tile).unwrap();
-        info!("Start polygon: {:?}", start_tile.polygons[start_poly as usize]);
-    }
 
     if start_tile == end_tile && start_poly == end_poly {
         return Ok(vec![(start_tile, start_poly)]);
@@ -185,7 +180,6 @@ pub fn find_path(
                 if heuristic < last_best_node_cost {
                     last_best_node_cost = heuristic;
                     last_best_node = neighbour_node_index;
-                    info!("New best: {:?}", neighbour_node);
                 }
 
                 (old_flags, total_cost)
@@ -309,7 +303,7 @@ pub fn perform_string_pulling_on_path(
                     Link::OffMesh { edge, bound_min, bound_max, .. } => {
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
                         let b = node_tile.vertices[indices[(*edge + 1) as usize % indices.len()] as usize];
-                        
+
                         const S: f32 = 1.0/255.0;
                         let clamped_a = a.lerp(b, *bound_min as f32 * S);
                         let clamped_b = a.lerp(b, *bound_max as f32 * S);
@@ -323,7 +317,7 @@ pub fn perform_string_pulling_on_path(
 
             // Right vertex.
             if triangle_area_2d(portal_apex, portal_right, right) <= 0.0 {
-                if portal_apex == portal_right || triangle_area_2d(portal_apex, portal_left, right) > 0.0 {
+                if portal_apex.distance_squared(portal_right) < (1.0/16384.0) || triangle_area_2d(portal_apex, portal_left, right) > 0.0 {
                     portal_right = right;
                     right_index = i;
                 } else {
@@ -344,11 +338,12 @@ pub fn perform_string_pulling_on_path(
 
             // Left vertex.
             if triangle_area_2d(portal_apex, portal_left, left) >= 0.0 {
-                if portal_apex == portal_left || triangle_area_2d(portal_apex, portal_right, left) < 0.0 {
+                if portal_apex.distance_squared(portal_left) < (1.0/16384.0)  || triangle_area_2d(portal_apex, portal_right, left) < 0.0 {
                     portal_left = left;
                     left_index = i;
                 } else {
                     portal_apex = portal_right;
+
                     if *string_path.last().unwrap() != portal_apex {
                         string_path.push(portal_apex);
                     }

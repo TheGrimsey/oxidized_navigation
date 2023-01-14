@@ -595,7 +595,7 @@ pub fn calculate_distance_field(
                     continue;
                 };
 
-                let other_cell_index = get_cell_offset(&nav_mesh_settings, i, dir);
+                let other_cell_index = get_cell_offset(nav_mesh_settings, i, dir);
                 let other_span =
                     &open_tile.cells[other_cell_index].spans[index as usize];
 
@@ -607,7 +607,7 @@ pub fn calculate_distance_field(
                     continue;
                 };
 
-                let other_cell_index = get_cell_offset(&nav_mesh_settings, other_cell_index, next_dir);
+                let other_cell_index = get_cell_offset(nav_mesh_settings, other_cell_index, next_dir);
 
                 let other_span =
                     &open_tile.cells[other_cell_index].spans[index as usize];

@@ -14,10 +14,12 @@ One of the main ideas is that this should allow runtime generation of tiled navi
 - [X] Generate tiles asynchronously
 - [X] Clean up intermediate representations when we finish processing a tile (Voxelized, Open cells, etc. Only keeping polymesh).
 - [ ] Implement areas allowing to specify differing cost of traveling.
+- [ ] Mark areas too close to walls as unwalkable
 - [ ] Optimize linking tiles. (At a cost of memory we can save a lot of time finding OffMesh links by just... saving indices of the polygons with OffMesh links)
 - [ ] Adjust memory representation for cache usage. (Some data we only need when linking tiles and not pathfinding)
 - [ ] Switch to more Rust-y implementations where it makes sense (Option<>, enums, etc).
 - [ ] Switch to the Bevy 0.9 plugin settings system.
+- [ ] Quick "How to use" guide.
 
 ## How to use:
 

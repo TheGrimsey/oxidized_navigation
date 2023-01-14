@@ -54,7 +54,7 @@ pub fn build_contours(
             for dir in 0..4 {
                 let mut other_region = 0;
                 if let Some(span_index) = span.neighbours[dir] {
-                    let other_span = &open_tile.cells[get_cell_offset(&nav_mesh_settings, cell_index, dir)]
+                    let other_span = &open_tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir)]
                         .spans[span_index as usize];
                     other_region = other_span.region;
                 }
@@ -89,7 +89,7 @@ pub fn build_contours(
                 cell_index,
                 span_index,
                 open_tile,
-                &nav_mesh_settings,
+                nav_mesh_settings,
                 &mut boundry_flags,
                 &mut vertices,
             );

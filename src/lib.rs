@@ -1,3 +1,10 @@
+//! Tiled Nav-mesh Generation for 3D worlds in [Bevy].
+//! 
+//! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and asynchronously generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
+//! 
+//! [Bevy]: https://crates.io/crates/bevy
+//! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
+
 use std::sync::{Arc, RwLock};
 
 use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error};
@@ -26,8 +33,9 @@ mod regions;
 pub mod tiles;
 pub mod query;
 
+/// System label used by the crate's systems. 
 #[derive(SystemLabel)]
-pub struct OxidizedGeneration;
+pub struct OxidizedNavigation;
 
 pub struct OxidizedNavigationPlugin;
 impl Plugin for OxidizedNavigationPlugin {
@@ -39,7 +47,7 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(GenerationTicker::default());
 
         app.add_system_set(SystemSet::new()
-            .label(OxidizedGeneration)
+            .label(OxidizedNavigation)
             .with_system(update_navmesh_affectors_system)
             .with_system(send_tile_rebuild_tasks_system.after(update_navmesh_affectors_system))
             .with_system(clear_dirty_tiles_system.after(send_tile_rebuild_tasks_system))
@@ -50,14 +58,9 @@ impl Plugin for OxidizedNavigationPlugin {
 const FLAG_BORDER_VERTEX: u32 = 0x10000;
 const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 
+/// Component for entities that should affect the nav-mesh. 
 #[derive(Component, Default)]
 pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
-
-#[derive(Default, Clone, Debug)]
-pub struct OpenCell {
-    spans: Vec<OpenSpan>,
-}
-
 
 /*
 *   Neighbours:
@@ -67,25 +70,9 @@ pub struct OpenCell {
 *   3: (0, -1)
 */
 
-// Like a HeightSpan but representing open walkable areas (empty space with floor & height >= walkable_height
-#[derive(Default, Clone, Copy, Debug)]
-struct OpenSpan {
-    min: u16,
-    max: Option<u16>,
-    neighbours: [Option<u16>; 4],
-    tile_index: usize, // The index of this span in the whole tile.
-    region: u16, // Region if non-zero. We could use option for this if we had some optimization for size.
-}
-
-#[derive(Default, Debug)]
-pub struct OpenTile {
-    cells: Vec<OpenCell>, // len = tiles_along_width^2. Laid out X to Y
-    distances: Vec<u16>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
-    max_distance: u16,
-    span_count: usize, // Total spans in all cells.
-    max_regions: u16,
-}
-
+/// Generation ticker for tiles. 
+/// 
+/// Used to keep track of if the existing tile is newer than the one we are trying to insert in [build_tile]
 #[derive(Default, Resource)]
 struct GenerationTicker(u64);
 
@@ -94,60 +81,87 @@ struct TileAffectors {
     map: HashMap<UVec2, HashSet<Entity>>,
 }
 
+/// Set of all tiles that need to be rebuilt.
 #[derive(Default, Resource)]
 struct DirtyTiles(HashSet<UVec2>);
 
+/// Settings for nav-mesh generation.
 #[derive(Resource, Clone)]
 pub struct NavMeshSettings {
-    // Suggestion: Set this to 1/2 of character radius.
+    /// The horizontal resolution of the voxelized tile.
+    /// 
+    /// **Suggested value**: 1/2 of character radius.
+    /// 
+    /// Smaller values will increase tile generation times with diminishing returns in nav-mesh detail.
     pub cell_width: f32,
-    // Suggestion: Set this to 1/2 of cell_width.
+    /// The vertical resolution of the voxelized tile.
+    /// 
+    /// **Suggested value**: 1/2 of cell_width.
+    /// 
+    /// Smaller values will increase tile generation times with diminishing returns in nav-mesh detail.
     pub cell_height: f32,
 
-    // Length of a tile size in cells.
-    // Higher means more to update each time something within the tile changes, smaller means you will have more overhead from connecting the edges to other tiles & generating the tile itself.
+    /// Length of a tile's side in cells. Resulting size in world units is ``tile_width * cell_width``.
+    /// 
+    /// **Suggested value**: ???
+    /// 
+    /// Higher means more to update each time something within the tile changes, smaller means you will have more overhead from connecting the edges to other tiles & generating the tile itself.
     pub tile_width: u16, 
     
-    // Set this to a value that keeps the entirety of the world you wish to cover with navmesh within it as measured from the world origin (0,0).
-    // This is added onto any calculation to figure out which tile we are in. Exists because without it we'd be in a big mess around 0,0.
+    /// Extents of the world as measured from the world origin (0.0, 0.0) on the XZ-plane.
+    /// 
+    /// **Suggested value**: As small as possible whilst still keeping the entire world within it.
+    /// 
+    /// This exists because figuring out which tile we are in around the world origin would not work without it.
     pub world_half_extents: f32,
-    // Minium Y position of anything in the world that should be covered by the nav mesh.
+    /// Bottom extents of the world on the Y-axis. The top extents is capped by ``world_bottom_bound + cell_height * u16::MAX``.
+    /// 
+    /// **Suggested value**: Minium Y position of anything in the world that should be covered by the nav mesh.
     pub world_bottom_bound: f32,
     
-    // Maximum slope traversable when navigating in radians.
+    /// Maximum slope traversable when navigating in radians.
     pub max_traversable_slope_radians: f32,
-    // Minimum open height for an area to be considered walkable in cell_height(s).
+    /// Minimum open height for an area to be considered walkable in cell_height(s).
+    /// 
+    /// **Suggested value**: The height of character * ``cell_height``, rounded up.
     pub walkable_height: u16,
-    // Theoretically minimum width of an area to be considered walkable, not quite used for that yet, in cell_width(s). 
+    /// UNIMPLEMENTED. Minimum width of an area to be considered walkable, in cell_width(s). 
     pub walkable_radius: u16,
-    // Maximum height difference that is still considered traversable in cell_height(s). (Think, stair steps)
+    /// Maximum height difference that is still considered traversable in cell_height(s). (Think, stair steps)
     pub step_height: u16,
 
-    // Minimum size of a region, anything smaller than this will be removed. This is used to filter out smaller regions that might appear on tables.
+    /// Minimum size of a region, anything smaller than this will be removed. This is used to filter out smaller regions that might appear on tables.
     pub min_region_area: usize,
-    // Maximum size of a region to merge other regions into.
+    /// Maximum size of a region to merge other regions into.
     pub merge_region_area: usize,
 
-    // Maximum length of an edge before it's split. Suggestion: Start high and reduce it if there are issues.
+    /// Maximum length of an edge before it's split. 
+    /// 
+    /// **Suggested value**: Start high and reduce if there are issues.
     pub max_edge_length: u32,
-    // Maximum difference allowed for simplified contour generation on the XZ-plane. Suggested value range: [1.1, 1.5]
+    /// Maximum difference allowed for simplified contour generation on the XZ-plane. 
+    /// 
+    /// **Suggested value range**: [1.1, 1.5]
     pub max_contour_simplification_error: f32, 
 }
 impl NavMeshSettings {
+    /// Returns the length of a tile's side in world units.
     #[inline]
     pub fn get_tile_size(&self) -> f32 {
         self.cell_width * self.tile_width as f32
     }
 
+    /// Returns the tile coordinate that contains the supplied ``world_position``.
     #[inline]
-    pub fn get_tile_position(&self, world_pos: Vec2) -> UVec2 {
+    pub fn get_tile_containing_position(&self, world_position: Vec2) -> UVec2 {
         let tile_size = self.get_tile_size();
 
-        let offset_world = world_pos + self.world_half_extents;
+        let offset_world = world_position + self.world_half_extents;
 
         (offset_world / tile_size).as_uvec2()
     }
 
+    /// Returns the minimum bound of a tile on the XZ-plane.
     #[inline]
     pub fn get_tile_min_bound(&self, tile: UVec2) -> Vec2 {
         let tile_size = self.get_tile_size();
@@ -155,6 +169,7 @@ impl NavMeshSettings {
         tile.as_vec2() * tile_size - self.world_half_extents
     }
 
+    /// Returns the minimum & maximum bound of a tile on the XZ-plane.
     #[inline]
     pub fn get_tile_bounds(&self, tile: UVec2) -> (Vec2, Vec2) {
         let tile_size = self.get_tile_size();
@@ -191,10 +206,10 @@ fn update_navmesh_affectors_system(
             .transform_by(&iso);
 
         let min_vec = Vec2::new(aabb.mins.x, aabb.mins.z);
-        let min_tile = nav_mesh_settings.get_tile_position(min_vec);
+        let min_tile = nav_mesh_settings.get_tile_containing_position(min_vec);
 
         let max_vec = Vec2::new(aabb.maxs.x, aabb.maxs.z);
-        let max_tile = nav_mesh_settings.get_tile_position(max_vec);
+        let max_tile = nav_mesh_settings.get_tile_containing_position(max_vec);
 
         // Remove from previous.
         for old_tile in affector.0.iter().filter(|tile_coord| {
@@ -334,7 +349,12 @@ fn clear_dirty_tiles_system(mut dirty_tiles: ResMut<DirtyTiles>) {
     dirty_tiles.0.clear();
 }
 
-fn get_cell_offset(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
+/*
+*   Lots of math stuff.
+*   Don't know where else to put it.
+*/
+
+fn get_neighbour_index(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
     match dir {
         0 => index - 1,
         1 => index + nav_mesh_settings.tile_width as usize,

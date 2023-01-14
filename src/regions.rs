@@ -1,5 +1,7 @@
+use crate::heightfields::{OpenTile, OpenSpan};
+
 use super::{
-    get_cell_offset, NavMeshSettings, OpenSpan, OpenTile,
+    get_neighbour_index, NavMeshSettings,
 };
 
 #[derive(Default, Clone, Copy)]
@@ -179,7 +181,7 @@ fn expand_regions(
                     continue;
                 };
 
-                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir)]
+                let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir)]
                     .spans[span_index as usize];
 
                 let other_region = regions[other_span.tile_index];
@@ -261,7 +263,7 @@ fn expand_regions_until_end(
                     continue;
                 };
 
-                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir)]
+                let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir)]
                     .spans[index as usize];
 
                 let other_region = regions[other_span.tile_index];
@@ -648,7 +650,7 @@ fn walk_contour(
     let span = &tile.cells[cell_index].spans[span_index];
     let mut current_region = 0;
     if let Some(span_index) = span.neighbours[dir] {
-        let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir)]
+        let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, cell_index, dir)]
             .spans[span_index as usize];
 
         current_region = source_regions[other_span.tile_index];
@@ -667,7 +669,7 @@ fn walk_contour(
         ) {
             let mut r = 0;
             if let Some(span_index) = span.neighbours[dir] {
-                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir)]
+                let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, cell_index, dir)]
                     .spans[span_index as usize];
 
                 r = source_regions[other_span.tile_index];
@@ -686,7 +688,7 @@ fn walk_contour(
                 return;
             }
 
-            cell_index = get_cell_offset(nav_mesh_settings, cell_index, dir);
+            cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir);
             dir = (dir + 3) & 0x3; // Rotate COUNTER clock-wise.
         }
 
@@ -720,7 +722,7 @@ fn is_solid_edge(
 ) -> bool {
     let mut region = 0;
     if let Some(span_index) = span.neighbours[dir] {
-        let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, c_i, dir)]
+        let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, c_i, dir)]
             .spans[span_index as usize];
 
         region = source_region[other_span.tile_index];
@@ -765,7 +767,7 @@ fn flood_region(
                 continue;
             };
 
-            let other_cell_index = get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir);
+            let other_cell_index = get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir);
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
             let other_region = regions[other_span.tile_index];
 
@@ -776,7 +778,7 @@ fn flood_region(
 
             let next_dir = (dir + 1) & 0x3;
             if let Some(span_index) = other_span.neighbours[next_dir] {
-                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, other_cell_index, next_dir)]
+                let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir)]
                     .spans[span_index as usize];
                 let other_region = regions[other_span.tile_index];
 
@@ -799,7 +801,7 @@ fn flood_region(
                 continue;
             };
 
-            let other_cell_index = get_cell_offset(nav_mesh_settings, entry.cell_index as usize, dir);
+            let other_cell_index = get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir);
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             if tile.distances[other_span.tile_index] >= lev && regions[other_span.tile_index] == 0

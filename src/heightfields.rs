@@ -5,8 +5,7 @@ use bevy::{
 };
 
 use super::{
-    get_cell_offset, NavMeshSettings, OpenCell,
-    OpenSpan, OpenTile,
+    get_neighbour_index, NavMeshSettings
 };
 
 #[derive(Default, Clone, Debug)]
@@ -24,6 +23,30 @@ struct VoxelCell {
 #[derive(Default)]
 pub struct VoxelizedTile {
     cells: Vec<VoxelCell>, // len = tiles_along_width^2. Laid out X to Y
+}
+
+#[derive(Default, Clone, Debug)]
+pub(super) struct OpenCell {
+    pub(super) spans: Vec<OpenSpan>,
+}
+
+// Like a HeightSpan but representing open walkable areas (empty space with floor & height >= walkable_height
+#[derive(Default, Clone, Copy, Debug)]
+pub(super) struct OpenSpan {
+    pub(super) min: u16,
+    pub(super) max: Option<u16>,
+    pub(super) neighbours: [Option<u16>; 4],
+    pub(super) tile_index: usize, // The index of this span in the whole tile.
+    pub(super) region: u16, // Region if non-zero. We could use option for this if we had some optimization for size.
+}
+
+#[derive(Default, Debug)]
+pub struct OpenTile {
+    pub(super) cells: Vec<OpenCell>, // len = tiles_along_width^2. Laid out X to Y
+    pub(super) distances: Vec<u16>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
+    pub(super) max_distance: u16,
+    pub(super) span_count: usize, // Total spans in all cells.
+    pub(super) max_regions: u16,
 }
 
 pub fn build_heightfield_tile(
@@ -595,7 +618,7 @@ pub fn calculate_distance_field(
                     continue;
                 };
 
-                let other_cell_index = get_cell_offset(nav_mesh_settings, i, dir);
+                let other_cell_index = get_neighbour_index(nav_mesh_settings, i, dir);
                 let other_span =
                     &open_tile.cells[other_cell_index].spans[index as usize];
 
@@ -607,7 +630,7 @@ pub fn calculate_distance_field(
                     continue;
                 };
 
-                let other_cell_index = get_cell_offset(nav_mesh_settings, other_cell_index, next_dir);
+                let other_cell_index = get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir);
 
                 let other_span =
                     &open_tile.cells[other_cell_index].spans[index as usize];

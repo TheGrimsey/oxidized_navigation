@@ -4,10 +4,10 @@ use bevy::{
     prelude::{warn, IVec2, UVec2, UVec4},
 };
 
-use crate::get_cell_offset;
+use crate::{get_neighbour_index, heightfields::{OpenTile, OpenSpan}};
 
 use super::{
-    in_cone, intersect, NavMeshSettings, OpenSpan, OpenTile,
+    in_cone, intersect, NavMeshSettings,
     FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION,
 };
 
@@ -54,7 +54,7 @@ pub fn build_contours(
             for dir in 0..4 {
                 let mut other_region = 0;
                 if let Some(span_index) = span.neighbours[dir] {
-                    let other_span = &open_tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir)]
+                    let other_span = &open_tile.cells[get_neighbour_index(nav_mesh_settings, cell_index, dir)]
                         .spans[span_index as usize];
                     other_region = other_span.region;
                 }
@@ -397,7 +397,7 @@ fn walk_contour(
 
             let mut bordering_region = 0u32;
             if let Some(span_index) = span.neighbours[dir as usize] {
-                let other_span = &tile.cells[get_cell_offset(nav_mesh_settings, cell_index, dir.into())]
+                let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, cell_index, dir.into())]
                     .spans[span_index as usize];
                 bordering_region = other_span.region.into();
             }
@@ -425,7 +425,7 @@ fn walk_contour(
                 panic!("Incorrectly flagged boundry!");
             }
 
-            cell_index = get_cell_offset(nav_mesh_settings, cell_index, dir.into());
+            cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
             dir = (dir + 3) & 0x3; // Rotate COUNTER clock-wise.
         }
 
@@ -450,7 +450,7 @@ fn get_corner_height(
     regions[0] = span.region;
 
     if let Some(span_index) = span.neighbours[dir as usize] {
-        let other_cell_index = get_cell_offset(nav_mesh_settings, cell_index, dir.into());
+        let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
         let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
         
         height = height.max(other_span.min);
@@ -459,7 +459,7 @@ fn get_corner_height(
         if let Some(span_index) =
             other_span.neighbours[next_dir as usize]
         {
-            let other_cell_index = get_cell_offset(nav_mesh_settings, other_cell_index, dir.into());
+            let other_cell_index = get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
             
             height = height.max(other_span.min);
@@ -468,14 +468,14 @@ fn get_corner_height(
     }
 
     if let Some(span_index) = span.neighbours[next_dir as usize] {
-        let other_cell_index = get_cell_offset(nav_mesh_settings, cell_index, next_dir.into());
+        let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, next_dir.into());
         let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
         height = height.max(other_span.min);
         regions[3] = other_span.region;
 
         if let Some(span_index) = other_span.neighbours[dir as usize] {
-            let other_cell_index = get_cell_offset(nav_mesh_settings, other_cell_index, dir.into());
+            let other_cell_index = get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);

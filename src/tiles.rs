@@ -37,6 +37,7 @@ pub struct Polygon {
 /*
 *   Polygons make up a form of graph, linking to other polygons (which could be on another mesh)
 */
+
 #[derive(Debug)]
 pub struct NavMeshTile {
     pub vertices: Vec<Vec3>,
@@ -52,11 +53,11 @@ pub struct NavMeshTiles {
 #[derive(Default)]
 pub struct NavMesh {
     pub tiles: HashMap<UVec2, NavMeshTile>,
-    pub tile_generations: HashMap<UVec2, u64>
+    pub(super) tile_generations: HashMap<UVec2, u64>
 }
 
 impl NavMesh {
-    pub fn add_tile(
+    pub(super) fn add_tile(
         &mut self,
         tile_coord: UVec2,
         mut tile: NavMeshTile,
@@ -184,8 +185,8 @@ impl NavMesh {
         let min = center - half_extents;
         let max = center + half_extents;
 
-        let min_tile = nav_mesh_settings.get_tile_position(min.xz());
-        let max_tile = nav_mesh_settings.get_tile_position(max.xz());
+        let min_tile = nav_mesh_settings.get_tile_containing_position(min.xz());
+        let max_tile = nav_mesh_settings.get_tile_containing_position(max.xz());
 
         let mut out_polygon = None;
         let mut out_distance = f32::INFINITY;

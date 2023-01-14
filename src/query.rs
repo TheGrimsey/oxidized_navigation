@@ -1,3 +1,5 @@
+
+//! Module for querying the nav-mesh
 use std::sync::{Arc, RwLock};
 
 use bevy::prelude::{Vec3, UVec2};
@@ -8,7 +10,7 @@ const HEURISTIC_SCALE: f32 = 0.999;
 
 bitflags::bitflags! {
     #[derive(Default)]
-    pub struct NodeFlags: u8 {
+    struct NodeFlags: u8 {
         const OPEN = 0b00000001;
         const CLOSED = 0b00000010;
     }
@@ -25,27 +27,42 @@ struct NavMeshNode {
     parent: Option<usize>
 }
 
+/// Errors returned by [find_path]
 pub enum FindPathError {
+    /// Nav-mesh couldn't be retrieved from lock.
     NavMeshUnavailable,
+    /// No polygon found near ``start_pos``. 
     NoValidStartPolygon,
+    /// No polygon found near ``end_pos``.
     NoValidEndPolygon,
 }
 
+/// Performs A* pathfinding on the supplied nav-mesh.
+/// Returning the polygons crossed as a Vec<(Tile, Polygon)> or [FindPathError]
+/// 
+/// * ``nav_mesh`` - Nav-mesh to pathfind across.
+/// * ``nav_mesh_settings`` - Nav-mesh settings used to generate ``nav_mesh``.
+/// * ``start_pos`` - Starting position for the path.
+/// * ``end_pos`` - Destination position for the path, i.e where you want to go.
+/// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
 pub fn find_path(
     nav_mesh: Arc<RwLock<NavMesh>>,
     nav_mesh_settings: NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
+    position_search_radius: Option<f32>
 ) -> Result<Vec<(UVec2, u16)>, FindPathError> {
     let Ok(nav_mesh) = nav_mesh.read() else {
         return Err(FindPathError::NavMeshUnavailable);
     };
 
-    let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, start_pos, 5.0) else {
+    let search_radius = position_search_radius.unwrap_or(5.0);
+
+    let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, start_pos, search_radius) else {
         return Err(FindPathError::NoValidStartPolygon);
     };
 
-    let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, end_pos, 5.0) else {
+    let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, end_pos, search_radius) else {
         return Err(FindPathError::NoValidEndPolygon);
     };
 
@@ -239,6 +256,9 @@ pub enum StringPullingError {
     NoLinkBetweenPathPoints
 }
 
+/// Performs "string pulling" on a path of polygons. Used to convert [find_path]'s result to a world space path.
+/// 
+/// Returns the path as Vec<Vec3> or [StringPullingError]
 pub fn perform_string_pulling_on_path(
     nav_mesh: Arc<RwLock<NavMesh>>,
     start_pos: Vec3,

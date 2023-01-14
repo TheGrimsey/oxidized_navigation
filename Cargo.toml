@@ -7,6 +7,7 @@ edition = "2021"
 authors = ["TheGrimsey"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+homepage = "https://github.com/TheGrimsey/oxidized_navigation"
 repository = "https://github.com/TheGrimsey/oxidized_navigation"
 
 keywords = ["gamedev", "navmesh", "navmesh-generation"]

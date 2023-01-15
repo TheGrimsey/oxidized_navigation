@@ -1,9 +1,11 @@
-
 //! Module for querying the nav-mesh
 
-use bevy::prelude::{Vec3, UVec2};
+use bevy::prelude::{UVec2, Vec3};
 
-use crate::{tiles::{NavMeshTiles, Link}, NavMeshSettings};
+use crate::{
+    tiles::{Link, NavMeshTiles},
+    NavMeshSettings,
+};
 
 const HEURISTIC_SCALE: f32 = 0.999;
 
@@ -23,14 +25,15 @@ struct NavMeshNode {
     tile: UVec2,
     polygon: u16,
     flags: NodeFlags,
-    parent: Option<usize>
+    parent: Option<usize>,
 }
 
 /// Errors returned by [find_path]
+#[derive(Debug)]
 pub enum FindPathError {
     /// Nav-mesh couldn't be retrieved from lock.
     NavMeshUnavailable,
-    /// No polygon found near ``start_pos``. 
+    /// No polygon found near ``start_pos``.
     NoValidStartPolygon,
     /// No polygon found near ``end_pos``.
     NoValidEndPolygon,
@@ -38,13 +41,13 @@ pub enum FindPathError {
 
 /// Performs A* pathfinding on the supplied nav-mesh.
 /// Returning the polygons crossed as a [Vec] containing the tile coordinate ([UVec2]) & polygon index ([u16]) or [FindPathError]
-/// 
+///
 /// * ``nav_mesh`` - Nav-mesh to pathfind across.
 /// * ``nav_mesh_settings`` - Nav-mesh settings used to generate ``nav_mesh``.
 /// * ``start_pos`` - Starting position for the path.
 /// * ``end_pos`` - Destination position for the path, i.e where you want to go.
 /// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
-/// 
+///
 /// Example usage:
 /// ```
 /// if let Ok(nav_mesh) = nav_mesh.get().read() {
@@ -58,7 +61,7 @@ pub fn find_path(
     nav_mesh_settings: &NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
-    position_search_radius: Option<f32>
+    position_search_radius: Option<f32>,
 ) -> Result<Vec<(UVec2, u16)>, FindPathError> {
     let search_radius = position_search_radius.unwrap_or(5.0);
 
@@ -87,16 +90,16 @@ pub fn find_path(
             flags: NodeFlags::OPEN,
             parent: None,
         };
-        
+
         nodes.push(start_node);
         open_list.push(0);
     }
 
     let mut last_best_node = 0;
     let mut last_best_node_cost = nodes[0].total_cost;
-    
+
     while let Some(best_node_index) = open_list.pop() {
-        let (best_tile, best_polygon, best_position, best_cost, best_parent) ={
+        let (best_tile, best_polygon, best_position, best_cost, best_parent) = {
             let node = &mut nodes[best_node_index];
             node.flags.remove(NodeFlags::OPEN);
             node.flags.insert(NodeFlags::CLOSED);
@@ -105,16 +108,28 @@ pub fn find_path(
                 last_best_node = best_node_index;
                 break;
             }
-            
-            (node.tile, node.polygon, node.position, node.cost, node.parent)
+
+            (
+                node.tile,
+                node.polygon,
+                node.position,
+                node.cost,
+                node.parent,
+            )
         };
 
         let node_tile = nav_mesh.tiles.get(&best_tile).unwrap();
 
         for link in node_tile.polygons[best_polygon as usize].links.iter() {
             let (link_tile, link_polygon) = match link {
-                Link::Internal { neighbour_polygon, .. } => (best_tile, *neighbour_polygon),
-                Link::External { neighbour_polygon, direction, .. } => (direction.offset(best_tile), *neighbour_polygon),
+                Link::Internal {
+                    neighbour_polygon, ..
+                } => (best_tile, *neighbour_polygon),
+                Link::External {
+                    neighbour_polygon,
+                    direction,
+                    ..
+                } => (direction.offset(best_tile), *neighbour_polygon),
             };
 
             // Don't go back to our parent.
@@ -124,7 +139,10 @@ pub fn find_path(
                 }
             }
 
-            let neighbour_node_index = if let Some(index) = nodes.iter().position(|element| element.tile == link_tile && element.polygon == link_polygon)  {
+            let neighbour_node_index = if let Some(index) = nodes
+                .iter()
+                .position(|element| element.tile == link_tile && element.polygon == link_polygon)
+            {
                 index
             } else {
                 // Node hasn't been visited already, let's create it.
@@ -133,24 +151,31 @@ pub fn find_path(
                         // Just the midpoint of the current edge.
                         let indices = &node_tile.polygons[best_polygon as usize].indices;
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
-                        let b = node_tile.vertices[indices[(*edge + 1) as usize % indices.len()] as usize];
+                        let b = node_tile.vertices
+                            [indices[(*edge + 1) as usize % indices.len()] as usize];
 
                         a.lerp(b, 0.5)
-                    },
-                    Link::External { edge, bound_min, bound_max, .. } => {
+                    }
+                    Link::External {
+                        edge,
+                        bound_min,
+                        bound_max,
+                        ..
+                    } => {
                         // The mid point of the current-edge sliced by bound_min & bound_max.
                         let indices = &node_tile.polygons[best_polygon as usize].indices;
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
-                        let b = node_tile.vertices[indices[(*edge + 1) as usize % indices.len()] as usize];
-                        
-                        const S: f32 = 1.0/255.0;
+                        let b = node_tile.vertices
+                            [indices[(*edge + 1) as usize % indices.len()] as usize];
+
+                        const S: f32 = 1.0 / 255.0;
                         let bound_min = *bound_min as f32 * S;
                         let bound_max = *bound_max as f32 * S;
                         let clamped_a = a.lerp(b, bound_min);
                         let clamped_b = a.lerp(b, bound_max);
 
                         clamped_a.lerp(clamped_b, 0.5)
-                    },
+                    }
                 };
 
                 nodes.push(NavMeshNode {
@@ -170,7 +195,8 @@ pub fn find_path(
                 let neighbour_node = &mut nodes[neighbour_node_index];
 
                 // TODO: Ideally you want to be able to override this but for now we just go with the distance.
-                let (cost, heuristic) = if end_tile == link_tile && end_poly == link_polygon { // Special case for the final node.
+                let (cost, heuristic) = if end_tile == link_tile && end_poly == link_polygon {
+                    // Special case for the final node.
                     let current_cost = best_position.distance(neighbour_node.position);
                     let end_cost = neighbour_node.position.distance(end_pos);
 
@@ -187,7 +213,11 @@ pub fn find_path(
                 };
                 let total_cost = cost + heuristic;
 
-                if neighbour_node.flags.intersects(NodeFlags::OPEN | NodeFlags::CLOSED) && total_cost >= neighbour_node.total_cost {
+                if neighbour_node
+                    .flags
+                    .intersects(NodeFlags::OPEN | NodeFlags::CLOSED)
+                    && total_cost >= neighbour_node.total_cost
+                {
                     continue;
                 }
 
@@ -208,15 +238,22 @@ pub fn find_path(
 
             if old_flags.contains(NodeFlags::OPEN) {
                 // Node already exists. Let's remove it.
-                if let Some(existing_index) = open_list.iter().position(|node| *node == neighbour_node_index) {
+                if let Some(existing_index) = open_list
+                    .iter()
+                    .position(|node| *node == neighbour_node_index)
+                {
                     open_list.remove(existing_index);
                 }
             }
 
             // We want to insert the node into the list so that the next entry has a lower total.
-            if let Some(index) = open_list.iter().position(|node_index| nodes[*node_index].total_cost < total_cost) {
+            if let Some(index) = open_list
+                .iter()
+                .position(|node_index| nodes[*node_index].total_cost < total_cost)
+            {
                 open_list.insert(index, neighbour_node_index);
-            } else { // There is no entry with a lower total.
+            } else {
+                // There is no entry with a lower total.
                 open_list.push(neighbour_node_index);
             }
         }
@@ -256,13 +293,13 @@ pub enum StringPullingError {
     MissingStartTile,
     MissingEndTile,
     MissingNodeTile,
-    NoLinkBetweenPathPoints
+    NoLinkBetweenPathPoints,
 }
 
 /// Performs "string pulling" on a path of polygons. Used to convert [find_path]'s result to a world space path.
-/// 
-/// Returns the path as Vec<Vec3> or [StringPullingError]
-/// 
+///
+/// Returns the path as `Vec<Vec3>` or [StringPullingError]
+///
 /// Example usage:
 /// ```
 /// let start_pos = Vec3::new(5.0, 1.0, 5.0);
@@ -277,7 +314,7 @@ pub fn perform_string_pulling_on_path(
     nav_mesh: &NavMeshTiles,
     start_pos: Vec3,
     end_pos: Vec3,
-    path: &[(UVec2, u16)]
+    path: &[(UVec2, u16)],
 ) -> Result<Vec<Vec3>, StringPullingError> {
     if path.is_empty() {
         return Err(StringPullingError::PathEmpty);
@@ -290,8 +327,10 @@ pub fn perform_string_pulling_on_path(
         return Err(StringPullingError::MissingEndTile);
     };
 
-    let start_pos = start_tile.get_closest_point_in_polygon(&start_tile.polygons[path[0].1 as usize], start_pos);
-    let end_pos = end_tile.get_closest_point_in_polygon(&end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
+    let start_pos = start_tile
+        .get_closest_point_in_polygon(&start_tile.polygons[path[0].1 as usize], start_pos);
+    let end_pos = end_tile
+        .get_closest_point_in_polygon(&end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
 
     let mut string_path = Vec::with_capacity(path.len() + 2);
     string_path.push(start_pos);
@@ -303,7 +342,7 @@ pub fn perform_string_pulling_on_path(
 
         let mut left_index = 0;
         let mut right_index = 0;
-        
+
         let mut i = 0;
         while i < path.len() {
             let (left, right) = if let Some(next) = path.get(i + 1) {
@@ -326,20 +365,27 @@ pub fn perform_string_pulling_on_path(
                 match link {
                     Link::Internal { edge, .. } => {
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
-                        let b = node_tile.vertices[indices[(*edge + 1) as usize % indices.len()] as usize];
+                        let b = node_tile.vertices
+                            [indices[(*edge + 1) as usize % indices.len()] as usize];
 
                         (a, b)
-                    },
-                    Link::External { edge, bound_min, bound_max, .. } => {
+                    }
+                    Link::External {
+                        edge,
+                        bound_min,
+                        bound_max,
+                        ..
+                    } => {
                         let a = node_tile.vertices[indices[*edge as usize] as usize];
-                        let b = node_tile.vertices[indices[(*edge + 1) as usize % indices.len()] as usize];
+                        let b = node_tile.vertices
+                            [indices[(*edge + 1) as usize % indices.len()] as usize];
 
-                        const S: f32 = 1.0/255.0;
+                        const S: f32 = 1.0 / 255.0;
                         let clamped_a = a.lerp(b, *bound_min as f32 * S);
                         let clamped_b = a.lerp(b, *bound_max as f32 * S);
 
                         (clamped_a, clamped_b)
-                    },
+                    }
                 }
             } else {
                 (end_pos, end_pos)
@@ -347,7 +393,9 @@ pub fn perform_string_pulling_on_path(
 
             // Right vertex.
             if triangle_area_2d(portal_apex, portal_right, right) <= 0.0 {
-                if portal_apex.distance_squared(portal_right) < (1.0/16384.0) || triangle_area_2d(portal_apex, portal_left, right) > 0.0 {
+                if portal_apex.distance_squared(portal_right) < (1.0 / 16384.0)
+                    || triangle_area_2d(portal_apex, portal_left, right) > 0.0
+                {
                     portal_right = right;
                     right_index = i;
                 } else {
@@ -368,7 +416,9 @@ pub fn perform_string_pulling_on_path(
 
             // Left vertex.
             if triangle_area_2d(portal_apex, portal_left, left) >= 0.0 {
-                if portal_apex.distance_squared(portal_left) < (1.0/16384.0)  || triangle_area_2d(portal_apex, portal_right, left) < 0.0 {
+                if portal_apex.distance_squared(portal_left) < (1.0 / 16384.0)
+                    || triangle_area_2d(portal_apex, portal_right, left) < 0.0
+                {
                     portal_left = left;
                     left_index = i;
                 } else {
@@ -396,11 +446,7 @@ pub fn perform_string_pulling_on_path(
     Ok(string_path)
 }
 
-fn triangle_area_2d(
-    a: Vec3,
-    b: Vec3,
-    c: Vec3
-) -> f32 {
+fn triangle_area_2d(a: Vec3, b: Vec3, c: Vec3) -> f32 {
     let ab_x = b.x - a.x;
     let ab_z = b.z - a.z;
 

@@ -1,12 +1,8 @@
 use std::{cmp::Ordering, ops::Div};
 
-use bevy::{
-    prelude::{GlobalTransform, IVec3, UVec2, Vec3},
-};
+use bevy::prelude::{GlobalTransform, IVec3, UVec2, Vec3};
 
-use super::{
-    get_neighbour_index, NavMeshSettings
-};
+use super::{get_neighbour_index, NavMeshSettings};
 
 #[derive(Default, Clone, Debug)]
 struct HeightSpan {
@@ -55,7 +51,10 @@ pub fn build_heightfield_tile(
     nav_mesh_settings: &NavMeshSettings,
 ) -> VoxelizedTile {
     let mut voxel_tile = VoxelizedTile {
-        cells: vec![VoxelCell::default(); nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize],
+        cells: vec![
+            VoxelCell::default();
+            nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize
+        ],
     };
 
     let tile_min = nav_mesh_settings.get_tile_min_bound(tile_coord);
@@ -66,15 +65,18 @@ pub fn build_heightfield_tile(
         (nav_mesh_settings.tile_width - 1).into(),
     );
 
-    let max_vertices = triangle_collections.iter().fold(0, |acc, val| acc.max(val.1.len()));
+    let max_vertices = triangle_collections
+        .iter()
+        .fold(0, |acc, val| acc.max(val.1.len()));
     let mut translated_vertices = Vec::with_capacity(max_vertices);
 
     for (transform, vertices, triangles) in triangle_collections.iter() {
         let transform = transform.compute_transform().with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
-        
+
         translated_vertices.clear();
         translated_vertices.extend(vertices.iter().map(|vertex| {
-            transform.transform_point(*vertex) - Vec3::new(tile_min.x, nav_mesh_settings.world_bottom_bound, tile_min.y)
+            transform.transform_point(*vertex)
+                - Vec3::new(tile_min.x, nav_mesh_settings.world_bottom_bound, tile_min.y)
         })); // Transform vertices.
 
         for triangle in triangles.iter() {
@@ -136,8 +138,7 @@ pub fn build_heightfield_tile(
                     column_min_vert_x = column_min_vert_x.min(vertex.x);
                     column_max_vert_x = column_max_vert_x.max(vertex.x);
                 }
-                let column_min =
-                    ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
+                let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
                 let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
                     .min((nav_mesh_settings.tile_width - 1).into());
 
@@ -230,7 +231,8 @@ fn divide_polygon(
     vertex_count_in: usize,
     clip_line: f32,
     axis: usize,
-) -> (usize, [Vec3; 7], usize, [Vec3; 7]) { // TODO: We always use one of these options. Does it make sense to even return the other?
+) -> (usize, [Vec3; 7], usize, [Vec3; 7]) {
+    // TODO: We always use one of these options. Does it make sense to even return the other?
     let mut polygon_a = [Vec3::ZERO; 7];
     let mut polygon_b = [Vec3::ZERO; 7];
 
@@ -287,7 +289,10 @@ pub fn build_open_heightfield_tile(
     nav_mesh_settings: &NavMeshSettings,
 ) -> OpenTile {
     let mut open_tile = OpenTile {
-        cells: vec![OpenCell::default(); nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize],
+        cells: vec![
+            OpenCell::default();
+            nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize
+        ],
         distances: Vec::new(),
         max_distance: 0,
         span_count: 0,
@@ -296,17 +301,18 @@ pub fn build_open_heightfield_tile(
 
     // First we create open spaces.
     for (i, cell) in voxelized_tile
-    .cells
-    .iter()
-    .enumerate()
-    .filter(|(_, cell)| !cell.spans.is_empty())
+        .cells
+        .iter()
+        .enumerate()
+        .filter(|(_, cell)| !cell.spans.is_empty())
     {
         let open_spans = &mut open_tile.cells[i].spans;
         open_spans.clear();
 
         let mut iter = cell.spans.iter().peekable();
         while let Some(span) = iter.next() {
-            if !span.traversable { // Skip untraversable. Not filtered because we still need to peek at them so.
+            if !span.traversable {
+                // Skip untraversable. Not filtered because we still need to peek at them so.
                 continue;
             }
 
@@ -336,10 +342,7 @@ pub fn build_open_heightfield_tile(
     open_tile
 }
 
-pub fn link_neighbours(
-    open_tile: &mut OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-) {
+pub fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
     let cells_count = nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize;
 
     let mut x_positive = Vec::with_capacity(3);
@@ -366,10 +369,20 @@ pub fn link_neighbours(
         z_negative.clear();
 
         if x_positive_contained {
-            x_positive.extend(open_tile.cells[i + 1].spans.iter().map(|span| (span.min, span.max)));
+            x_positive.extend(
+                open_tile.cells[i + 1]
+                    .spans
+                    .iter()
+                    .map(|span| (span.min, span.max)),
+            );
         }
         if x_negative_contained {
-            x_negative.extend(open_tile.cells[i - 1].spans.iter().map(|span| (span.min, span.max)));
+            x_negative.extend(
+                open_tile.cells[i - 1]
+                    .spans
+                    .iter()
+                    .map(|span| (span.min, span.max)),
+            );
         }
         if z_positive_contained {
             z_positive.extend(
@@ -450,7 +463,7 @@ pub fn link_neighbours(
                         continue;
                     }
                 }
-                
+
                 if min.abs_diff(span.min) < nav_mesh_settings.step_height {
                     span.neighbours[3] = Some(i as u16);
                     break;
@@ -460,10 +473,7 @@ pub fn link_neighbours(
     }
 }
 
-pub fn calculate_distance_field(
-    open_tile: &mut OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-) {
+pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
     // Assign tile_index.
     let mut tile_index = 0;
     for cell in open_tile.cells.iter_mut() {
@@ -476,7 +486,11 @@ pub fn calculate_distance_field(
     // Mark boundary cells.
     for cell in open_tile.cells.iter() {
         for span in cell.spans.iter() {
-            let neighbours = span.neighbours.iter().filter(|neighbour| neighbour.is_some()).count();
+            let neighbours = span
+                .neighbours
+                .iter()
+                .filter(|neighbour| neighbour.is_some())
+                .count();
 
             if neighbours != 4 {
                 open_tile.distances[span.tile_index] = 0;
@@ -493,7 +507,7 @@ pub fn calculate_distance_field(
                 // (-1, 0)
                 let other_cell_index = i - 1;
                 let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
-                
+
                 let other_distance = open_tile.distances[other_span.tile_index];
                 if (other_distance + 2) < distance {
                     distance = other_distance + 2;
@@ -532,7 +546,7 @@ pub fn calculate_distance_field(
                     }
                 }
             }
-            
+
             // Apply distance change.
             open_tile.distances[span.tile_index] = distance;
         }
@@ -554,9 +568,7 @@ pub fn calculate_distance_field(
                 }
 
                 // (1, 1)
-                if let Some(span_index) =
-                    other_span.neighbours[1]
-                {
+                if let Some(span_index) = other_span.neighbours[1] {
                     let other_cell_index = other_cell_index + nav_mesh_settings.tile_width as usize;
                     let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
@@ -578,9 +590,7 @@ pub fn calculate_distance_field(
                 }
 
                 // (-1, 1)
-                if let Some(span_index) =
-                    other_span.neighbours[0]
-                {
+                if let Some(span_index) = other_span.neighbours[0] {
                     let other_cell_index = other_cell_index - 1;
                     let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
@@ -595,7 +605,7 @@ pub fn calculate_distance_field(
             open_tile.distances[span.tile_index] = distance;
         }
     }
-    
+
     open_tile.max_distance = *open_tile.distances.iter().max().unwrap_or(&0);
 
     // Box blur. If you're reading this, why?
@@ -619,8 +629,7 @@ pub fn calculate_distance_field(
                 };
 
                 let other_cell_index = get_neighbour_index(nav_mesh_settings, i, dir);
-                let other_span =
-                    &open_tile.cells[other_cell_index].spans[index as usize];
+                let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
 
                 d += open_tile.distances[other_span.tile_index];
 
@@ -630,10 +639,10 @@ pub fn calculate_distance_field(
                     continue;
                 };
 
-                let other_cell_index = get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir);
+                let other_cell_index =
+                    get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir);
 
-                let other_span =
-                    &open_tile.cells[other_cell_index].spans[index as usize];
+                let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
 
                 d += open_tile.distances[other_span.tile_index];
             }

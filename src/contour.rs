@@ -1,15 +1,13 @@
 use std::cmp::Ordering;
 
-use bevy::{
-    prelude::{warn, IVec2, UVec2, UVec4},
+use bevy::prelude::{warn, IVec2, UVec2, UVec4};
+
+use crate::{
+    get_neighbour_index,
+    heightfields::{OpenSpan, OpenTile},
 };
 
-use crate::{get_neighbour_index, heightfields::{OpenTile, OpenSpan}};
-
-use super::{
-    in_cone, intersect, NavMeshSettings,
-    FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION,
-};
+use super::{in_cone, intersect, NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION};
 
 #[derive(Default, Clone, Debug)]
 pub struct Contour {
@@ -36,10 +34,7 @@ struct ContourRegion {
     holes: Vec<ContourHole>,
 }
 
-pub fn build_contours(
-    open_tile: &OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-) -> ContourSet {
+pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings) -> ContourSet {
     let max_contours = open_tile.max_regions.max(8);
     let mut contour_set = ContourSet {
         contours: Vec::with_capacity(max_contours.into()),
@@ -54,8 +49,9 @@ pub fn build_contours(
             for dir in 0..4 {
                 let mut other_region = 0;
                 if let Some(span_index) = span.neighbours[dir] {
-                    let other_span = &open_tile.cells[get_neighbour_index(nav_mesh_settings, cell_index, dir)]
-                        .spans[span_index as usize];
+                    let other_span = &open_tile.cells
+                        [get_neighbour_index(nav_mesh_settings, cell_index, dir)]
+                    .spans[span_index as usize];
                     other_region = other_span.region;
                 }
 
@@ -99,7 +95,7 @@ pub fn build_contours(
                 &vertices,
                 &mut simplified_vertices,
                 nav_mesh_settings.max_contour_simplification_error,
-                nav_mesh_settings.max_edge_length
+                nav_mesh_settings.max_edge_length,
             );
 
             // Remove degenerate segments.
@@ -397,8 +393,9 @@ fn walk_contour(
 
             let mut bordering_region = 0u32;
             if let Some(span_index) = span.neighbours[dir as usize] {
-                let other_span = &tile.cells[get_neighbour_index(nav_mesh_settings, cell_index, dir.into())]
-                    .spans[span_index as usize];
+                let other_span = &tile.cells
+                    [get_neighbour_index(nav_mesh_settings, cell_index, dir.into())]
+                .spans[span_index as usize];
                 bordering_region = other_span.region.into();
             }
 
@@ -452,16 +449,15 @@ fn get_corner_height(
     if let Some(span_index) = span.neighbours[dir as usize] {
         let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
         let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
-        
+
         height = height.max(other_span.min);
         regions[1] = other_span.region;
 
-        if let Some(span_index) =
-            other_span.neighbours[next_dir as usize]
-        {
-            let other_cell_index = get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+        if let Some(span_index) = other_span.neighbours[next_dir as usize] {
+            let other_cell_index =
+                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
-            
+
             height = height.max(other_span.min);
             regions[2] = other_span.region;
         }
@@ -475,7 +471,8 @@ fn get_corner_height(
         regions[3] = other_span.region;
 
         if let Some(span_index) = other_span.neighbours[dir as usize] {
-            let other_cell_index = get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+            let other_cell_index =
+                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);
@@ -486,7 +483,12 @@ fn get_corner_height(
     height
 }
 
-fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32, max_edge_len: u32) {
+fn simplify_contour(
+    points: &[u32],
+    simplified: &mut Vec<UVec4>,
+    max_error: f32,
+    max_edge_len: u32,
+) {
     let has_connections = {
         let mut has_connections = false;
 
@@ -627,20 +629,21 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32,
     // We don't split long edges. For now... I guess eventually it might be needed. :)
     // SPLIT LONG EDGES.
     {
-        let mut i = 0; 
+        let mut i = 0;
         while i < simplified.len() {
             let a = simplified[i];
             let b = simplified[(i + 1) % simplified.len()];
 
-            let next_original_point_index = (a.w + 1) as usize % point_count; 
-            let should_tesselate = points[next_original_point_index * 4 + 3] & MASK_CONTOUR_REGION == 0;
+            let next_original_point_index = (a.w + 1) as usize % point_count;
+            let should_tesselate =
+                points[next_original_point_index * 4 + 3] & MASK_CONTOUR_REGION == 0;
 
             let mut max_i = None;
             if should_tesselate {
                 let delta_x = b.x.abs_diff(a.x);
                 let delta_z = b.z.abs_diff(a.z);
 
-                if delta_x*delta_x + delta_z*delta_z > max_edge_len*max_edge_len {
+                if delta_x * delta_x + delta_z * delta_z > max_edge_len * max_edge_len {
                     let n = if b.w < a.w {
                         b.w as isize + point_count as isize - a.w as isize
                     } else {
@@ -649,21 +652,24 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32,
 
                     if n > 1 {
                         if b.x > a.x || (b.x == a.x && b.z > a.z) {
-                            max_i = Some((a.w as usize + (n/2) as usize) % point_count);
+                            max_i = Some((a.w as usize + (n / 2) as usize) % point_count);
                         } else {
-                            max_i = Some((a.w as usize + ((n + 1)/2) as usize) % point_count)
+                            max_i = Some((a.w as usize + ((n + 1) / 2) as usize) % point_count)
                         }
                     }
                 }
             }
 
             if let Some(max_i) = max_i {
-                simplified.insert(i + 1, UVec4::new(
-                    points[max_i*4],
-                    points[max_i*4+1],
-                    points[max_i*4+2],
-                    max_i as u32
-                ));
+                simplified.insert(
+                    i + 1,
+                    UVec4::new(
+                        points[max_i * 4],
+                        points[max_i * 4 + 1],
+                        points[max_i * 4 + 2],
+                        max_i as u32,
+                    ),
+                );
             } else {
                 i += 1;
             }

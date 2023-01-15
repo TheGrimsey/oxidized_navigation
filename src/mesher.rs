@@ -2,9 +2,7 @@ use bevy::prelude::{info, UVec2, UVec3, UVec4};
 
 use crate::contour::ContourSet;
 
-use super::{
-    intersect_prop, intersect, left, left_on, NavMeshSettings,
-};
+use super::{intersect, intersect_prop, left, left_on, NavMeshSettings};
 
 #[derive(Default)]
 pub struct PolyMesh {
@@ -16,10 +14,7 @@ pub struct PolyMesh {
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
 pub const VERTICES_IN_TRIANGLE: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
-pub fn build_poly_mesh(
-    contour_set: &ContourSet,
-    nav_mesh_settings: &NavMeshSettings,
-) -> PolyMesh {
+pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSettings) -> PolyMesh {
     let mut max_vertices = 0;
     let mut max_tris = 0;
     let mut max_verts_per_contour = 0;
@@ -59,9 +54,7 @@ pub fn build_poly_mesh(
         indices.extend(0..contour.vertices.len() as u32);
 
         if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
-            info!(
-                "Triangulation failed for contour."
-            );
+            info!("Triangulation failed for contour.");
         }
 
         for vertex in contour.vertices.iter() {
@@ -289,7 +282,8 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
             let next = (i + 1) % indices.len();
             if indices[next] & 0x80000000 != 0 {
                 let point = vertices[(indices[i] & 0x0fffffff) as usize];
-                let point_next = vertices[(indices[(next + 1) % indices.len()] & 0x0fffffff) as usize];
+                let point_next =
+                    vertices[(indices[(next + 1) % indices.len()] & 0x0fffffff) as usize];
 
                 let delta_x = point_next.x.abs_diff(point.x);
                 let delta_z = point_next.z.abs_diff(point.z);
@@ -309,7 +303,8 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
                 let next_next = (next + 1) % indices.len();
                 if diagonal_loose(i, next_next, vertices, indices) {
                     let point = vertices[(indices[i] & 0x0fffffff) as usize];
-                    let point_next = vertices[(indices[(next_next + 1) % indices.len()] & 0x0fffffff) as usize];
+                    let point_next =
+                        vertices[(indices[(next_next + 1) % indices.len()] & 0x0fffffff) as usize];
 
                     let delta_x = point_next.x.abs_diff(point.x);
                     let delta_z = point_next.z.abs_diff(point.z);

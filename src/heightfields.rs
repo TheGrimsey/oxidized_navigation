@@ -70,6 +70,8 @@ pub fn build_heightfield_tile(
     let mut translated_vertices = Vec::with_capacity(max_vertices);
 
     for (transform, vertices, triangles) in triangle_collections.iter() {
+        let transform = transform.compute_transform().with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
+        
         translated_vertices.clear();
         translated_vertices.extend(vertices.iter().map(|vertex| {
             transform.transform_point(*vertex) - Vec3::new(tile_min.x, nav_mesh_settings.world_bottom_bound, tile_min.y)

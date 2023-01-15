@@ -10,9 +10,9 @@
 //! [Bevy]: https://crates.io/crates/bevy
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 
-use std::sync::{Arc, RwLock, LockResult, RwLockReadGuard};
+use std::sync::{Arc, RwLock};
 
-use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error, Deref, DerefMut, info, Or};
+use bevy::prelude::{IntoSystemDescriptor, SystemSet, SystemLabel, With, Vec3, error, Deref, DerefMut, Or, warn};
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
     ecs::system::Resource,
@@ -31,7 +31,7 @@ use regions::build_regions;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 
-pub mod contour;
+mod contour;
 mod heightfields;
 mod mesher;
 mod regions;
@@ -187,17 +187,20 @@ impl NavMeshSettings {
 
 /// Wrapper around the nav-mesh data.
 /// 
-/// The actual nav-mesh data must be retrieved using [NavMesh::get]
+/// The underlying [NavMeshTiles] must be retrieved using [NavMesh::get]
+/// ```
+/// if let Ok(nav_mesh) = nav_mesh.get().read() {
+///     // Use nav_mesh.
+/// }
+/// ```
 #[derive(Default, Resource)]
 pub struct NavMesh(Arc<RwLock<NavMeshTiles>>);
 
 impl NavMesh {
-    /// Returns a read lock containing [NavMeshTiles].
-    pub fn get(&self) -> LockResult<RwLockReadGuard<NavMeshTiles>> {
-        self.0.read()
+    pub fn get(&self) -> Arc<RwLock<NavMeshTiles>> {
+        self.0.clone()
     }
 }
-
 
 fn update_navmesh_affectors_system(
     nav_mesh_settings: Res<NavMeshSettings>,
@@ -305,15 +308,15 @@ fn send_tile_rebuild_tasks_system(
                 ColliderView::RoundConvexPolyhedron(round_polyhedron) => round_polyhedron.raw.inner_shape.to_trimesh(),
                 // TODO: All the following ones require me to think.
                 ColliderView::Triangle(_) => {
-                    info!("Triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    warn!("Triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
                     continue;
                 },
                 ColliderView::RoundTriangle(_) => {
-                    info!("Rounded triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    warn!("Rounded triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
                     continue;
                 },
                 ColliderView::Compound(_) => {
-                    info!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    warn!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
                     continue;
                 },
                 // These ones do not make sense in this.
@@ -384,7 +387,7 @@ async fn build_tile(
         error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
         return;
     };
-    
+
     if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
         nav_mesh.tile_generations.insert(tile_coord, generation);
 

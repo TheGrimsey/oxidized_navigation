@@ -71,13 +71,20 @@ impl NavMeshTile {
 }
 
 /// Container for all nav-mesh tiles. Used for pathfinding queries.
+/// 
+/// Call [crate::query::find_path] to run pathfinding algorithm.
 #[derive(Default)]
 pub struct NavMeshTiles {
-    pub tiles: HashMap<UVec2, NavMeshTile>,
+    pub(super) tiles: HashMap<UVec2, NavMeshTile>,
     pub(super) tile_generations: HashMap<UVec2, u64>
 }
 
 impl NavMeshTiles {
+    /// Returns a [HashMap] containing all tiles in the nav-mesh.
+    pub fn get_tiles(&self) -> &HashMap<UVec2, NavMeshTile> {
+        &self.tiles
+    }
+
     pub(super) fn add_tile(
         &mut self,
         tile_coord: UVec2,
@@ -114,6 +121,7 @@ impl NavMeshTiles {
                 );
             }
         }
+
         // X-Positive
         if tile_coord.x < u32::MAX {
             let neighbour_coord = UVec2::new(tile_coord.x + 1, tile_coord.y);
@@ -140,6 +148,7 @@ impl NavMeshTiles {
                 );
             }
         }
+
         // Z-Negative
         if tile_coord.y > 0 {
             let neighbour_coord = UVec2::new(tile_coord.x, tile_coord.y - 1);
@@ -166,6 +175,7 @@ impl NavMeshTiles {
                 );
             }
         }
+
         // Z-Positive
         if tile_coord.y < u32::MAX {
             let neighbour_coord = UVec2::new(tile_coord.x, tile_coord.y + 1);
@@ -406,10 +416,12 @@ fn remove_links_to_direction(
             if let Link::External { direction, .. } = polygon.links[i] {
                 if direction == remove_direction {
                     polygon.links.swap_remove(i);
+
+                    continue;
                 }
-            } else {
-                i += 1;
             }
+
+            i += 1;
         }
     }
 }
@@ -430,10 +442,12 @@ fn connect_external_links(
                 if let Link::External { direction, .. } = polygon.links[i] {
                     if direction == neighbour_direction {
                         polygon.links.swap_remove(i);
+
+                        continue;
                     }
-                } else {
-                    i += 1;
                 }
+
+                i += 1;
             }
         }
 

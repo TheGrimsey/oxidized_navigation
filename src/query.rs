@@ -37,27 +37,36 @@ pub enum FindPathError {
 }
 
 /// Performs A* pathfinding on the supplied nav-mesh.
-/// Returning the polygons crossed as a Vec<(Tile, Polygon)> or [FindPathError]
+/// Returning the polygons crossed as a [Vec] containing the tile coordinate ([UVec2]) & polygon index ([u16]) or [FindPathError]
 /// 
 /// * ``nav_mesh`` - Nav-mesh to pathfind across.
 /// * ``nav_mesh_settings`` - Nav-mesh settings used to generate ``nav_mesh``.
 /// * ``start_pos`` - Starting position for the path.
 /// * ``end_pos`` - Destination position for the path, i.e where you want to go.
 /// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
+/// 
+/// Example usage:
+/// ```
+/// if let Ok(nav_mesh) = nav_mesh.get().read() {
+///     if let Ok(path) = find_path(&nav_mesh, &nav_mesh_settings, Vec3::new(5.0, 1.0, 5.0), Vec3::new(10.0, 5.0, 25.0), None) {
+///         // Use path.
+///     }
+/// }
+/// ```
 pub fn find_path(
     nav_mesh: &NavMeshTiles,
-    nav_mesh_settings: NavMeshSettings,
+    nav_mesh_settings: &NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
     position_search_radius: Option<f32>
 ) -> Result<Vec<(UVec2, u16)>, FindPathError> {
     let search_radius = position_search_radius.unwrap_or(5.0);
 
-    let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, start_pos, search_radius) else {
+    let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, start_pos, search_radius) else {
         return Err(FindPathError::NoValidStartPolygon);
     };
 
-    let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(&nav_mesh_settings, end_pos, search_radius) else {
+    let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, end_pos, search_radius) else {
         return Err(FindPathError::NoValidEndPolygon);
     };
 
@@ -253,6 +262,17 @@ pub enum StringPullingError {
 /// Performs "string pulling" on a path of polygons. Used to convert [find_path]'s result to a world space path.
 /// 
 /// Returns the path as Vec<Vec3> or [StringPullingError]
+/// 
+/// Example usage:
+/// ```
+/// let start_pos = Vec3::new(5.0, 1.0, 5.0);
+/// let end_pos = Vec3::new(10.0, 5.0, 25.0);
+/// if let Ok(path) = find_path(&nav_mesh, &nav_mesh_settings, start_pos, end_pos, None) {
+///     if let Ok(string_pulled_path) = perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
+///         // You now have a path of Vec3s. You can use these as you wish.
+///     }
+/// }
+/// ```
 pub fn perform_string_pulling_on_path(
     nav_mesh: &NavMeshTiles,
     start_pos: Vec3,

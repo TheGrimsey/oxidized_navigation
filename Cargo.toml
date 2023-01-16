@@ -1,12 +1,13 @@
 [package]
 name = "oxidized_navigation"
-description = "An experimental Nav-Mesh generation plugin based on Recast's Navmesh generation to Bevy Engine in Rust."
+description = "A Nav-Mesh generation plugin for Bevy Engine in Rust."
 version = "0.1.0"
 edition = "2021"
 
 authors = ["TheGrimsey"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
+homepage = "https://github.com/TheGrimsey/oxidized_navigation"
 repository = "https://github.com/TheGrimsey/oxidized_navigation"
 
 keywords = ["gamedev", "navmesh", "navmesh-generation"]
@@ -18,3 +19,5 @@ categories = ["game-development"]
 bevy = "0.9"
 bevy_rapier3d = { version = "0.19" }
 smallvec ={ version = "1.10", features = [ "union" ]}
+[dev-dependencies]
+futures-lite = "1.12.0"

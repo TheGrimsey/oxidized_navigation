@@ -1,63 +1,87 @@
-use bevy::prelude::IntoSystemDescriptor;
+//! Tiled **Runtime** Nav-mesh Generation for 3D worlds in [Bevy].
+//!
+//! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
+//!
+//! ## Quick Start:
+//! **Nav-mesh generation:**
+//! 1. Insert an instance of the [NavMeshSettings] resource into your Bevy app.
+//! 2. Add [OxidizedNavigationPlugin] as a plugin.
+//! 3. Attach a [NavMeshAffector] component and a rapier collider to any entity you want to affect the nav-mesh.
+//! 
+//! *At this point nav-meshes will be automatically generated whenever the collider or [GlobalTransform] of any entity with a [NavMeshAffector] is changed.*
+//! 
+//! **Querying the nav-mesh / Pathfinding:**
+//! 1. Your system needs to take in the [NavMesh] resource.
+//! 2. Get the underlying data from the nav-mesh using [NavMesh::get]. This data is wrapped in an [RwLock].
+//! 3. To access the data call [RwLock::read]. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
+//! 4. Call [query::find_path] with the [NavMeshTiles] returned from the [RwLock]. 
+//! 
+//! *Also see the [examples] for how to run pathfinding in an async task which may be preferable.*
+//! 
+//! [Bevy]: https://crates.io/crates/bevy
+//! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
+//! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
+
+use std::sync::{Arc, RwLock};
+
+use bevy::prelude::{
+    error, warn, Deref, DerefMut, IntoSystemDescriptor, Or, SystemLabel, SystemSet, Vec3, With,
+};
+use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
     ecs::system::Resource,
     prelude::{
-        App, Changed, Component, CoreStage, Entity, GlobalTransform, IVec4, Plugin, Query, Res,
-        ResMut, UVec2, UVec4, Vec2,
+        App, Changed, Component, Entity, GlobalTransform, IVec4, Plugin, Query, Res, ResMut, UVec2,
+        UVec4, Vec2,
     },
     utils::{HashMap, HashSet},
 };
+use bevy_rapier3d::prelude::ColliderView;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
-use smallvec::SmallVec;
-
-use self::{
-    contour::{build_contours_system, TileContours},
-    heightfields::{
-        construct_open_heightfields_system, create_distance_field_system,
-        create_neighbour_links_system, rebuild_heightfields_system, TilesVoxelized,
-    },
-    mesher::{build_poly_mesh_system, TilePolyMesh},
-    regions::build_regions_system,
+use contour::build_contours;
+use heightfields::{
+    build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field, link_neighbours,
 };
+use mesher::build_poly_mesh;
+use regions::build_regions;
+use smallvec::SmallVec;
+use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 
 mod contour;
 mod heightfields;
 mod mesher;
+pub mod query;
 mod regions;
-mod tiles;
+pub mod tiles;
+
+/// System label used by the crate's systems.
+#[derive(SystemLabel)]
+pub struct OxidizedNavigation;
 
 pub struct OxidizedNavigationPlugin;
 impl Plugin for OxidizedNavigationPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TilesVoxelized::default())
-            .insert_resource(TileAffectors::default())
-            .insert_resource(TilesOpen::default())
-            .insert_resource(TileContours::default())
+        app.insert_resource(TileAffectors::default())
             .insert_resource(DirtyTiles::default())
-            .insert_resource(TilePolyMesh::default());
+            .insert_resource(NavMesh::default())
+            .insert_resource(GenerationTicker::default());
 
-        app.add_system(update_navmesh_affectors_system)
-            .add_system(rebuild_heightfields_system.after(update_navmesh_affectors_system))
-            .add_system(construct_open_heightfields_system.after(rebuild_heightfields_system))
-            .add_system(create_neighbour_links_system.after(construct_open_heightfields_system))
-            .add_system(create_distance_field_system.after(create_neighbour_links_system))
-            .add_system(build_regions_system.after(create_distance_field_system))
-            .add_system(build_contours_system.after(build_regions_system))
-            .add_system(build_poly_mesh_system.after(build_contours_system))
-            .add_system_to_stage(CoreStage::PostUpdate, clear_dirty_tiles_system);
+        app.add_system_set(
+            SystemSet::new()
+                .label(OxidizedNavigation)
+                .with_system(update_navmesh_affectors_system)
+                .with_system(send_tile_rebuild_tasks_system.after(update_navmesh_affectors_system))
+                .with_system(clear_dirty_tiles_system.after(send_tile_rebuild_tasks_system)),
+        );
     }
 }
 
 const FLAG_BORDER_VERTEX: u32 = 0x10000;
 const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 
+/// Component for entities that should affect the nav-mesh.
 #[derive(Component, Default)]
 pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
-
-#[derive(Default, Clone, Debug)]
-pub struct OpenCell {
-    spans: Vec<OpenSpan>,
-}
 
 /*
 *   Neighbours:
@@ -66,88 +90,130 @@ pub struct OpenCell {
 *   2: (1, 0),
 *   3: (0, -1)
 */
-#[derive(Default, Clone, Copy, Debug)]
-enum NeighbourConnection {
-    // TODO: This might be overkill and could just be replaced by Option<u16>.
-    #[default]
-    Unconnected,
-    Connected {
-        index: u16, // Index of the span in the neighbour cell.
-    },
-}
 
-// Like a HeightSpan but representing open walkable areas (empty space with floor & height >= walkable_height
-#[derive(Default, Clone, Copy, Debug)]
-struct OpenSpan {
-    min: u16,
-    max: Option<u16>,
-    neighbours: [NeighbourConnection; 4],
-    tile_index: usize, // The index of this span in the whole tile.
-    region: u16, // Region if non-zero. We could use option for this if we had some optimization for size.
-}
-
-#[derive(Default, Debug)]
-pub struct OpenTile {
-    cells: Vec<OpenCell>, // len = tiles_along_width^2. Laid out X to Y
-    distances: Vec<u16>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
-    max_distance: u16,
-    span_count: usize, // Total spans in all cells.
-    max_regions: u16,
-}
-
+/// Generation ticker for tiles.
+///
+/// Used to keep track of if the existing tile is newer than the one we are trying to insert in [build_tile]. This could happen if we go from having a lot of triangles to very few.
 #[derive(Default, Resource)]
-struct TilesOpen {
-    map: HashMap<UVec2, OpenTile>,
-}
+struct GenerationTicker(u64);
 
-#[derive(Default, Resource)]
-struct TileAffectors {
-    map: HashMap<UVec2, HashSet<Entity>>,
-}
+#[derive(Default, Resource, Deref, DerefMut)]
+struct TileAffectors(HashMap<UVec2, HashSet<Entity>>);
 
+/// Set of all tiles that need to be rebuilt.
 #[derive(Default, Resource)]
 struct DirtyTiles(HashSet<UVec2>);
 
-#[derive(Resource)]
+/// Settings for nav-mesh generation.
+#[derive(Resource, Clone)]
 pub struct NavMeshSettings {
-    pub cell_width: f32,  // Recast recommends having this be 1/2 of character radius.
-    pub cell_height: f32, // Recast recommends having this be 1/2 of cell_width.
+    /// The horizontal resolution of the voxelized tile.
+    ///
+    /// **Suggested value**: 1/2 of character radius.
+    ///
+    /// Smaller values will increase tile generation times with diminishing returns in nav-mesh detail.
+    pub cell_width: f32,
+    /// The vertical resolution of the voxelized tile.
+    ///
+    /// **Suggested value**: 1/2 of cell_width.
+    ///
+    /// Smaller values will increase tile generation times with diminishing returns in nav-mesh detail.
+    pub cell_height: f32,
 
-    pub tile_width: u16, // As a multiple of cell_width
+    /// Length of a tile's side in cells. Resulting size in world units is ``tile_width * cell_width``.
+    ///
+    /// **Suggested value**: ???
+    ///
+    /// Higher means more to update each time something within the tile changes, smaller means you will have more overhead from connecting the edges to other tiles & generating the tile itself.
+    pub tile_width: u16,
 
-    pub world_bound: f32, // Keep this as small as possible whilst fitting your world between -world_bound & world_bound on X & Z. This is added onto any calculation to figure out which tile we are in. Exists because without it we'd be in a big mess around 0,0.
-    pub world_bottom_bound: f32, // Minium height of anything in the world: For example: -100.
+    /// Extents of the world as measured from the world origin (0.0, 0.0) on the XZ-plane.
+    ///
+    /// **Suggested value**: As small as possible whilst still keeping the entire world within it.
+    ///
+    /// This exists because figuring out which tile we are in around the world origin would not work without it.
+    pub world_half_extents: f32,
+    /// Bottom extents of the world on the Y-axis. The top extents is capped by ``world_bottom_bound + cell_height * u16::MAX``.
+    ///
+    /// **Suggested value**: Minium Y position of anything in the world that should be covered by the nav mesh.
+    pub world_bottom_bound: f32,
 
-    pub max_traversable_slope: f32, // In Radians.
-    pub walkable_height: u16, // Minimum open height for a cell to be considered walkable. Size in cell_height(s).
-    pub walkable_radius: u16, // Theoretically minimum width of an area to be considered walkable, not quite used for that yet. Size in cell_widths.
-    pub step_height: u16, // Maximum height difference that is still considered traversable. (Think, stair steps)
+    /// Maximum slope traversable when navigating in radians.
+    pub max_traversable_slope_radians: f32,
+    /// Minimum open height for an area to be considered walkable in cell_height(s).
+    ///
+    /// **Suggested value**: The height of character * ``cell_height``, rounded up.
+    pub walkable_height: u16,
+    /// UNIMPLEMENTED. Minimum width of an area to be considered walkable, in cell_width(s).
+    pub walkable_radius: u16,
+    /// Maximum height difference that is still considered traversable in cell_height(s). (Think, stair steps)
+    pub step_height: u16,
 
-    pub min_region_area: usize, // Minimum area of a region for it to not be removed in cells.
-    pub merge_region_size: usize, // Maximum size of a region to merge other regions into.
+    /// Minimum size of a region, anything smaller than this will be removed. This is used to filter out smaller regions that might appear on tables.
+    pub min_region_area: usize,
+    /// Maximum size of a region to merge other regions into.
+    pub merge_region_area: usize,
 
-    pub max_contour_simplification_error: f32, // Maximum difference allowed for the contour generation on the XZ-plane in cell_widths. Recast suggests keeping this in the range of [1.1, 1.5]
+    /// Maximum length of an edge before it's split.
+    ///
+    /// **Suggested value**: Start high and reduce if there are issues.
+    pub max_edge_length: u32,
+    /// Maximum difference allowed for simplified contour generation on the XZ-plane.
+    ///
+    /// **Suggested value range**: [1.1, 1.5]
+    pub max_contour_simplification_error: f32,
 }
 impl NavMeshSettings {
+    /// Returns the length of a tile's side in world units.
+    #[inline]
     pub fn get_tile_size(&self) -> f32 {
         self.cell_width * self.tile_width as f32
     }
 
-    pub fn get_tile_position(&self, world_pos: Vec2) -> UVec2 {
+    /// Returns the tile coordinate that contains the supplied ``world_position``.
+    #[inline]
+    pub fn get_tile_containing_position(&self, world_position: Vec2) -> UVec2 {
         let tile_size = self.get_tile_size();
 
-        let offset_world = world_pos + self.world_bound;
+        let offset_world = world_position + self.world_half_extents;
 
         (offset_world / tile_size).as_uvec2()
     }
 
+    /// Returns the minimum bound of a tile on the XZ-plane.
+    #[inline]
+    pub fn get_tile_min_bound(&self, tile: UVec2) -> Vec2 {
+        let tile_size = self.get_tile_size();
+
+        tile.as_vec2() * tile_size - self.world_half_extents
+    }
+
+    /// Returns the minimum & maximum bound of a tile on the XZ-plane.
+    #[inline]
     pub fn get_tile_bounds(&self, tile: UVec2) -> (Vec2, Vec2) {
         let tile_size = self.get_tile_size();
 
-        let min_bound = tile.as_vec2() * tile_size - self.world_bound;
+        let min_bound = tile.as_vec2() * tile_size - self.world_half_extents;
         let max_bound = min_bound + tile_size;
 
         (min_bound, max_bound)
+    }
+}
+
+/// Wrapper around the nav-mesh data.
+///
+/// The underlying [NavMeshTiles] must be retrieved using [NavMesh::get]
+/// ```
+/// if let Ok(nav_mesh) = nav_mesh.get().read() {
+///     // Use nav_mesh.
+/// }
+/// ```
+#[derive(Default, Resource)]
+pub struct NavMesh(Arc<RwLock<NavMeshTiles>>);
+
+impl NavMesh {
+    pub fn get(&self) -> Arc<RwLock<NavMeshTiles>> {
+        self.0.clone()
     }
 }
 
@@ -157,7 +223,7 @@ fn update_navmesh_affectors_system(
     mut dirty_tiles: ResMut<DirtyTiles>,
     mut query: Query<
         (Entity, &mut NavMeshAffector, &Collider, &GlobalTransform),
-        Changed<GlobalTransform>,
+        Or<(Changed<GlobalTransform>, Changed<Collider>)>,
     >,
 ) {
     for (e, mut affector, collider, global_transform) in query.iter_mut() {
@@ -176,10 +242,10 @@ fn update_navmesh_affectors_system(
             .transform_by(&iso);
 
         let min_vec = Vec2::new(aabb.mins.x, aabb.mins.z);
-        let min_tile = nav_mesh_settings.get_tile_position(min_vec);
+        let min_tile = nav_mesh_settings.get_tile_containing_position(min_vec);
 
         let max_vec = Vec2::new(aabb.maxs.x, aabb.maxs.z);
-        let max_tile = nav_mesh_settings.get_tile_position(max_vec);
+        let max_tile = nav_mesh_settings.get_tile_containing_position(max_vec);
 
         // Remove from previous.
         for old_tile in affector.0.iter().filter(|tile_coord| {
@@ -188,7 +254,7 @@ fn update_navmesh_affectors_system(
                 || max_tile.x < tile_coord.x
                 || max_tile.y < tile_coord.y
         }) {
-            if let Some(affectors) = tile_affectors.map.get_mut(old_tile) {
+            if let Some(affectors) = tile_affectors.get_mut(old_tile) {
                 affectors.remove(&e);
                 dirty_tiles.0.insert(*old_tile);
             }
@@ -199,11 +265,11 @@ fn update_navmesh_affectors_system(
             for y in min_tile.y..=max_tile.y {
                 let tile_coord = UVec2::new(x, y);
 
-                if !tile_affectors.map.contains_key(&tile_coord) {
-                    tile_affectors.map.insert(tile_coord, HashSet::default());
+                if !tile_affectors.contains_key(&tile_coord) {
+                    tile_affectors.insert(tile_coord, HashSet::default());
                 }
 
-                let affectors = tile_affectors.map.get_mut(&tile_coord).unwrap();
+                let affectors = tile_affectors.get_mut(&tile_coord).unwrap();
                 affectors.insert(e);
 
                 affector.0.push(tile_coord);
@@ -213,56 +279,176 @@ fn update_navmesh_affectors_system(
     }
 }
 
+fn send_tile_rebuild_tasks_system(
+    nav_mesh_settings: Res<NavMeshSettings>,
+    nav_mesh: Res<NavMesh>,
+    tile_affectors: Res<TileAffectors>,
+    dirty_tiles: Res<DirtyTiles>,
+    collider_query: Query<(&Collider, &GlobalTransform), With<NavMeshAffector>>,
+    mut generation_ticker: ResMut<GenerationTicker>,
+) {
+    let thread_pool = AsyncComputeTaskPool::get();
+
+    for tile_coord in dirty_tiles.0.iter() {
+        let Some(affectors) = tile_affectors.get(tile_coord) else {
+            // Spawn task to remove tile.
+            generation_ticker.0 += 1;
+            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.0.clone())).detach();
+            continue;
+        };
+        if affectors.is_empty() {
+            // Spawn task to remove tile.
+            generation_ticker.0 += 1;
+            thread_pool
+                .spawn(remove_tile(
+                    generation_ticker.0,
+                    *tile_coord,
+                    nav_mesh.0.clone(),
+                ))
+                .detach();
+            continue;
+        }
+
+        // Step 1: Gather data.
+        let mut triangle_collections = Vec::with_capacity(affectors.len());
+
+        let mut collider_iter = collider_query.iter_many(affectors.iter());
+        while let Some((collider, transform)) = collider_iter.fetch_next() {
+            let (raw_vertices, raw_triangles) = match collider.as_typed_shape() {
+                ColliderView::Ball(ball) => ball.raw.to_trimesh(5, 5),
+                ColliderView::Cuboid(cuboid) => cuboid.raw.to_trimesh(),
+                ColliderView::Capsule(capsule) => capsule.raw.to_trimesh(5, 5),
+                ColliderView::TriMesh(trimesh) => {
+                    (trimesh.raw.vertices().to_vec(), trimesh.indices().to_vec())
+                }
+                ColliderView::HeightField(heightfield) => heightfield.raw.to_trimesh(),
+                ColliderView::ConvexPolyhedron(polyhedron) => polyhedron.raw.to_trimesh(),
+                ColliderView::Cylinder(cylinder) => cylinder.raw.to_trimesh(5),
+                ColliderView::Cone(cone) => cone.raw.to_trimesh(5),
+                ColliderView::RoundCuboid(round_cuboid) => {
+                    round_cuboid.raw.inner_shape.to_trimesh()
+                }
+                ColliderView::RoundCylinder(round_cylinder) => {
+                    round_cylinder.raw.inner_shape.to_trimesh(5)
+                }
+                ColliderView::RoundCone(round_cone) => round_cone.raw.inner_shape.to_trimesh(5),
+                ColliderView::RoundConvexPolyhedron(round_polyhedron) => {
+                    round_polyhedron.raw.inner_shape.to_trimesh()
+                }
+                // TODO: All the following ones require me to think.
+                ColliderView::Triangle(_) => {
+                    warn!("Triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    continue;
+                }
+                ColliderView::RoundTriangle(_) => {
+                    warn!("Rounded triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    continue;
+                }
+                ColliderView::Compound(_) => {
+                    warn!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
+                    continue;
+                }
+                // These ones do not make sense in this.
+                ColliderView::HalfSpace(_) => continue, /* This is like an infinite plane? We don't care. */
+                ColliderView::Polyline(_) => continue,  /* This is a line. */
+                ColliderView::Segment(_) => continue,   /* This is a line segment. */
+            };
+
+            let raw_vertices = raw_vertices
+                .iter()
+                .map(|point| Vec3::new(point.x, point.y, point.z))
+                .collect();
+
+            triangle_collections.push((*transform, raw_vertices, raw_triangles));
+        }
+
+        // Step 2: Acquire generation & nav_mesh lock
+        generation_ticker.0 += 1;
+        let generation = generation_ticker.0;
+        let nav_mesh = nav_mesh.0.clone();
+
+        // Step 3: Make it a task.
+        let task = thread_pool.spawn(build_tile(
+            generation,
+            *tile_coord,
+            nav_mesh_settings.clone(),
+            triangle_collections,
+            nav_mesh,
+        ));
+        task.detach();
+    }
+}
+
+async fn remove_tile(
+    generation: u64, // This is the max generation we remove. Should we somehow strangely be executing this after a new tile has arrived we won't remove it.
+    tile_coord: UVec2,
+    nav_mesh: Arc<RwLock<NavMeshTiles>>,
+) {
+    let Ok(mut nav_mesh) = nav_mesh.write() else {
+        error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
+        return;
+    };
+
+    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
+        nav_mesh.tile_generations.insert(tile_coord, generation);
+        nav_mesh.remove_tile(tile_coord);
+    }
+}
+
+async fn build_tile(
+    generation: u64,
+    tile_coord: UVec2,
+    nav_mesh_settings: NavMeshSettings,
+    triangle_collections: Vec<(GlobalTransform, Vec<Vec3>, Vec<[u32; 3]>)>,
+    nav_mesh: Arc<RwLock<NavMeshTiles>>,
+) {
+    let voxelized_tile =
+        build_heightfield_tile(tile_coord, triangle_collections, &nav_mesh_settings);
+
+    let mut open_tile = build_open_heightfield_tile(&voxelized_tile, &nav_mesh_settings);
+    std::mem::drop(voxelized_tile);
+
+    link_neighbours(&mut open_tile, &nav_mesh_settings);
+    calculate_distance_field(&mut open_tile, &nav_mesh_settings);
+    build_regions(&mut open_tile, &nav_mesh_settings);
+
+    let contour_set = build_contours(&open_tile, &nav_mesh_settings);
+    std::mem::drop(open_tile);
+
+    let poly_mesh = build_poly_mesh(&contour_set, &nav_mesh_settings);
+    std::mem::drop(contour_set);
+
+    let nav_mesh_tile =
+        create_nav_mesh_tile_from_poly_mesh(&poly_mesh, tile_coord, &nav_mesh_settings);
+    std::mem::drop(poly_mesh);
+
+    let Ok(mut nav_mesh) = nav_mesh.write() else {
+        error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
+        return;
+    };
+
+    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
+        nav_mesh.tile_generations.insert(tile_coord, generation);
+
+        nav_mesh.add_tile(tile_coord, nav_mesh_tile, &nav_mesh_settings);
+    }
+}
+
 fn clear_dirty_tiles_system(mut dirty_tiles: ResMut<DirtyTiles>) {
     dirty_tiles.0.clear();
 }
 
-fn cell_move_back_row<'a>(
-    tile: &'a OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&'a OpenSpan, usize) {
-    let other_cell_index = cell_index - nav_mesh_settings.tile_width as usize;
-    let other_cell = &tile.cells[other_cell_index];
-    (&other_cell.spans[target_span_index], other_cell_index)
-}
+/*
+*   Lots of math stuff.
+*   Don't know where else to put it.
+*/
 
-fn cell_move_forward_row<'a>(
-    tile: &'a OpenTile,
-    nav_mesh_settings: &NavMeshSettings,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&'a OpenSpan, usize) {
-    let other_cell_index = cell_index + nav_mesh_settings.tile_width as usize;
-    let other_cell = &tile.cells[other_cell_index];
-    (&other_cell.spans[target_span_index], other_cell_index)
-}
-
-fn cell_move_back_column(
-    tile: &OpenTile,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&OpenSpan, usize) {
-    let other_cell = &tile.cells[cell_index - 1];
-    (&other_cell.spans[target_span_index], cell_index - 1)
-}
-
-fn cell_move_forward_column(
-    tile: &OpenTile,
-    cell_index: usize,
-    target_span_index: usize,
-) -> (&OpenSpan, usize) {
-    let other_cell = &tile.cells[cell_index + 1];
-    (&other_cell.spans[target_span_index], cell_index + 1)
-}
-
-fn get_cell_offset(nav_mesh_settings: &NavMeshSettings, dir: usize) -> isize {
+fn get_neighbour_index(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
     match dir {
-        0 => -1,
-        1 => nav_mesh_settings.tile_width as isize,
-        2 => 1,
-        3 => -(nav_mesh_settings.tile_width as isize),
+        0 => index - 1,
+        1 => index + nav_mesh_settings.tile_width as usize,
+        2 => index + 1,
+        3 => index - nav_mesh_settings.tile_width as usize,
         _ => panic!("Not a valid direction"),
     }
 }
@@ -281,13 +467,13 @@ fn between(a: IVec4, b: IVec4, c: IVec4) -> bool {
     }
 
     if a.x != b.x {
-        return a.x <= c.x && c.x <= b.x || a.x >= c.x && c.x >= b.x;
+        return (a.x <= c.x && c.x <= b.x) || (a.x >= c.x && c.x >= b.x);
     }
 
-    a.z <= c.z && c.z <= b.z || a.z >= c.z && c.z >= b.z
+    (a.z <= c.z && c.z <= b.z) || (a.z >= c.z && c.z >= b.z)
 }
 
-fn intersect_segment(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
+fn intersect(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
     intersect_prop(a, b, c, d)
         || between(a, b, c)
         || between(a, b, d)
@@ -296,7 +482,7 @@ fn intersect_segment(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
 }
 
 fn area_sqr(a: IVec4, b: IVec4, c: IVec4) -> i32 {
-    (b.x - a.x) * (c.z - a.z) * (c.x - a.x) * (b.z - a.z)
+    (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)
 }
 
 fn collinear(a: IVec4, b: IVec4, c: IVec4) -> bool {

@@ -1,32 +1,23 @@
 use std::cmp::Ordering;
 
-use bevy::{
-    prelude::{warn, IVec2, Res, ResMut, Resource, UVec2, UVec4},
-    utils::HashMap,
+use bevy::prelude::{warn, IVec2, UVec2, UVec4};
+
+use crate::{
+    get_neighbour_index,
+    heightfields::{OpenSpan, OpenTile},
 };
 
-use crate::{get_cell_offset, NeighbourConnection};
-
-use super::{
-    cell_move_back_column, cell_move_back_row, cell_move_forward_column, cell_move_forward_row,
-    in_cone, intersect_segment, DirtyTiles, NavMeshSettings, OpenSpan, OpenTile, TilesOpen,
-    FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION,
-};
-
-#[derive(Default, Resource)]
-pub(super) struct TileContours {
-    pub(super) map: HashMap<UVec2, ContourSet>,
-}
+use super::{in_cone, intersect, NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION};
 
 #[derive(Default, Clone, Debug)]
-pub(super) struct Contour {
-    pub(super) vertices: Vec<UVec4>,
-    pub(super) region: u16,
+pub struct Contour {
+    pub vertices: Vec<UVec4>,
+    pub region: u16,
 }
 
 #[derive(Default)]
-pub(super) struct ContourSet {
-    pub(super) contours: Vec<Contour>,
+pub struct ContourSet {
+    pub contours: Vec<Contour>,
 }
 
 #[derive(Default, Clone)]
@@ -43,140 +34,129 @@ struct ContourRegion {
     holes: Vec<ContourHole>,
 }
 
-pub(super) fn build_contours_system(
-    nav_mesh_settings: Res<NavMeshSettings>,
-    open_tiles: Res<TilesOpen>,
-    mut contours: ResMut<TileContours>,
-    dirty_tiles: Res<DirtyTiles>,
-) {
-    for tile_coord in dirty_tiles.0.iter() {
-        let Some(tile) = open_tiles.map.get(tile_coord) else {
-            continue;
-        };
+pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings) -> ContourSet {
+    let max_contours = open_tile.max_regions.max(8);
+    let mut contour_set = ContourSet {
+        contours: Vec::with_capacity(max_contours.into()),
+    };
 
-        let max_contours = tile.max_regions.max(8);
-        let mut contour_set = ContourSet {
-            contours: Vec::with_capacity(max_contours.into()),
-        };
+    // Mark boundaries.
+    let mut boundry_flags = vec![0u8; open_tile.span_count];
+    for (cell_index, cell) in open_tile.cells.iter().enumerate() {
+        for span in cell.spans.iter() {
+            let mut res = 0;
 
-        // Mark boundaries.
-        let mut boundry_flags = vec![0u8; tile.span_count];
-        for (cell_index, cell) in tile.cells.iter().enumerate() {
-            for span in cell.spans.iter() {
-                let mut res = 0;
-
-                for dir in 0..4 {
-                    let mut other_region = 0;
-                    if let NeighbourConnection::Connected { index } = span.neighbours[dir] {
-                        let other_span = &tile.cells[(cell_index as isize
-                            + get_cell_offset(&nav_mesh_settings, dir))
-                            as usize]
-                            .spans[index as usize];
-                        other_region = other_span.region;
-                    }
-
-                    if span.region == other_region {
-                        res |= 1 << dir;
-                    }
+            for dir in 0..4 {
+                let mut other_region = 0;
+                if let Some(span_index) = span.neighbours[dir] {
+                    let other_span = &open_tile.cells
+                        [get_neighbour_index(nav_mesh_settings, cell_index, dir)]
+                    .spans[span_index as usize];
+                    other_region = other_span.region;
                 }
 
-                boundry_flags[span.tile_index] = res ^ 0b1111; // Flip so we mark unconnected sides.
+                if span.region == other_region {
+                    res |= 1 << dir;
+                }
             }
+
+            boundry_flags[span.tile_index] = res ^ 0b1111; // Flip so we mark unconnected sides.
         }
-
-        let mut vertices = Vec::with_capacity(256);
-        let mut simplified_vertices = Vec::with_capacity(64);
-
-        for (cell_index, cell) in tile.cells.iter().enumerate() {
-            for (span_index, span) in cell.spans.iter().enumerate() {
-                if boundry_flags[span.tile_index] == 0 || boundry_flags[span.tile_index] == 0b1111 {
-                    boundry_flags[span.tile_index] = 0;
-                    continue;
-                }
-                if span.region == 0 {
-                    continue;
-                }
-
-                vertices.clear();
-                simplified_vertices.clear();
-
-                // Walk contour
-                walk_contour(
-                    cell_index,
-                    span_index,
-                    tile,
-                    &nav_mesh_settings,
-                    &mut boundry_flags,
-                    &mut vertices,
-                );
-
-                // Simplify contour
-                simplify_contour(
-                    &vertices,
-                    &mut simplified_vertices,
-                    nav_mesh_settings.max_contour_simplification_error,
-                );
-
-                // Remove degenerate segments.
-                remove_denegerate_segments(&mut simplified_vertices);
-
-                if simplified_vertices.len() >= 3 {
-                    let new_contour = Contour {
-                        vertices: simplified_vertices.clone(),
-                        region: span.region,
-                    };
-
-                    contour_set.contours.push(new_contour);
-                }
-            }
-        }
-
-        // handle holes.
-        if !contour_set.contours.is_empty() {
-            let mut winding = vec![0; contour_set.contours.len()];
-            let mut num_holes = 0;
-            for (i, contour) in contour_set.contours.iter().enumerate() {
-                let contour_winding = calc_area_of_polygon_2d(&contour.vertices);
-
-                if contour_winding < 0 {
-                    num_holes += 1;
-                    winding[i] = -1;
-                } else {
-                    winding[i] = 1;
-                }
-            }
-
-            if num_holes > 0 {
-                let num_regions = tile.max_regions + 1;
-                let mut regions = vec![ContourRegion::default(); num_regions.into()];
-
-                for (i, contour) in contour_set.contours.iter().enumerate() {
-                    if winding[i] > 0 {
-                        // Outline
-                        regions[contour.region as usize].outline = Some(contour.clone());
-                    } else {
-                        // Hole
-                        regions[contour.region as usize].holes.push(ContourHole {
-                            contour: contour.clone(),
-                            min_x: contour.vertices[0].x,
-                            min_z: contour.vertices[0].z,
-                            left_most_vertex: 0,
-                        });
-                    }
-                }
-
-                for region in regions.iter_mut().filter(|region| !region.holes.is_empty()) {
-                    if region.outline.is_none() {
-                        continue;
-                    };
-
-                    merge_region_holes(region);
-                }
-            }
-        }
-
-        contours.map.insert(*tile_coord, contour_set);
     }
+
+    let mut vertices = Vec::with_capacity(256);
+    let mut simplified_vertices = Vec::with_capacity(64);
+
+    for (cell_index, cell) in open_tile.cells.iter().enumerate() {
+        for (span_index, span) in cell.spans.iter().enumerate() {
+            if boundry_flags[span.tile_index] == 0 || boundry_flags[span.tile_index] == 0b1111 {
+                boundry_flags[span.tile_index] = 0;
+                continue;
+            }
+            if span.region == 0 {
+                continue;
+            }
+
+            vertices.clear();
+            simplified_vertices.clear();
+
+            // Walk contour
+            walk_contour(
+                cell_index,
+                span_index,
+                open_tile,
+                nav_mesh_settings,
+                &mut boundry_flags,
+                &mut vertices,
+            );
+
+            // Simplify contour
+            simplify_contour(
+                &vertices,
+                &mut simplified_vertices,
+                nav_mesh_settings.max_contour_simplification_error,
+                nav_mesh_settings.max_edge_length,
+            );
+
+            // Remove degenerate segments.
+            remove_denegerate_segments(&mut simplified_vertices);
+
+            if simplified_vertices.len() >= 3 {
+                let new_contour = Contour {
+                    vertices: simplified_vertices.clone(),
+                    region: span.region,
+                };
+
+                contour_set.contours.push(new_contour);
+            }
+        }
+    }
+
+    // handle holes.
+    if !contour_set.contours.is_empty() {
+        let mut winding = vec![0; contour_set.contours.len()];
+        let mut num_holes = 0;
+        for (i, contour) in contour_set.contours.iter().enumerate() {
+            let contour_winding = calc_area_of_polygon_2d(&contour.vertices);
+
+            if contour_winding < 0 {
+                num_holes += 1;
+                winding[i] = -1;
+            } else {
+                winding[i] = 1;
+            }
+        }
+
+        if num_holes > 0 {
+            let num_regions = open_tile.max_regions + 1;
+            let mut regions = vec![ContourRegion::default(); num_regions.into()];
+
+            for (i, contour) in contour_set.contours.iter().enumerate() {
+                if winding[i] > 0 {
+                    // Outline
+                    regions[contour.region as usize].outline = Some(contour.clone());
+                } else {
+                    // Hole
+                    regions[contour.region as usize].holes.push(ContourHole {
+                        contour: contour.clone(),
+                        min_x: contour.vertices[0].x,
+                        min_z: contour.vertices[0].z,
+                        left_most_vertex: 0,
+                    });
+                }
+            }
+
+            for region in regions.iter_mut().filter(|region| !region.holes.is_empty()) {
+                if region.outline.is_none() {
+                    continue;
+                };
+
+                merge_region_holes(region);
+            }
+        }
+    }
+
+    contour_set
 }
 
 #[derive(Default, Clone, Copy)]
@@ -210,7 +190,7 @@ fn merge_region_holes(region: &mut ContourRegion) {
         + region
             .holes
             .iter()
-            .fold(0, |value, contour| value + contour.contour.vertices.len());
+            .fold(0, |value, hole| value + hole.contour.vertices.len());
 
     let mut diagonals = Vec::with_capacity(max_vertices);
 
@@ -342,7 +322,7 @@ fn intersect_segment_contour(
             continue;
         }
 
-        if intersect_segment(
+        if intersect(
             point.as_ivec4(),
             corner.as_ivec4(),
             point_i.as_ivec4(),
@@ -373,7 +353,7 @@ fn intersect_segment_contour_no_vertex(
             continue;
         }
 
-        if intersect_segment(
+        if intersect(
             point.as_ivec4(),
             corner.as_ivec4(),
             point_i.as_ivec4(),
@@ -409,19 +389,14 @@ fn walk_contour(
         let span = &tile.cells[cell_index].spans[span_index];
         if boundry_flags[span.tile_index] & (1 << dir) > 0 {
             // Check if this direction is unconnected.
-            let (height, is_border_vertex) =
-                get_corner_height(cell_index, span, tile, nav_mesh_settings, dir);
+            let height = get_corner_height(cell_index, span, tile, nav_mesh_settings, dir);
 
             let mut bordering_region = 0u32;
-            if let NeighbourConnection::Connected { index } = span.neighbours[dir as usize] {
-                let other_span = &tile.cells[(cell_index as isize
-                    + get_cell_offset(nav_mesh_settings, dir.into()))
-                    as usize]
-                    .spans[index as usize];
+            if let Some(span_index) = span.neighbours[dir as usize] {
+                let other_span = &tile.cells
+                    [get_neighbour_index(nav_mesh_settings, cell_index, dir.into())]
+                .spans[span_index as usize];
                 bordering_region = other_span.region.into();
-            }
-            if is_border_vertex {
-                bordering_region |= FLAG_BORDER_VERTEX;
             }
 
             let px = match dir {
@@ -441,14 +416,13 @@ fn walk_contour(
             dir = (dir + 1) & 0x3; // Rotate clock-wise.
         } else {
             // Direction is connected.
-            if let NeighbourConnection::Connected { index } = span.neighbours[dir as usize] {
+            if let Some(index) = span.neighbours[dir as usize] {
                 span_index = index.into();
             } else {
                 panic!("Incorrectly flagged boundry!");
             }
 
-            cell_index =
-                (cell_index as isize + get_cell_offset(nav_mesh_settings, dir.into())) as usize;
+            cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
             dir = (dir + 3) & 0x3; // Rotate COUNTER clock-wise.
         }
 
@@ -464,7 +438,7 @@ fn get_corner_height(
     tile: &OpenTile,
     nav_mesh_settings: &NavMeshSettings,
     dir: u8,
-) -> (u16, bool) {
+) -> u16 {
     let next_dir = (dir + 1) & 0x3;
     let mut regions = [0; 4];
 
@@ -472,81 +446,49 @@ fn get_corner_height(
 
     regions[0] = span.region;
 
-    if let NeighbourConnection::Connected { index } = span.neighbours[dir as usize] {
-        let (other_span, other_cell_index) = match dir {
-            0 => cell_move_back_column(tile, cell_index, index.into()),
-            1 => cell_move_forward_row(tile, nav_mesh_settings, cell_index, index.into()),
-            2 => cell_move_forward_column(tile, cell_index, index.into()),
-            3 => cell_move_back_row(tile, nav_mesh_settings, cell_index, index.into()),
-            _ => panic!("Invalid direction."),
-        };
+    if let Some(span_index) = span.neighbours[dir as usize] {
+        let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
+        let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
         height = height.max(other_span.min);
         regions[1] = other_span.region;
 
-        if let NeighbourConnection::Connected { index, .. } =
-            other_span.neighbours[next_dir as usize]
-        {
-            let (other_span, _) = match next_dir {
-                0 => cell_move_back_column(tile, other_cell_index, index.into()),
-                1 => cell_move_forward_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                2 => cell_move_forward_column(tile, other_cell_index, index.into()),
-                3 => cell_move_back_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                _ => panic!("Invalid direction."),
-            };
+        if let Some(span_index) = other_span.neighbours[next_dir as usize] {
+            let other_cell_index =
+                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+            let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);
             regions[2] = other_span.region;
         }
     }
 
-    if let NeighbourConnection::Connected { index } = span.neighbours[next_dir as usize] {
-        let (other_span, other_cell_index) = match next_dir {
-            0 => cell_move_back_column(tile, cell_index, index.into()),
-            1 => cell_move_forward_row(tile, nav_mesh_settings, cell_index, index.into()),
-            2 => cell_move_forward_column(tile, cell_index, index.into()),
-            3 => cell_move_back_row(tile, nav_mesh_settings, cell_index, index.into()),
-            _ => panic!("Invalid direction."),
-        };
+    if let Some(span_index) = span.neighbours[next_dir as usize] {
+        let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, next_dir.into());
+        let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
         height = height.max(other_span.min);
         regions[3] = other_span.region;
 
-        if let NeighbourConnection::Connected { index } = other_span.neighbours[dir as usize] {
-            let (other_span, _) = match dir {
-                0 => cell_move_back_column(tile, other_cell_index, index.into()),
-                1 => cell_move_forward_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                2 => cell_move_forward_column(tile, other_cell_index, index.into()),
-                3 => cell_move_back_row(tile, nav_mesh_settings, other_cell_index, index.into()),
-                _ => panic!("Invalid direction."),
-            };
+        if let Some(span_index) = other_span.neighbours[dir as usize] {
+            let other_cell_index =
+                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+            let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);
             regions[2] = other_span.region;
         }
     }
 
-    // Check for special edge vertex these will be removed later.
-    let mut is_border_vertex = false;
-    for i in 0..4 {
-        let a = regions[i];
-        let b = regions[(i + 1) & 0x3];
-        let c = regions[(i + 2) & 0x3];
-        let d = regions[(i + 3) & 0x3];
-
-        let two_same_exteriors = a == b;
-        let no_zero = a != 0 && b != 0 && c != 0 && d != 0;
-
-        if two_same_exteriors && no_zero {
-            is_border_vertex = true;
-            break;
-        }
-    }
-
-    (height, is_border_vertex)
+    height
 }
 
-fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32) {
+fn simplify_contour(
+    points: &[u32],
+    simplified: &mut Vec<UVec4>,
+    max_error: f32,
+    max_edge_len: u32,
+) {
     let has_connections = {
         let mut has_connections = false;
 
@@ -669,7 +611,7 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32)
         }
 
         if max_i.is_some() && max_deviation > (max_error * max_error) {
-            let max_i = max_i.unwrap();
+            let max_i = max_i.unwrap(); // TODO: Let-chains make this nicer.
             simplified.insert(
                 i + 1,
                 UVec4 {
@@ -685,10 +627,58 @@ fn simplify_contour(points: &[u32], simplified: &mut Vec<UVec4>, max_error: f32)
     }
 
     // We don't split long edges. For now... I guess eventually it might be needed. :)
+    // SPLIT LONG EDGES.
+    {
+        let mut i = 0;
+        while i < simplified.len() {
+            let a = simplified[i];
+            let b = simplified[(i + 1) % simplified.len()];
+
+            let next_original_point_index = (a.w + 1) as usize % point_count;
+            let should_tesselate =
+                points[next_original_point_index * 4 + 3] & MASK_CONTOUR_REGION == 0;
+
+            let mut max_i = None;
+            if should_tesselate {
+                let delta_x = b.x.abs_diff(a.x);
+                let delta_z = b.z.abs_diff(a.z);
+
+                if delta_x * delta_x + delta_z * delta_z > max_edge_len * max_edge_len {
+                    let n = if b.w < a.w {
+                        b.w as isize + point_count as isize - a.w as isize
+                    } else {
+                        b.w as isize - a.w as isize
+                    };
+
+                    if n > 1 {
+                        if b.x > a.x || (b.x == a.x && b.z > a.z) {
+                            max_i = Some((a.w as usize + (n / 2) as usize) % point_count);
+                        } else {
+                            max_i = Some((a.w as usize + ((n + 1) / 2) as usize) % point_count)
+                        }
+                    }
+                }
+            }
+
+            if let Some(max_i) = max_i {
+                simplified.insert(
+                    i + 1,
+                    UVec4::new(
+                        points[max_i * 4],
+                        points[max_i * 4 + 1],
+                        points[max_i * 4 + 2],
+                        max_i as u32,
+                    ),
+                );
+            } else {
+                i += 1;
+            }
+        }
+    }
 
     for point in simplified.iter_mut() {
-        let current = point.w;
         let next = (point.w + 1) % point_count as u32;
+        let current = point.w;
         point.w = (points[(next * 4 + 3) as usize] & MASK_CONTOUR_REGION)
             | (points[(current * 4 + 3) as usize] & FLAG_BORDER_VERTEX);
     }

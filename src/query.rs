@@ -437,7 +437,9 @@ pub fn perform_string_pulling_on_path(
         }
     }
 
-    string_path.push(end_pos);
+    if *string_path.last().unwrap() != end_pos {
+        string_path.push(end_pos);
+    }
 
     Ok(string_path)
 }

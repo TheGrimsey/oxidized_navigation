@@ -37,6 +37,7 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 - [X] Clean up intermediate representations when we finish processing a tile (Voxelized, Open cells, etc. Only keeping polymesh).
 - [X] Quick "How to use" guide.
 
+- [ ] Built-in nav-mesh debug draw.
 - [ ] Implement areas allowing to specify differing cost of traveling.
 - [ ] Mark areas too close to walls as unwalkable based on character width.
 - [ ] Allow creating nav-mesh from meshes (probably add an option to ``NavMeshAffector``).
@@ -47,12 +48,36 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 - [ ] Optimize linking tiles. (At a cost of memory we can save a lot of time finding OffMesh links by just... saving indices of the polygons with OffMesh links)
 - [ ] Adjust memory representation for cache usage. (Some data we only need when linking tiles and not pathfinding)
 
-## How to use:
+## Debug draw.
 
-1. Add a ``NavMeshSettings`` resource.
-2. Add the ``OxidizedNavigationPlugin`` plugin.
-3. Attach a ``NavMeshAffector`` to any entity that should affect the Nav-Mesh, the Nav-mesh will automatically update when this entity moves.
+Whilst not included in the plugin currently, you can use [Bevy Prototype Debug Lines](https://crates.io/crates/bevy_prototype_debug_lines) and the following snippet in a system to draw up the nav-mesh:
 
-## Nav Mesh Tiles.
+```rust
+fn draw_nav_mesh(
+    nav_mesh_settings: Res<NavMeshSettings>,
+    nav_mesh: Res<NavMesh>,
+    mut lines: ResMut<DebugLines>
+) {
+    // Probably want to add in a trigger key here to make it not always draw.
 
-The world is divided into tiles of ``cell_width * tile_width`` size with 0,0 in tile coordinates being at ``(-world_half_extents, world_bound_bottom, -world_half_extents)``
+    if let Ok(nav_mesh) = nav_mesh.get().read() {
+        for (_, tile) in nav_mesh.get_tiles().iter() {
+            // Draw polygons.
+            for poly in tile.polygons.iter() {
+                let indices = &poly.indices;
+                for i in 0..indices.len() {
+                    let a = tile.vertices[indices[i] as usize];
+                    let b = tile.vertices[indices[(i + 1) % indices.len()] as usize];
+
+                    lines.line(a, b, 15.0);
+                }
+            }
+
+            // Draw vertex points.
+            for vertex in tile.vertices.iter() {
+                lines.line(*vertex, *vertex + Vec3::Y, 15.0);
+            }
+        }
+    }
+}
+```

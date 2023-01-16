@@ -1,5 +1,4 @@
 //! Module for querying the nav-mesh
-
 use bevy::prelude::{UVec2, Vec3};
 
 use crate::{
@@ -9,12 +8,12 @@ use crate::{
 
 const HEURISTIC_SCALE: f32 = 0.999;
 
-bitflags::bitflags! {
-    #[derive(Default)]
-    struct NodeFlags: u8 {
-        const OPEN = 0b00000001;
-        const CLOSED = 0b00000010;
-    }
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+enum NodeState {
+    #[default]
+    Unchecked,
+    Open,
+    Closed,
 }
 
 #[derive(Debug)]
@@ -24,7 +23,7 @@ struct NavMeshNode {
     total_cost: f32,
     tile: UVec2,
     polygon: u16,
-    flags: NodeFlags,
+    state: NodeState,
     parent: Option<usize>,
 }
 
@@ -87,7 +86,7 @@ pub fn find_path(
             total_cost: start_pos.distance(end_pos) * HEURISTIC_SCALE,
             tile: start_tile,
             polygon: start_poly,
-            flags: NodeFlags::OPEN,
+            state: NodeState::Open,
             parent: None,
         };
 
@@ -101,8 +100,7 @@ pub fn find_path(
     while let Some(best_node_index) = open_list.pop() {
         let (best_tile, best_polygon, best_position, best_cost, best_parent) = {
             let node = &mut nodes[best_node_index];
-            node.flags.remove(NodeFlags::OPEN);
-            node.flags.insert(NodeFlags::CLOSED);
+            node.state = NodeState::Closed;
 
             if node.tile == end_tile && node.polygon == end_poly {
                 last_best_node = best_node_index;
@@ -184,14 +182,14 @@ pub fn find_path(
                     total_cost: 0.0,
                     tile: link_tile,
                     polygon: link_polygon,
-                    flags: NodeFlags::empty(),
+                    state: NodeState::Unchecked,
                     parent: None,
                 });
 
                 nodes.len() - 1
             };
 
-            let (old_flags, total_cost) = {
+            let (old_state, total_cost) = {
                 let neighbour_node = &mut nodes[neighbour_node_index];
 
                 // TODO: Ideally you want to be able to override this but for now we just go with the distance.
@@ -214,17 +212,15 @@ pub fn find_path(
                 let total_cost = cost + heuristic;
 
                 if neighbour_node
-                    .flags
-                    .intersects(NodeFlags::OPEN | NodeFlags::CLOSED)
+                    .state != NodeState::Unchecked
                     && total_cost >= neighbour_node.total_cost
                 {
                     continue;
                 }
 
-                let old_flags = neighbour_node.flags;
+                let old_state = neighbour_node.state;
                 neighbour_node.parent = Some(best_node_index);
-                neighbour_node.flags.remove(NodeFlags::CLOSED);
-                neighbour_node.flags.insert(NodeFlags::OPEN);
+                neighbour_node.state = NodeState::Open;
                 neighbour_node.cost = cost;
                 neighbour_node.total_cost = total_cost;
 
@@ -233,10 +229,10 @@ pub fn find_path(
                     last_best_node = neighbour_node_index;
                 }
 
-                (old_flags, total_cost)
+                (old_state, total_cost)
             };
 
-            if old_flags.contains(NodeFlags::OPEN) {
+            if old_state == NodeState::Open {
                 // Node already exists. Let's remove it.
                 if let Some(existing_index) = open_list
                     .iter()

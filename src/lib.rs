@@ -2,13 +2,25 @@
 //!
 //! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
 //!
-//! ### Quick Start:
-//! 1. Insert an instance of [NavMeshSettings] into your Bevy app.
+//! ## Quick Start:
+//! **Nav-mesh generation:**
+//! 1. Insert an instance of the [NavMeshSettings] resource into your Bevy app.
 //! 2. Add [OxidizedNavigationPlugin] as a plugin.
 //! 3. Attach a [NavMeshAffector] component and a rapier collider to any entity you want to affect the nav-mesh.
-//!
+//! 
+//! *At this point nav-meshes will be automatically generated whenever the collider or [GlobalTransform] of any entity with a [NavMeshAffector] is changed.*
+//! 
+//! **Querying the nav-mesh / Pathfinding:**
+//! 1. Your system needs to take in the [NavMesh] resource.
+//! 2. Get the underlying data from the nav-mesh using [NavMesh::get]. This data is wrapped in an [RwLock].
+//! 3. To access the data call [RwLock::read]. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
+//! 4. Call [query::find_path] with the [NavMeshTiles] returned from the [RwLock]. 
+//! 
+//! *Also see the [examples] for how to run pathfinding in an async task which may be preferable.*
+//! 
 //! [Bevy]: https://crates.io/crates/bevy
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
+//! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 
 use std::sync::{Arc, RwLock};
 

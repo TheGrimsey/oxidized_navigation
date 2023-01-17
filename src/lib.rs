@@ -222,7 +222,7 @@ fn update_navmesh_affectors_system(
     >,
 ) {
     /*
-    *   TODO: Expand tile size by walkable_radius * 2
+    *   TODO: Expand tile size by walkable_radius * 2.
     */
     for (e, mut affector, collider, global_transform) in query.iter_mut() {
         let transform = global_transform.compute_transform();

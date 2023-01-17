@@ -18,5 +18,5 @@ bevy = { version = "0.9", default-features = false }
 bevy_rapier3d = { version = "0.20" }
 smallvec = { version = "1.10", features = [ "union" ]}
 [dev-dependencies]
-bevy = { version = "0.9", default-features = false, features = [ "bevy_winit", "render" ] }
+bevy = { version = "0.9", default-features = false, features = [ "bevy_winit", "render", "x11" ] }
 futures-lite = "1.12.0"

@@ -108,6 +108,10 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
             let vertex_a = poly_mesh.vertices[indices[index] as usize];
             let vertex_b = poly_mesh.vertices[indices[(index + 1) % indices.len()] as usize];
 
+            /*
+            *   TODO: This should remove the border.
+            */
+
             // Only edges parallel to the tile edge.
             if vertex_a.x == 0 && vertex_b.x == 0 {
                 poly_mesh.edges[i][index] =

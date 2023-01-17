@@ -20,7 +20,7 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 3. To access the data call ``RwLock::read``. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
 4. Call ``query::find_path`` with the ``NavMeshTiles`` returned from the ``RwLock``. 
 
-*Also see the [examples] for how to run pathfinding in an async task which may be preferable.*
+*Also see the [examples](https://github.com/TheGrimsey/oxidized_navigation/tree/master/examples) for how to run pathfinding in an async task which may be preferable.*
 
 ## Supported versions
 

@@ -46,15 +46,6 @@ pub enum FindPathError {
 /// * ``start_pos`` - Starting position for the path.
 /// * ``end_pos`` - Destination position for the path, i.e where you want to go.
 /// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
-///
-/// Example usage:
-/// ```
-/// if let Ok(nav_mesh) = nav_mesh.get().read() {
-///     if let Ok(path) = find_path(&nav_mesh, &nav_mesh_settings, Vec3::new(5.0, 1.0, 5.0), Vec3::new(10.0, 5.0, 25.0), None) {
-///         // Use path.
-///     }
-/// }
-/// ```
 pub fn find_path(
     nav_mesh: &NavMeshTiles,
     nav_mesh_settings: &NavMeshSettings,
@@ -295,17 +286,6 @@ pub enum StringPullingError {
 /// Performs "string pulling" on a path of polygons. Used to convert [find_path]'s result to a world space path.
 ///
 /// Returns the path as `Vec<Vec3>` or [StringPullingError]
-///
-/// Example usage:
-/// ```
-/// let start_pos = Vec3::new(5.0, 1.0, 5.0);
-/// let end_pos = Vec3::new(10.0, 5.0, 25.0);
-/// if let Ok(path) = find_path(&nav_mesh, &nav_mesh_settings, start_pos, end_pos, None) {
-///     if let Ok(string_pulled_path) = perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
-///         // You now have a path of Vec3s. You can use these as you wish.
-///     }
-/// }
-/// ```
 pub fn perform_string_pulling_on_path(
     nav_mesh: &NavMeshTiles,
     start_pos: Vec3,

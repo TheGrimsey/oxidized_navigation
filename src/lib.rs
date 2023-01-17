@@ -40,7 +40,7 @@ use bevy_rapier3d::prelude::ColliderView;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
 use heightfields::{
-    build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field, link_neighbours,
+    build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field, erode_walkable_area,
 };
 use mesher::build_poly_mesh;
 use regions::build_regions;
@@ -203,11 +203,6 @@ impl NavMeshSettings {
 /// Wrapper around the nav-mesh data.
 ///
 /// The underlying [NavMeshTiles] must be retrieved using [NavMesh::get]
-/// ```
-/// if let Ok(nav_mesh) = nav_mesh.get().read() {
-///     // Use nav_mesh.
-/// }
-/// ```
 #[derive(Default, Resource)]
 pub struct NavMesh(Arc<RwLock<NavMeshTiles>>);
 
@@ -226,6 +221,9 @@ fn update_navmesh_affectors_system(
         Or<(Changed<GlobalTransform>, Changed<Collider>)>,
     >,
 ) {
+    /*
+    *   TODO: Expand tile size by walkable_radius * 2
+    */
     for (e, mut affector, collider, global_transform) in query.iter_mut() {
         let transform = global_transform.compute_transform();
         let iso = Isometry::new(
@@ -408,7 +406,9 @@ async fn build_tile(
     let mut open_tile = build_open_heightfield_tile(&voxelized_tile, &nav_mesh_settings);
     std::mem::drop(voxelized_tile);
 
-    link_neighbours(&mut open_tile, &nav_mesh_settings);
+    // Remove areas that are too close to a wall.
+    erode_walkable_area(&mut open_tile, &nav_mesh_settings);
+
     calculate_distance_field(&mut open_tile, &nav_mesh_settings);
     build_regions(&mut open_tile, &nav_mesh_settings);
 

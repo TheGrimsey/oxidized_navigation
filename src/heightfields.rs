@@ -9,6 +9,7 @@ struct HeightSpan {
     min: u16,
     max: u16,
     traversable: bool,
+    area: Option<u16>
 }
 
 #[derive(Default, Clone)]
@@ -34,12 +35,14 @@ pub(super) struct OpenSpan {
     pub(super) neighbours: [Option<u16>; 4],
     pub(super) tile_index: usize, // The index of this span in the whole tile.
     pub(super) region: u16, // Region if non-zero. We could use option for this if we had some optimization for size.
+    pub(super) area: Option<u16>,
 }
 
 #[derive(Default, Debug)]
 pub struct OpenTile {
     pub(super) cells: Vec<OpenCell>, // len = tiles_along_width^2. Laid out X to Y
     pub(super) distances: Vec<u16>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
+    pub(super) areas: Vec<Option<u16>>,
     pub(super) max_distance: u16,
     pub(super) span_count: usize, // Total spans in all cells.
     pub(super) max_regions: u16,
@@ -181,6 +184,7 @@ pub fn build_heightfield_tile(
                         min: min_height,
                         max: max_height,
                         traversable,
+                        area: Some(0), // TODO: We want an optional area component.
                     };
 
                     if cell.spans.is_empty() {
@@ -204,9 +208,12 @@ pub fn build_heightfield_tile(
                             Ordering::Greater => {
                                 new_span.traversable = existing_span.traversable;
                                 new_span.max = existing_span.max;
+                                new_span.area = existing_span.area;
                             }
                             Ordering::Equal => {
                                 new_span.traversable |= existing_span.traversable;
+                                // Higher area number has higher priority.
+                                new_span.area = new_span.area.max(existing_span.area);
                             }
                             Ordering::Less => {}
                         }
@@ -288,16 +295,12 @@ pub fn build_open_heightfield_tile(
     voxelized_tile: &VoxelizedTile,
     nav_mesh_settings: &NavMeshSettings,
 ) -> OpenTile {
-    let mut open_tile = OpenTile {
-        cells: vec![
-            OpenCell::default();
-            nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize
-        ],
-        distances: Vec::new(),
-        max_distance: 0,
-        span_count: 0,
-        max_regions: 0,
-    };
+
+    let mut cells = vec![
+        OpenCell::default();
+        nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize
+    ];
+    let mut span_count = 0;
 
     // First we create open spaces.
     for (i, cell) in voxelized_tile
@@ -306,13 +309,12 @@ pub fn build_open_heightfield_tile(
         .enumerate()
         .filter(|(_, cell)| !cell.spans.is_empty())
     {
-        let open_spans = &mut open_tile.cells[i].spans;
-        open_spans.clear();
+        let open_spans = &mut cells[i].spans;
 
         let mut iter = cell.spans.iter().peekable();
         while let Some(span) = iter.next() {
             if !span.traversable {
-                // Skip untraversable. Not filtered because we still need to peek at them so.
+                // Skip untraversable. Not filtered because we still need to peek at them.
                 continue;
             }
 
@@ -322,6 +324,7 @@ pub fn build_open_heightfield_tile(
                     open_spans.push(OpenSpan {
                         min: span.max,
                         max: Some(next_span.min),
+                        area: span.area,
                         ..Default::default()
                     });
                 }
@@ -330,19 +333,42 @@ pub fn build_open_heightfield_tile(
                 open_spans.push(OpenSpan {
                     min: span.max,
                     max: None,
+                    area: span.area,
                     ..Default::default()
                 });
             }
         }
-        open_tile.span_count += open_spans.len();
+        span_count += open_spans.len();
     }
 
-    open_tile.distances.resize(open_tile.span_count, u16::MAX);
+    // Create Open Tile.
+    let mut open_tile = OpenTile {
+        cells,
+        distances: vec![u16::MAX; span_count],
+        areas: vec![None; span_count],
+        max_distance: 0,
+        span_count,
+        max_regions: 0,
+    };
+
+    // Assign tile_index & copy over areas.
+    let mut tile_index = 0;
+    for cell in open_tile.cells.iter_mut() {
+        for span in cell.spans.iter_mut() {
+            span.tile_index = tile_index;
+
+            open_tile.areas[tile_index] = span.area;
+
+            tile_index += 1;
+        }
+    }
+
+    link_neighbours(&mut open_tile, &nav_mesh_settings);
 
     open_tile
 }
 
-pub fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
+fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
     let cells_count = nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize;
 
     let mut x_positive = Vec::with_capacity(3);
@@ -473,31 +499,141 @@ pub fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSett
     }
 }
 
-pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
-    // Assign tile_index.
-    let mut tile_index = 0;
-    for cell in open_tile.cells.iter_mut() {
-        for span in cell.spans.iter_mut() {
-            span.tile_index = tile_index;
-            tile_index += 1;
-        }
-    }
-
+pub fn erode_walkable_area(
+    open_tile: &mut OpenTile,
+    nav_mesh_settings: &NavMeshSettings
+) {
     // Mark boundary cells.
-    for cell in open_tile.cells.iter() {
+    for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {
-            let neighbours = span
+            let area = open_tile.areas[span.tile_index];
+
+            if area.is_none() {
+                open_tile.distances[span.tile_index] = 0;
+                continue;
+            }
+
+            // This might be over complicated now.
+            let all_neighbours = span
                 .neighbours
                 .iter()
-                .filter(|neighbour| neighbour.is_some())
-                .count();
+                .enumerate()
+                .all(|(dir, neighbour)| {
+                    if let Some(neighbour) = neighbour {
+                        let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                        let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
 
-            if neighbours != 4 {
-                open_tile.distances[span.tile_index] = 0;
-            }
+                        open_tile.areas[neighbour.tile_index].is_some() // Any neighbour.
+                    } else {
+                        false
+                    }
+                });
+
+            open_tile.distances[span.tile_index] = if all_neighbours {
+                u16::MAX
+            } else {
+                0
+            };
         }
     }
 
+    filter_tile(open_tile, nav_mesh_settings);
+
+    // Any cell within 2*walkable_radius is considered unwalkable. This ensures characters won't clip into walls.
+    let threshold = nav_mesh_settings.walkable_radius * 2;
+    for i in 0..open_tile.span_count {
+        if open_tile.distances[i] < threshold {
+            open_tile.areas[i] = None;
+        }
+    }
+}
+
+pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
+    // Mark boundary cells.
+    for (i, cell) in open_tile.cells.iter().enumerate() {
+        for span in cell.spans.iter() {
+            let area = open_tile.areas[span.tile_index];
+
+            // This might be over complicated now.
+            let all_neighbours = span
+                .neighbours
+                .iter()
+                .enumerate()
+                .all(|(dir, neighbour)| {
+                    if let Some(neighbour) = neighbour {
+                        let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                        let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
+
+                        open_tile.areas[neighbour.tile_index] == area // Only neighbours of same area.
+                    } else {
+                        false
+                    }
+                });
+
+            open_tile.distances[span.tile_index] = if all_neighbours {
+                u16::MAX
+            } else {
+                0
+            };
+        }
+    }
+
+    filter_tile(open_tile, nav_mesh_settings);
+
+    open_tile.max_distance = *open_tile.distances.iter().max().unwrap_or(&0);
+
+    // Box blur. If you're reading this, why?
+    let threshold = 2;
+
+    let mut blurred = vec![0; open_tile.distances.len()];
+
+    for (i, cell) in open_tile.cells.iter().enumerate() {
+        for span in cell.spans.iter() {
+            let distance = open_tile.distances[span.tile_index];
+            if distance <= threshold {
+                blurred[span.tile_index] = distance;
+                continue;
+            }
+
+            let mut d = distance;
+            for dir in 0..4 {
+                let Some(index) = span.neighbours[dir] else {
+                    d += distance * 2;
+                    continue;
+                };
+
+                let other_cell_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
+
+                d += open_tile.distances[other_span.tile_index];
+
+                let next_dir = (dir + 1) & 0x3;
+                let Some(index) = other_span.neighbours[next_dir] else {
+                    d += distance;
+                    continue;
+                };
+
+                let other_cell_index =
+                    get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir);
+
+                let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
+
+                d += open_tile.distances[other_span.tile_index];
+            }
+
+            // Apply distance change.
+            blurred[span.tile_index] = (d + 5) / 9;
+        }
+    }
+
+    open_tile.distances = blurred;
+    // End Box Blur
+}
+
+fn filter_tile(
+    open_tile: &mut OpenTile,
+    nav_mesh_settings: &NavMeshSettings
+) {
     // Pass 1.
     for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {
@@ -605,53 +741,4 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
             open_tile.distances[span.tile_index] = distance;
         }
     }
-
-    open_tile.max_distance = *open_tile.distances.iter().max().unwrap_or(&0);
-
-    // Box blur. If you're reading this, why?
-    let threshold = 2;
-
-    let mut blurred = vec![0; open_tile.distances.len()];
-
-    for (i, cell) in open_tile.cells.iter().enumerate() {
-        for span in cell.spans.iter() {
-            let distance = open_tile.distances[span.tile_index];
-            if distance <= threshold {
-                blurred[span.tile_index] = distance;
-                continue;
-            }
-
-            let mut d = distance;
-            for dir in 0..4 {
-                let Some(index) = span.neighbours[dir] else {
-                    d += distance * 2;
-                    continue;
-                };
-
-                let other_cell_index = get_neighbour_index(nav_mesh_settings, i, dir);
-                let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
-
-                d += open_tile.distances[other_span.tile_index];
-
-                let next_dir = (dir + 1) & 0x3;
-                let Some(index) = other_span.neighbours[next_dir] else {
-                    d += distance;
-                    continue;
-                };
-
-                let other_cell_index =
-                    get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir);
-
-                let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
-
-                d += open_tile.distances[other_span.tile_index];
-            }
-
-            // Apply distance change.
-            blurred[span.tile_index] = (d + 5) / 9;
-        }
-    }
-
-    open_tile.distances = blurred;
-    // End Box Blur
 }

@@ -385,18 +385,12 @@ fn in_polygon(vertices: &[Vec3; VERTICES_IN_TRIANGLE], position: Vec3) -> bool {
 
 fn remove_links_to_direction(tile: &mut NavMeshTile, remove_direction: EdgeConnectionDirection) {
     for polygon in tile.polygons.iter_mut() {
-        let mut i = 0;
-        while i < polygon.links.len() {
-            if let Link::External { direction, .. } = polygon.links[i] {
-                if direction == remove_direction {
-                    polygon.links.swap_remove(i);
-
-                    continue;
-                }
+        polygon.links.retain(|link| {
+            match link {
+                Link::Internal { .. } => true,
+                Link::External { direction, .. } => *direction != remove_direction,
             }
-
-            i += 1;
-        }
+        });
     }
 }
 
@@ -410,19 +404,12 @@ fn connect_external_links(
 ) {
     for (poly_index, polygon) in tile.polygons.iter_mut().enumerate() {
         if remove_existing_links {
-            // Remove existing links to neighbour.
-            let mut i = 0;
-            while i < polygon.links.len() {
-                if let Link::External { direction, .. } = polygon.links[i] {
-                    if direction == neighbour_direction {
-                        polygon.links.swap_remove(i);
-
-                        continue;
-                    }
+            polygon.links.retain(|link| {
+                match link {
+                    Link::Internal { .. } => true,
+                    Link::External { direction, .. } => *direction != neighbour_direction,
                 }
-
-                i += 1;
-            }
+            });
         }
 
         for (edge_index, edge) in tile.edges[poly_index].iter().enumerate() {

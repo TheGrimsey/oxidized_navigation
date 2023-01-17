@@ -115,7 +115,7 @@ fn sort_cells_by_level(
 
     for (c_i, cell) in open_tile.cells.iter().enumerate() {
         for (s_i, span) in cell.spans.iter().enumerate() {
-            if regions[span.tile_index] != 0 {
+            if open_tile.areas[span.tile_index].is_none() || regions[span.tile_index] != 0 {
                 continue;
             }
 
@@ -170,6 +170,7 @@ fn expand_regions(
             let mut new_region = regions[entry.index as usize];
             let mut distance = u16::MAX;
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
+            let area = tile.areas[span.tile_index];
 
             for dir in 0..4 {
                 let Some(span_index) = span.neighbours[dir] else {
@@ -179,6 +180,10 @@ fn expand_regions(
                 let other_span = &tile.cells
                     [get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir)]
                 .spans[span_index as usize];
+                let other_area = tile.areas[other_span.tile_index];
+                if other_area != area {
+                    continue;
+                }
 
                 let other_region = regions[other_span.tile_index];
                 let other_distance = distances[other_span.tile_index];
@@ -228,7 +233,7 @@ fn expand_regions_until_end(
 
     for (c_i, cell) in tile.cells.iter().enumerate() {
         for (s_i, span) in cell.spans.iter().enumerate() {
-            if regions[span.tile_index] == 0 {
+            if regions[span.tile_index] == 0 && tile.areas[span.tile_index].is_some() {
                 level_stack.push(LevelStackEntry {
                     cell_index: c_i as u32,
                     span_index: s_i as u32,
@@ -253,6 +258,7 @@ fn expand_regions_until_end(
             let mut new_region = regions[entry.index as usize];
             let mut distance = u16::MAX;
             let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
+            let area = tile.areas[span.tile_index];
 
             for dir in 0..4 {
                 let Some(index) = span.neighbours[dir] else {
@@ -262,6 +268,10 @@ fn expand_regions_until_end(
                 let other_span = &tile.cells
                     [get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir)]
                 .spans[index as usize];
+                let other_area = tile.areas[other_span.tile_index];
+                if other_area != area {
+                    continue;
+                }
 
                 let other_region = regions[other_span.tile_index];
                 let other_distance = distances[other_span.tile_index];
@@ -302,6 +312,7 @@ struct Region {
     overlap: bool,
     floors: Vec<u16>,
     connections: Vec<u16>,
+    area: Option<u16>
 }
 
 fn merge_regions(
@@ -320,6 +331,7 @@ fn merge_regions(
             overlap: false,
             floors: Vec::with_capacity(4),
             connections: Vec::with_capacity(4),
+            area: None,
         });
     }
 
@@ -352,6 +364,8 @@ fn merge_regions(
             if !region.connections.is_empty() {
                 continue;
             }
+
+            region.area = tile.areas[span.tile_index];
 
             let dir = {
                 let mut dir = None;
@@ -616,6 +630,10 @@ fn remove_adjacent_connection_duplicates(region: &mut Region) {
 }
 
 fn can_merge_with_region(a: &Region, b: &Region) -> bool {
+    if a.area != b.area {
+        return false;
+    }
+
     let mut n = 0;
     for region in a.connections.iter() {
         if *region == b.id {
@@ -748,6 +766,8 @@ fn flood_region(
     stack.clear();
     stack.push(entry);
 
+    let area = tile.areas[entry.cell_index as usize];
+
     regions[entry.index as usize] = region_id;
     distances[entry.index as usize] = 0;
 
@@ -767,6 +787,11 @@ fn flood_region(
                 get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir);
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
             let other_region = regions[other_span.tile_index];
+            let other_area = tile.areas[other_span.tile_index];
+
+            if other_area != area {
+                continue;
+            }
 
             if other_region != 0 && other_region != region_id {
                 has_adjecant_region = true;
@@ -779,7 +804,12 @@ fn flood_region(
                     [get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir)]
                 .spans[span_index as usize];
                 let other_region = regions[other_span.tile_index];
-
+                let other_area = tile.areas[other_span.tile_index];
+                
+                if other_area != area {
+                    continue;
+                }
+                
                 if other_region != 0 && other_region != region_id {
                     has_adjecant_region = true;
                     break;
@@ -794,6 +824,7 @@ fn flood_region(
 
         expanded_any = true;
 
+        // Expand neighbours.
         for dir in 0..4 {
             let Some(span_index) = span.neighbours[dir] else {
                 continue;
@@ -802,6 +833,10 @@ fn flood_region(
             let other_cell_index =
                 get_neighbour_index(nav_mesh_settings, entry.cell_index as usize, dir);
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
+            let other_area = tile.areas[other_span.tile_index];
+            if other_area != area {
+                continue;
+            }
 
             if tile.distances[other_span.tile_index] >= lev && regions[other_span.tile_index] == 0 {
                 regions[other_span.tile_index] = region_id;

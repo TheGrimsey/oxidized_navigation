@@ -1,4 +1,6 @@
 # Oxidized Navigation
+[![Crates.io](https://img.shields.io/crates/v/oxidized_navigation)](https://crates.io/crates/oxidized_navigation/)
+![Crates.io](https://img.shields.io/crates/l/oxidized_navigation)
 
 Tiled **Runtime** Nav-mesh generation for 3D worlds in [Bevy](https://bevyengine.org/). Based on [Recast's Nav-mesh generation](https://github.com/recastnavigation/recastnavigation/) but in Rust.
 
@@ -13,10 +15,10 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 *At this point nav-meshes will be automatically generated whenever the collider or ``GlobalTransform`` of any entity with a ``NavMeshAffector`` is changed.*
 
 **Querying the nav-mesh / Pathfinding:**
-1. Your system needs to take in the [NavMesh] resource.
-2. Get the underlying data from the nav-mesh using [NavMesh::get]. This data is wrapped in an [RwLock].
-3. To access the data call [RwLock::read]. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
-4. Call [query::find_path] with the [NavMeshTiles] returned from the [RwLock]. 
+1. Your system needs to take in the ``NavMesh`` resource.
+2. Get the underlying data from the nav-mesh using ``NavMesh::get``. This data is wrapped in an ``RwLock``.
+3. To access the data call ``RwLock::read``. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
+4. Call ``query::find_path`` with the ``NavMeshTiles`` returned from the ``RwLock``. 
 
 *Also see the [examples] for how to run pathfinding in an async task which may be preferable.*
 

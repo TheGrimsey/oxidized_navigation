@@ -455,7 +455,7 @@ fn get_corner_height(
 
         if let Some(span_index) = other_span.neighbours[next_dir as usize] {
             let other_cell_index =
-                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+                get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);

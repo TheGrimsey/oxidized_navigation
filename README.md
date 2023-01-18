@@ -26,7 +26,7 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 
 | Crate Version | Bevy Version | Bevy Rapier 3D Version |
 | ------------- | ------------ | ---------------------- |
-| 0.1.0         | 0.9.1        | 0.19                   |
+| 0.1.X         | 0.9.1        | 0.19                   |
 
 *Note: These are the versions the crate is built against. It may work with newer versions.*
 

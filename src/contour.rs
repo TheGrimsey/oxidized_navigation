@@ -13,6 +13,8 @@ use super::{in_cone, intersect, NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOU
 pub struct Contour {
     pub vertices: Vec<UVec4>,
     pub region: u16,
+    /// Unlike [OpenSpan] this can't be ``None`` as ``None`` spans are ignored when generating contours.  
+    pub area: u16,
 }
 
 #[derive(Default)]
@@ -73,7 +75,7 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
                 boundry_flags[span.tile_index] = 0;
                 continue;
             }
-            if span.region == 0 {
+            if span.region == 0 || span.area.is_none() {
                 continue;
             }
 
@@ -105,6 +107,7 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
                 let new_contour = Contour {
                     vertices: simplified_vertices.clone(),
                     region: span.region,
+                    area: span.area.unwrap(), // Already checked above.
                 };
 
                 contour_set.contours.push(new_contour);
@@ -114,16 +117,22 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
 
     // handle holes.
     if !contour_set.contours.is_empty() {
-        let mut winding = vec![0; contour_set.contours.len()];
+        #[derive(Clone, Copy)]
+        enum Winding {
+            Outline,
+            Hole,
+        }
+
+        let mut winding = vec![Winding::Hole; contour_set.contours.len()];
         let mut num_holes = 0;
         for (i, contour) in contour_set.contours.iter().enumerate() {
             let contour_winding = calc_area_of_polygon_2d(&contour.vertices);
 
             if contour_winding < 0 {
                 num_holes += 1;
-                winding[i] = -1;
+                winding[i] = Winding::Hole;
             } else {
-                winding[i] = 1;
+                winding[i] = Winding::Outline;
             }
         }
 
@@ -131,26 +140,26 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
             let num_regions = open_tile.max_regions + 1;
             let mut regions = vec![ContourRegion::default(); num_regions.into()];
 
-            for (i, contour) in contour_set.contours.iter().enumerate() {
-                if winding[i] > 0 {
-                    // Outline
-                    regions[contour.region as usize].outline = Some(contour.clone());
-                } else {
-                    // Hole
-                    regions[contour.region as usize].holes.push(ContourHole {
-                        contour: contour.clone(),
-                        min_x: contour.vertices[0].x,
-                        min_z: contour.vertices[0].z,
-                        left_most_vertex: 0,
-                    });
+            for (contour, winding) in contour_set.contours.iter().zip(winding) {
+                match winding {
+                    Winding::Outline => {
+                        regions[contour.region as usize].outline = Some(contour.clone());
+                    }
+                    Winding::Hole => {
+                        regions[contour.region as usize].holes.push(ContourHole {
+                            contour: contour.clone(),
+                            min_x: contour.vertices[0].x,
+                            min_z: contour.vertices[0].z,
+                            left_most_vertex: 0,
+                        });
+                    }
                 }
             }
 
-            for region in regions.iter_mut().filter(|region| !region.holes.is_empty()) {
-                if region.outline.is_none() {
-                    continue;
-                };
-
+            for region in regions
+                .iter_mut()
+                .filter(|region| !region.holes.is_empty() && region.outline.is_some())
+            {
                 merge_region_holes(region);
             }
         }
@@ -383,8 +392,8 @@ fn walk_contour(
     let start_span = span_index;
 
     loop {
-        let row = cell_index / nav_mesh_settings.tile_width as usize;
-        let column = cell_index % nav_mesh_settings.tile_width as usize;
+        let row = cell_index / nav_mesh_settings.get_tile_side_with_border();
+        let column = cell_index % nav_mesh_settings.get_tile_side_with_border();
 
         let span = &tile.cells[cell_index].spans[span_index];
         if boundry_flags[span.tile_index] & (1 << dir) > 0 {
@@ -419,7 +428,7 @@ fn walk_contour(
             if let Some(index) = span.neighbours[dir as usize] {
                 span_index = index.into();
             } else {
-                panic!("Incorrectly flagged boundry!");
+                panic!("Incorrectly flagged boundry! This should not happen.");
             }
 
             cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
@@ -455,7 +464,7 @@ fn get_corner_height(
 
         if let Some(span_index) = other_span.neighbours[next_dir as usize] {
             let other_cell_index =
-                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+                get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);

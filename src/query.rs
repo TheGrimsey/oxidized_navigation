@@ -202,8 +202,7 @@ pub fn find_path(
                 };
                 let total_cost = cost + heuristic;
 
-                if neighbour_node
-                    .state != NodeState::Unchecked
+                if neighbour_node.state != NodeState::Unchecked
                     && total_cost >= neighbour_node.total_cost
                 {
                     continue;

@@ -312,7 +312,7 @@ struct Region {
     overlap: bool,
     floors: Vec<u16>,
     connections: Vec<u16>,
-    area: Option<u16>
+    area: Option<u16>,
 }
 
 fn merge_regions(
@@ -766,7 +766,8 @@ fn flood_region(
     stack.clear();
     stack.push(entry);
 
-    let area = tile.areas[entry.cell_index as usize];
+    let span = &tile.cells[entry.cell_index as usize].spans[entry.span_index as usize];
+    let area = tile.areas[span.tile_index];
 
     regions[entry.index as usize] = region_id;
     distances[entry.index as usize] = 0;
@@ -805,11 +806,11 @@ fn flood_region(
                 .spans[span_index as usize];
                 let other_region = regions[other_span.tile_index];
                 let other_area = tile.areas[other_span.tile_index];
-                
+
                 if other_area != area {
                     continue;
                 }
-                
+
                 if other_region != 0 && other_region != region_id {
                     has_adjecant_region = true;
                     break;

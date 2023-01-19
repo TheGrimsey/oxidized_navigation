@@ -26,9 +26,7 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 
 | Crate Version | Bevy Version | Bevy Rapier 3D Version |
 | ------------- | ------------ | ---------------------- |
-| 0.1.0         | 0.9.1        | 0.19                   |
-
-*Note: These are the versions the crate is built against. It may work with newer versions.*
+| 0.1.X         | 0.9.1        | 0.19                   |
 
 ## Non-exhaustive TODO-list:
 
@@ -39,47 +37,19 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 - [X] Clean up intermediate representations when we finish processing a tile (Voxelized, Open cells, etc. Only keeping polymesh).
 - [X] Quick "How to use" guide.
 
-- [ ] Built-in nav-mesh debug draw.
+- [X] Mark areas too close to walls as unwalkable based on character width.
 - [ ] Implement areas allowing to specify differing cost of traveling.
-- [ ] Mark areas too close to walls as unwalkable based on character width.
+- [ ] Built-in nav-mesh debug draw.
 - [ ] Allow creating nav-mesh from meshes (probably add an option to ``NavMeshAffector``).
 - [ ] Switch to the Bevy 0.9 plugin settings system.
+- [ ] Rebuild all tiles when ``NavMeshSettings`` are changed. *Ideally, one would want to have the ability to change the resolution of the nav-mesh when changing level.* 
 
+- [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of simply creating the data in the right format from the start.
 - [ ] Code Tests.
 - [ ] Benchmarks for tile generation & pathfinding. 
-- [ ] Optimize linking tiles. (At a cost of memory we can save a lot of time finding OffMesh links by just... saving indices of the polygons with OffMesh links)
+- [ ] Optimize linking tiles. (At a cost of memory we can save a lot of time linking by saving indices of polygons with OffMesh links)
 - [ ] Adjust memory representation for cache usage. (Some data we only need when linking tiles and not pathfinding)
 
 ## Debug draw.
 
-Whilst not included in the plugin currently, you can use [Bevy Prototype Debug Lines](https://crates.io/crates/bevy_prototype_debug_lines) and the following snippet in a system to draw up the nav-mesh:
-
-```rust
-fn draw_nav_mesh(
-    nav_mesh_settings: Res<NavMeshSettings>,
-    nav_mesh: Res<NavMesh>,
-    mut lines: ResMut<DebugLines>
-) {
-    // Probably want to add in a trigger key here to make it not always draw.
-
-    if let Ok(nav_mesh) = nav_mesh.get().read() {
-        for (_, tile) in nav_mesh.get_tiles().iter() {
-            // Draw polygons.
-            for poly in tile.polygons.iter() {
-                let indices = &poly.indices;
-                for i in 0..indices.len() {
-                    let a = tile.vertices[indices[i] as usize];
-                    let b = tile.vertices[indices[(i + 1) % indices.len()] as usize];
-
-                    lines.line(a, b, 15.0);
-                }
-            }
-
-            // Draw vertex points.
-            for vertex in tile.vertices.iter() {
-                lines.line(*vertex, *vertex + Vec3::Y, 15.0);
-            }
-        }
-    }
-}
-```
+Whilst not included in the plugin currently, you can use [Bevy Prototype Debug Lines](https://crates.io/crates/bevy_prototype_debug_lines) and the ``draw_nav_mesh_system`` in the ``blocking_async`` example:

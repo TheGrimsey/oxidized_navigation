@@ -7,17 +7,17 @@
 //! 1. Insert an instance of the [NavMeshSettings] resource into your Bevy app.
 //! 2. Add [OxidizedNavigationPlugin] as a plugin.
 //! 3. Attach a [NavMeshAffector] component and a rapier collider to any entity you want to affect the nav-mesh.
-//! 
+//!
 //! *At this point nav-meshes will be automatically generated whenever the collider or [GlobalTransform] of any entity with a [NavMeshAffector] is changed.*
-//! 
+//!
 //! **Querying the nav-mesh / Pathfinding:**
 //! 1. Your system needs to take in the [NavMesh] resource.
 //! 2. Get the underlying data from the nav-mesh using [NavMesh::get]. This data is wrapped in an [RwLock].
 //! 3. To access the data call [RwLock::read]. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
-//! 4. Call [query::find_path] with the [NavMeshTiles] returned from the [RwLock]. 
-//! 
+//! 4. Call [query::find_path] with the [NavMeshTiles] returned from the [RwLock].
+//!
 //! *Also see the [examples] for how to run pathfinding in an async task which may be preferable.*
-//! 
+//!
 //! [Bevy]: https://crates.io/crates/bevy
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
@@ -40,7 +40,8 @@ use bevy_rapier3d::prelude::ColliderView;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
 use heightfields::{
-    build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field, erode_walkable_area,
+    build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field,
+    erode_walkable_area,
 };
 use mesher::build_poly_mesh;
 use regions::build_regions;
@@ -82,6 +83,12 @@ const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 /// Component for entities that should affect the nav-mesh.
 #[derive(Component, Default)]
 pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
+
+/// Optional component to define the area type of an entity.
+///
+/// Any part of the nav-mesh generated from this entity will have this area type. Overlapping areas will prefer the higher area type.
+#[derive(Component)]
+pub struct NavMeshAreaType(u16);
 
 /*
 *   Neighbours:
@@ -138,13 +145,15 @@ pub struct NavMeshSettings {
     /// **Suggested value**: Minium Y position of anything in the world that should be covered by the nav mesh.
     pub world_bottom_bound: f32,
 
-    /// Maximum slope traversable when navigating in radians.
+    /// Maximum incline/slope traversable when navigating in radians.
     pub max_traversable_slope_radians: f32,
     /// Minimum open height for an area to be considered walkable in cell_height(s).
     ///
     /// **Suggested value**: The height of character * ``cell_height``, rounded up.
     pub walkable_height: u16,
-    /// UNIMPLEMENTED. Minimum width of an area to be considered walkable, in cell_width(s).
+    /// This will "pull-back" the nav-mesh from edges, meaning anywhere on the nav-mesh will be walkable for a character with a radius of ``walkable_radius * cell_width``.
+    ///
+    /// **Suggested value**: ``ceil(character_radius / cell_width)`` (2-3 if `cell_width`` is 1/2 of ``character_radius``)  
     pub walkable_radius: u16,
     /// Maximum height difference that is still considered traversable in cell_height(s). (Think, stair steps)
     pub step_height: u16,
@@ -158,7 +167,7 @@ pub struct NavMeshSettings {
     ///
     /// **Suggested value**: Start high and reduce if there are issues.
     pub max_edge_length: u32,
-    /// Maximum difference allowed for simplified contour generation on the XZ-plane.
+    /// Maximum difference allowed for simplified contour generation on the XZ-plane in cell_width(s).
     ///
     /// **Suggested value range**: [1.1, 1.5]
     pub max_contour_simplification_error: f32,
@@ -167,25 +176,41 @@ impl NavMeshSettings {
     /// Returns the length of a tile's side in world units.
     #[inline]
     pub fn get_tile_size(&self) -> f32 {
-        self.cell_width * self.tile_width as f32
+        self.cell_width * f32::from(self.tile_width)
+    }
+    #[inline]
+    pub fn get_border_size(&self) -> f32 {
+        f32::from(self.walkable_radius) * self.cell_width
     }
 
     /// Returns the tile coordinate that contains the supplied ``world_position``.
     #[inline]
     pub fn get_tile_containing_position(&self, world_position: Vec2) -> UVec2 {
-        let tile_size = self.get_tile_size();
-
         let offset_world = world_position + self.world_half_extents;
 
-        (offset_world / tile_size).as_uvec2()
+        (offset_world / self.get_tile_size()).as_uvec2()
     }
 
     /// Returns the minimum bound of a tile on the XZ-plane.
     #[inline]
-    pub fn get_tile_min_bound(&self, tile: UVec2) -> Vec2 {
-        let tile_size = self.get_tile_size();
+    pub fn get_tile_origin(&self, tile: UVec2) -> Vec2 {
+        tile.as_vec2() * self.get_tile_size() - self.world_half_extents
+    }
 
-        tile.as_vec2() * tile_size - self.world_half_extents
+    /// Returns the origin of a tile on the XZ-plane including the border area.
+    #[inline]
+    pub fn get_tile_origin_with_border(&self, tile: UVec2) -> Vec2 {
+        self.get_tile_origin(tile) - self.get_border_size()
+    }
+
+    #[inline]
+    pub fn get_tile_side_with_border(&self) -> usize {
+        usize::from(self.tile_width) + usize::from(self.walkable_radius) * 2
+    }
+    #[inline]
+    pub fn get_border_side(&self) -> usize {
+        // Not technically useful currently but in case.
+        self.walkable_radius.into()
     }
 
     /// Returns the minimum & maximum bound of a tile on the XZ-plane.
@@ -221,9 +246,9 @@ fn update_navmesh_affectors_system(
         Or<(Changed<GlobalTransform>, Changed<Collider>)>,
     >,
 ) {
-    /*
-    *   TODO: Expand tile size by walkable_radius * 2.
-    */
+    // Expand by 2 * walkable_radius to match with erode_walkable_area.
+    let border_expansion =
+        f32::from(nav_mesh_settings.walkable_radius * 2) * nav_mesh_settings.cell_width;
     for (e, mut affector, collider, global_transform) in query.iter_mut() {
         let transform = global_transform.compute_transform();
         let iso = Isometry::new(
@@ -239,10 +264,16 @@ fn update_navmesh_affectors_system(
             ))
             .transform_by(&iso);
 
-        let min_vec = Vec2::new(aabb.mins.x, aabb.mins.z);
+        let min_vec = Vec2::new(
+            aabb.mins.x - border_expansion,
+            aabb.mins.z - border_expansion,
+        );
         let min_tile = nav_mesh_settings.get_tile_containing_position(min_vec);
 
-        let max_vec = Vec2::new(aabb.maxs.x, aabb.maxs.z);
+        let max_vec = Vec2::new(
+            aabb.maxs.x + border_expansion,
+            aabb.maxs.z + border_expansion,
+        );
         let max_tile = nav_mesh_settings.get_tile_containing_position(max_vec);
 
         // Remove from previous.
@@ -446,9 +477,15 @@ fn clear_dirty_tiles_system(mut dirty_tiles: ResMut<DirtyTiles>) {
 fn get_neighbour_index(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
     match dir {
         0 => index - 1,
-        1 => index + nav_mesh_settings.tile_width as usize,
+        1 => {
+            index
+                + usize::from(nav_mesh_settings.tile_width + nav_mesh_settings.walkable_radius * 2)
+        } // TODO: This requires explaination for borders.
         2 => index + 1,
-        3 => index - nav_mesh_settings.tile_width as usize,
+        3 => {
+            index
+                - usize::from(nav_mesh_settings.tile_width + nav_mesh_settings.walkable_radius * 2)
+        }
         _ => panic!("Not a valid direction"),
     }
 }

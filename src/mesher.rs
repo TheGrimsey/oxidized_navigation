@@ -9,6 +9,7 @@ pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
     pub polygons: Vec<[u32; VERTICES_IN_TRIANGLE]>, //
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
+    pub areas: Vec<u16>,
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
@@ -33,6 +34,7 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
         vertices: Vec::with_capacity(max_vertices),
         polygons: Vec::with_capacity(max_tris),
         edges: Vec::with_capacity(max_tris),
+        areas: Vec::with_capacity(max_tris),
     };
 
     let mut first_vertex = vec![-1; VERTEX_BUCKET_COUNT];
@@ -40,7 +42,6 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
 
     let mut indices = Vec::with_capacity(max_verts_per_contour);
     let mut triangles = Vec::with_capacity(max_verts_per_contour * 3);
-    let mut polygons = Vec::with_capacity((max_verts_per_contour + 1) * VERTICES_IN_TRIANGLE);
 
     for contour in &contour_set.contours {
         if contour.vertices.len() < 3 {
@@ -49,7 +50,6 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
 
         indices.clear();
         triangles.clear();
-        polygons.clear();
 
         indices.extend(0..contour.vertices.len() as u32);
 
@@ -74,20 +74,15 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
             let c = triangles[i * 3 + 2];
 
             if a != b && a != c && b != c {
-                polygons.push([
+                poly_mesh.polygons.push([
                     indices[a as usize],
                     indices[b as usize],
                     indices[c as usize],
                 ]);
+
+                poly_mesh.areas.push(contour.area);
             }
         }
-
-        if polygons.is_empty() {
-            continue;
-        }
-
-        // Store polygons.
-        poly_mesh.polygons.extend(polygons.iter());
     }
 
     // For each edge, find other polygon that shares that edge.
@@ -98,37 +93,29 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
     );
 
     // Fix portal edges.
-    for (i, indices) in poly_mesh.polygons.iter().enumerate() {
-        for index in 0..indices.len() {
-            // Connect to edges that don't have an internal edge connection.
-            let EdgeConnection::None = poly_mesh.edges[i][index] else {
-                continue;
-            };
+    let border_side = nav_mesh_settings.get_border_side() as u32;
+    let far_edge = nav_mesh_settings.tile_width as u32 + border_side;
 
-            let vertex_a = poly_mesh.vertices[indices[index] as usize];
-            let vertex_b = poly_mesh.vertices[indices[(index + 1) % indices.len()] as usize];
+    for (polygon_index, edges) in poly_mesh.edges.iter_mut().enumerate() {
+        let indices = &poly_mesh.polygons[polygon_index];
 
-            /*
-            *   TODO: This should remove the border.
-            */
+        for (i, edge) in edges
+            .iter_mut()
+            .enumerate()
+            .filter(|(_, edge)| *edge == &EdgeConnection::None)
+        {
+            let vertex_a = poly_mesh.vertices[indices[i] as usize];
+            let vertex_b = poly_mesh.vertices[indices[(i + 1) % indices.len()] as usize];
 
-            // Only edges parallel to the tile edge.
-            if vertex_a.x == 0 && vertex_b.x == 0 {
-                poly_mesh.edges[i][index] =
-                    EdgeConnection::External(EdgeConnectionDirection::XNegative);
-            } else if vertex_a.z == nav_mesh_settings.tile_width as u32
-                && vertex_b.z == nav_mesh_settings.tile_width as u32
-            {
-                poly_mesh.edges[i][index] =
-                    EdgeConnection::External(EdgeConnectionDirection::ZPositive);
-            } else if vertex_a.x == nav_mesh_settings.tile_width as u32
-                && vertex_b.x == nav_mesh_settings.tile_width as u32
-            {
-                poly_mesh.edges[i][index] =
-                    EdgeConnection::External(EdgeConnectionDirection::XPositive);
-            } else if vertex_a.z == 0 && vertex_b.z == 0 {
-                poly_mesh.edges[i][index] =
-                    EdgeConnection::External(EdgeConnectionDirection::ZNegative);
+            // Only edges parallel to the tile edge (excluding border).
+            if vertex_a.x == border_side && vertex_b.x == border_side {
+                *edge = EdgeConnection::External(EdgeConnectionDirection::XNegative);
+            } else if vertex_a.z == far_edge && vertex_b.z == far_edge {
+                *edge = EdgeConnection::External(EdgeConnectionDirection::ZPositive);
+            } else if vertex_a.x == far_edge && vertex_b.x == far_edge {
+                *edge = EdgeConnection::External(EdgeConnectionDirection::XPWositive);
+            } else if vertex_a.z == border_side && vertex_b.z == border_side {
+                *edge = EdgeConnection::External(EdgeConnectionDirection::ZNegative);
             }
         }
     }
@@ -154,7 +141,7 @@ impl EdgeConnectionDirection {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EdgeConnection {
     None,
     Internal(u16),
@@ -252,10 +239,7 @@ fn add_vertex(
 
     while i != -1 {
         let other_vertex = vertices[i as usize];
-        if other_vertex.x == vertex.x
-            && other_vertex.y.abs_diff(vertex.y) <= 1
-            && other_vertex.z == vertex.z
-        {
+        if other_vertex == vertex {
             return i as u32;
         }
         i = next_vertex[i as usize];
@@ -370,6 +354,7 @@ fn triangulate(vertices: &[UVec4], indices: &mut Vec<u32>, triangles: &mut Vec<u
     true
 }
 
+/// Equal comparison treating the UVec4 as a UVec2 only considering X & Z.
 fn vec_equal(a: UVec4, b: UVec4) -> bool {
     a.x == b.x && a.z == b.z
 }

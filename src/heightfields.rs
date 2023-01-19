@@ -9,7 +9,7 @@ struct HeightSpan {
     min: u16,
     max: u16,
     traversable: bool,
-    area: Option<u16>
+    area: Option<u16>,
 }
 
 #[derive(Default, Clone)]
@@ -53,19 +53,18 @@ pub fn build_heightfield_tile(
     triangle_collections: Vec<(GlobalTransform, Vec<Vec3>, Vec<[u32; 3]>)>,
     nav_mesh_settings: &NavMeshSettings,
 ) -> VoxelizedTile {
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
     let mut voxel_tile = VoxelizedTile {
-        cells: vec![
-            VoxelCell::default();
-            nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize
-        ],
+        cells: vec![VoxelCell::default(); tile_side.pow(2)],
     };
 
-    let tile_min = nav_mesh_settings.get_tile_min_bound(tile_coord);
+    let tile_max_bound = IVec3::new((tile_side - 1) as i32, 0, (tile_side - 1) as i32);
 
-    let tile_max_bound = IVec3::new(
-        (nav_mesh_settings.tile_width - 1).into(),
-        0,
-        (nav_mesh_settings.tile_width - 1).into(),
+    let tile_origin = nav_mesh_settings.get_tile_origin_with_border(tile_coord);
+    let tile_origin = Vec3::new(
+        tile_origin.x,
+        nav_mesh_settings.world_bottom_bound,
+        tile_origin.y,
     );
 
     let max_vertices = triangle_collections
@@ -77,10 +76,11 @@ pub fn build_heightfield_tile(
         let transform = transform.compute_transform().with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         translated_vertices.clear();
-        translated_vertices.extend(vertices.iter().map(|vertex| {
-            transform.transform_point(*vertex)
-                - Vec3::new(tile_min.x, nav_mesh_settings.world_bottom_bound, tile_min.y)
-        })); // Transform vertices.
+        translated_vertices.extend(
+            vertices
+                .iter()
+                .map(|vertex| transform.transform_point(*vertex) - tile_origin),
+        ); // Transform vertices.
 
         for triangle in triangles.iter() {
             let a = translated_vertices[triangle[0] as usize];
@@ -93,8 +93,8 @@ pub fn build_heightfield_tile(
             // Check if triangle is completely outside the tile.
             if max_bound.x < 0
                 || max_bound.z < 0
-                || min_bound.x > nav_mesh_settings.tile_width.into()
-                || min_bound.z > nav_mesh_settings.tile_width.into()
+                || min_bound.x > tile_max_bound.x
+                || min_bound.z > tile_max_bound.z
             {
                 continue;
             }
@@ -143,7 +143,7 @@ pub fn build_heightfield_tile(
                 }
                 let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
                 let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
-                    .min((nav_mesh_settings.tile_width - 1).into());
+                    .min((tile_side - 1) as i32);
 
                 for x in column_min..=column_max {
                     let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
@@ -177,7 +177,7 @@ pub fn build_heightfield_tile(
                     let min_height = (square_min_height / nav_mesh_settings.cell_height) as u16;
                     let max_height = (square_max_height / nav_mesh_settings.cell_height) as u16;
 
-                    let index = (x + z * nav_mesh_settings.tile_width as i32) as usize;
+                    let index = x as usize + z as usize * tile_side;
                     let cell = &mut voxel_tile.cells[index];
 
                     let mut new_span = HeightSpan {
@@ -295,11 +295,7 @@ pub fn build_open_heightfield_tile(
     voxelized_tile: &VoxelizedTile,
     nav_mesh_settings: &NavMeshSettings,
 ) -> OpenTile {
-
-    let mut cells = vec![
-        OpenCell::default();
-        nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize
-    ];
+    let mut cells = vec![OpenCell::default(); voxelized_tile.cells.len()];
     let mut span_count = 0;
 
     // First we create open spaces.
@@ -369,24 +365,23 @@ pub fn build_open_heightfield_tile(
 }
 
 fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
-    let cells_count = nav_mesh_settings.tile_width as usize * nav_mesh_settings.tile_width as usize;
-
     let mut x_positive = Vec::with_capacity(3);
     let mut x_negative = Vec::with_capacity(3);
     let mut z_positive = Vec::with_capacity(3);
     let mut z_negative = Vec::with_capacity(3);
 
-    for i in 0..cells_count {
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
+    for i in 0..open_tile.cells.len() {
         if open_tile.cells[i].spans.is_empty() {
             continue;
         }
 
-        let row = i / nav_mesh_settings.tile_width as usize;
-        let column = i % nav_mesh_settings.tile_width as usize;
+        let row = i / tile_side as usize;
+        let column = i % tile_side as usize;
 
-        let x_positive_contained = column < (nav_mesh_settings.tile_width - 1).into();
+        let x_positive_contained = column < (tile_side - 1).into();
         let x_negative_contained = column > 0;
-        let z_positive_contained = row < (nav_mesh_settings.tile_width - 1).into();
+        let z_positive_contained = row < (tile_side - 1).into();
         let z_negative_contained = row > 0;
 
         x_positive.clear();
@@ -412,7 +407,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
         }
         if z_positive_contained {
             z_positive.extend(
-                open_tile.cells[i + nav_mesh_settings.tile_width as usize]
+                open_tile.cells[i + tile_side as usize]
                     .spans
                     .iter()
                     .map(|span| (span.min, span.max)),
@@ -420,7 +415,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
         }
         if z_negative_contained {
             z_negative.extend(
-                open_tile.cells[i - nav_mesh_settings.tile_width as usize]
+                open_tile.cells[i - tile_side as usize]
                     .spans
                     .iter()
                     .map(|span| (span.min, span.max)),
@@ -499,10 +494,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
     }
 }
 
-pub fn erode_walkable_area(
-    open_tile: &mut OpenTile,
-    nav_mesh_settings: &NavMeshSettings
-) {
+pub fn erode_walkable_area(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
     // Mark boundary cells.
     for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {
@@ -514,26 +506,18 @@ pub fn erode_walkable_area(
             }
 
             // This might be over complicated now.
-            let all_neighbours = span
-                .neighbours
-                .iter()
-                .enumerate()
-                .all(|(dir, neighbour)| {
-                    if let Some(neighbour) = neighbour {
-                        let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
-                        let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
+            let all_neighbours = span.neighbours.iter().enumerate().all(|(dir, neighbour)| {
+                if let Some(neighbour) = neighbour {
+                    let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                    let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
 
-                        open_tile.areas[neighbour.tile_index].is_some() // Any neighbour.
-                    } else {
-                        false
-                    }
-                });
+                    open_tile.areas[neighbour.tile_index].is_some() // Any neighbour.
+                } else {
+                    false
+                }
+            });
 
-            open_tile.distances[span.tile_index] = if all_neighbours {
-                u16::MAX
-            } else {
-                0
-            };
+            open_tile.distances[span.tile_index] = if all_neighbours { u16::MAX } else { 0 };
         }
     }
 
@@ -555,26 +539,18 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
             let area = open_tile.areas[span.tile_index];
 
             // This might be over complicated now.
-            let all_neighbours = span
-                .neighbours
-                .iter()
-                .enumerate()
-                .all(|(dir, neighbour)| {
-                    if let Some(neighbour) = neighbour {
-                        let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
-                        let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
+            let all_neighbours = span.neighbours.iter().enumerate().all(|(dir, neighbour)| {
+                if let Some(neighbour) = neighbour {
+                    let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                    let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
 
-                        open_tile.areas[neighbour.tile_index] == area // Only neighbours of same area.
-                    } else {
-                        false
-                    }
-                });
+                    open_tile.areas[neighbour.tile_index] == area // Only neighbours of same area.
+                } else {
+                    false
+                }
+            });
 
-            open_tile.distances[span.tile_index] = if all_neighbours {
-                u16::MAX
-            } else {
-                0
-            };
+            open_tile.distances[span.tile_index] = if all_neighbours { u16::MAX } else { 0 };
         }
     }
 
@@ -630,10 +606,8 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
     // End Box Blur
 }
 
-fn filter_tile(
-    open_tile: &mut OpenTile,
-    nav_mesh_settings: &NavMeshSettings
-) {
+fn filter_tile(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
     // Pass 1.
     for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {
@@ -644,31 +618,31 @@ fn filter_tile(
                 let other_cell_index = i - 1;
                 let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                let other_distance = open_tile.distances[other_span.tile_index];
-                if (other_distance + 2) < distance {
-                    distance = other_distance + 2;
+                let other_distance = open_tile.distances[other_span.tile_index] + 2;
+                if other_distance < distance {
+                    distance = other_distance;
                 }
 
                 // (-1, -1)
                 if let Some(span_index) = other_span.neighbours[3] {
-                    let other_cell_index = other_cell_index - nav_mesh_settings.tile_width as usize;
+                    let other_cell_index = other_cell_index - tile_side;
                     let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                    let other_distance = open_tile.distances[other_span.tile_index];
-                    if (other_distance + 3) < distance {
-                        distance = other_distance + 3;
+                    let other_distance = open_tile.distances[other_span.tile_index] + 3;
+                    if other_distance < distance {
+                        distance = other_distance;
                     }
                 }
             }
 
             if let Some(span_index) = span.neighbours[3] {
                 // (0, -1)
-                let other_cell_index = i - nav_mesh_settings.tile_width as usize;
+                let other_cell_index = i - tile_side;
                 let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                let other_distance = open_tile.distances[other_span.tile_index];
-                if (other_distance + 2) < distance {
-                    distance = other_distance + 2;
+                let other_distance = open_tile.distances[other_span.tile_index] + 2;
+                if other_distance < distance {
+                    distance = other_distance;
                 }
 
                 // (1, -1)
@@ -676,9 +650,9 @@ fn filter_tile(
                     let other_cell_index = other_cell_index + 1;
                     let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                    let other_distance = open_tile.distances[other_span.tile_index];
-                    if (other_distance + 3) < distance {
-                        distance = other_distance + 3;
+                    let other_distance = open_tile.distances[other_span.tile_index] + 3;
+                    if other_distance < distance {
+                        distance = other_distance;
                     }
                 }
             }
@@ -698,31 +672,31 @@ fn filter_tile(
                 let other_cell_index = i + 1;
                 let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                let other_distance = open_tile.distances[other_span.tile_index];
-                if (other_distance + 2) < distance {
-                    distance = other_distance + 2;
+                let other_distance = open_tile.distances[other_span.tile_index] + 2;
+                if other_distance < distance {
+                    distance = other_distance;
                 }
 
                 // (1, 1)
                 if let Some(span_index) = other_span.neighbours[1] {
-                    let other_cell_index = other_cell_index + nav_mesh_settings.tile_width as usize;
+                    let other_cell_index = other_cell_index + tile_side;
                     let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                    let other_distance = open_tile.distances[other_span.tile_index];
-                    if (other_distance + 3) < distance {
-                        distance = other_distance + 3;
+                    let other_distance = open_tile.distances[other_span.tile_index] + 3;
+                    if other_distance < distance {
+                        distance = other_distance;
                     }
                 }
             }
 
             if let Some(span_index) = span.neighbours[1] {
                 // (0, 1)
-                let other_cell_index = i + nav_mesh_settings.tile_width as usize;
+                let other_cell_index = i + tile_side;
                 let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                let other_distance = open_tile.distances[other_span.tile_index];
-                if (other_distance + 2) < distance {
-                    distance = other_distance + 2;
+                let other_distance = open_tile.distances[other_span.tile_index] + 2;
+                if other_distance < distance {
+                    distance = other_distance;
                 }
 
                 // (-1, 1)
@@ -730,9 +704,9 @@ fn filter_tile(
                     let other_cell_index = other_cell_index - 1;
                     let other_span = &open_tile.cells[other_cell_index].spans[span_index as usize];
 
-                    let other_distance = open_tile.distances[other_span.tile_index];
-                    if (other_distance + 3) < distance {
-                        distance = other_distance + 3;
+                    let other_distance = open_tile.distances[other_span.tile_index] + 3;
+                    if other_distance < distance {
+                        distance = other_distance;
                     }
                 }
             }

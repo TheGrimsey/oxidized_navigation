@@ -40,6 +40,7 @@ pub enum Link {
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
     pub links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
+    pub area: u16,
 }
 
 /*
@@ -385,11 +386,9 @@ fn in_polygon(vertices: &[Vec3; VERTICES_IN_TRIANGLE], position: Vec3) -> bool {
 
 fn remove_links_to_direction(tile: &mut NavMeshTile, remove_direction: EdgeConnectionDirection) {
     for polygon in tile.polygons.iter_mut() {
-        polygon.links.retain(|link| {
-            match link {
-                Link::Internal { .. } => true,
-                Link::External { direction, .. } => *direction != remove_direction,
-            }
+        polygon.links.retain(|link| match link {
+            Link::Internal { .. } => true,
+            Link::External { direction, .. } => *direction != remove_direction,
         });
     }
 }
@@ -404,11 +403,9 @@ fn connect_external_links(
 ) {
     for (poly_index, polygon) in tile.polygons.iter_mut().enumerate() {
         if remove_existing_links {
-            polygon.links.retain(|link| {
-                match link {
-                    Link::Internal { .. } => true,
-                    Link::External { direction, .. } => *direction != neighbour_direction,
-                }
+            polygon.links.retain(|link| match link {
+                Link::Internal { .. } => true,
+                Link::External { direction, .. } => *direction != neighbour_direction,
             });
         }
 
@@ -617,15 +614,16 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
         .polygons
         .iter()
         .zip(poly_mesh.edges.iter())
-        .map(|(indices, edges)| {
+        .zip(poly_mesh.areas.iter())
+        .map(|((indices, edges), area)| {
             // Pre build internal links.
             let links = edges
                 .iter()
                 .enumerate()
                 .filter_map(|(i, edge)| {
                     let EdgeConnection::Internal(other_polygon) = edge else {
-                return None;
-            };
+                        return None;
+                    };
 
                     Some(Link::Internal {
                         edge: i as u8,
@@ -637,20 +635,21 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
             Polygon {
                 links,
                 indices: *indices,
+                area: *area,
             }
         })
         .collect();
 
-    let tile_min_bound = nav_mesh_settings.get_tile_min_bound(tile_coord);
+    let tile_origin = nav_mesh_settings.get_tile_origin_with_border(tile_coord);
     let vertices = poly_mesh
         .vertices
         .iter()
         .map(|vertex| {
             Vec3::new(
-                tile_min_bound.x + vertex.x as f32 * nav_mesh_settings.cell_width,
+                tile_origin.x + vertex.x as f32 * nav_mesh_settings.cell_width,
                 nav_mesh_settings.world_bottom_bound
                     + vertex.y as f32 * nav_mesh_settings.cell_height,
-                tile_min_bound.y + vertex.z as f32 * nav_mesh_settings.cell_width,
+                tile_origin.y + vertex.z as f32 * nav_mesh_settings.cell_width,
             )
         })
         .collect();

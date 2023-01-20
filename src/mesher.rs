@@ -113,7 +113,7 @@ pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSett
             } else if vertex_a.z == far_edge && vertex_b.z == far_edge {
                 *edge = EdgeConnection::External(EdgeConnectionDirection::ZPositive);
             } else if vertex_a.x == far_edge && vertex_b.x == far_edge {
-                *edge = EdgeConnection::External(EdgeConnectionDirection::XPWositive);
+                *edge = EdgeConnection::External(EdgeConnectionDirection::XPositive);
             } else if vertex_a.z == border_side && vertex_b.z == border_side {
                 *edge = EdgeConnection::External(EdgeConnectionDirection::ZNegative);
             }

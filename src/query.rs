@@ -46,12 +46,14 @@ pub enum FindPathError {
 /// * ``start_pos`` - Starting position for the path.
 /// * ``end_pos`` - Destination position for the path, i.e where you want to go.
 /// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
+/// * ``area_cost_multipliers`` - Multipliers for area cost, use to prioritize or deprioritize taking certain paths. Values not present default to 1.0. Lesser value means the path costs less.
 pub fn find_path(
     nav_mesh: &NavMeshTiles,
     nav_mesh_settings: &NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
     position_search_radius: Option<f32>,
+    area_cost_multipliers: Option<&Vec<f32>>, // TODO: A Vec<> is likely not the best choice when there are a ton of area types. Might be some HashMap type thing we can use.
 ) -> Result<Vec<(UVec2, u16)>, FindPathError> {
     let search_radius = position_search_radius.unwrap_or(5.0);
 
@@ -184,16 +186,26 @@ pub fn find_path(
                 let neighbour_node = &mut nodes[neighbour_node_index];
 
                 // TODO: Ideally you want to be able to override this but for now we just go with the distance.
+                let node_cost_multiplier = area_cost_multipliers.map_or(1.0, |multipliers| {
+                    let area = nav_mesh.tiles.get(&neighbour_node.tile).unwrap().polygons
+                        [neighbour_node.polygon as usize]
+                        .area;
+
+                    *multipliers.get(area as usize).unwrap_or(&1.0)
+                });
+
                 let (cost, heuristic) = if end_tile == link_tile && end_poly == link_polygon {
                     // Special case for the final node.
-                    let current_cost = best_position.distance(neighbour_node.position);
+                    let current_cost =
+                        best_position.distance(neighbour_node.position) * node_cost_multiplier;
                     let end_cost = neighbour_node.position.distance(end_pos);
 
                     let cost = best_cost + current_cost + end_cost;
 
                     (cost, 0.0)
                 } else {
-                    let current_cost = best_position.distance(neighbour_node.position);
+                    let current_cost =
+                        best_position.distance(neighbour_node.position) * node_cost_multiplier;
 
                     let cost = best_cost + current_cost;
                     let heuristic = neighbour_node.position.distance(end_pos) * HEURISTIC_SCALE;

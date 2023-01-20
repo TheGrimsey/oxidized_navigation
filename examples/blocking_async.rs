@@ -83,7 +83,14 @@ fn run_blocking_pathfinding(
         let end_pos = Vec3::new(-15.0, 1.0, -15.0);
 
         // Run pathfinding to get a polygon path.
-        match find_path(&nav_mesh, &nav_mesh_settings, start_pos, end_pos, None) {
+        match find_path(
+            &nav_mesh,
+            &nav_mesh_settings,
+            start_pos,
+            end_pos,
+            None,
+            Some(&vec![1.0, 0.5]),
+        ) {
             Ok(path) => {
                 info!("Path found (BLOCKING): {:?}", path);
 
@@ -182,6 +189,7 @@ async fn async_path_find(
         start_pos,
         end_pos,
         position_search_radius,
+        Some(&vec![1.0, 0.5]),
     ) {
         Ok(path) => {
             info!("Path found (ASYNC): {:?}", path);

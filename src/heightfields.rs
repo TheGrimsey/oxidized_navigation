@@ -48,9 +48,16 @@ pub struct OpenTile {
     pub(super) max_regions: u16,
 }
 
+pub struct TriangleCollection {
+    pub(super) global_transform: GlobalTransform,
+    pub(super) vertices: Vec<Vec3>,
+    pub(super) indices: Vec<[u32; 3]>,
+    pub(super) area: Option<u16>,
+}
+
 pub fn build_heightfield_tile(
     tile_coord: UVec2,
-    triangle_collections: Vec<(GlobalTransform, Vec<Vec3>, Vec<[u32; 3]>)>,
+    triangle_collections: Vec<TriangleCollection>,
     nav_mesh_settings: &NavMeshSettings,
 ) -> VoxelizedTile {
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
@@ -69,20 +76,24 @@ pub fn build_heightfield_tile(
 
     let max_vertices = triangle_collections
         .iter()
-        .fold(0, |acc, val| acc.max(val.1.len()));
+        .fold(0, |acc, val| acc.max(val.vertices.len()));
     let mut translated_vertices = Vec::with_capacity(max_vertices);
 
-    for (transform, vertices, triangles) in triangle_collections.iter() {
-        let transform = transform.compute_transform().with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
+    for collection in triangle_collections.iter() {
+        let transform = collection
+            .global_transform
+            .compute_transform()
+            .with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         translated_vertices.clear();
         translated_vertices.extend(
-            vertices
+            collection
+                .vertices
                 .iter()
                 .map(|vertex| transform.transform_point(*vertex) - tile_origin),
         ); // Transform vertices.
 
-        for triangle in triangles.iter() {
+        for triangle in collection.indices.iter() {
             let a = translated_vertices[triangle[0] as usize];
             let b = translated_vertices[triangle[1] as usize];
             let c = translated_vertices[triangle[2] as usize];
@@ -184,7 +195,7 @@ pub fn build_heightfield_tile(
                         min: min_height,
                         max: max_height,
                         traversable,
-                        area: Some(0), // TODO: We want an optional area component.
+                        area: collection.area,
                     };
 
                     if cell.spans.is_empty() {
@@ -505,13 +516,12 @@ pub fn erode_walkable_area(open_tile: &mut OpenTile, nav_mesh_settings: &NavMesh
                 continue;
             }
 
-            // This might be over complicated now.
             let all_neighbours = span.neighbours.iter().enumerate().all(|(dir, neighbour)| {
                 if let Some(neighbour) = neighbour {
                     let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
                     let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
 
-                    open_tile.areas[neighbour.tile_index].is_some() // Any neighbour.
+                    open_tile.areas[neighbour.tile_index].is_some() // Any neighbour not marked as unwalkable.
                 } else {
                     false
                 }
@@ -538,7 +548,6 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
         for span in cell.spans.iter() {
             let area = open_tile.areas[span.tile_index];
 
-            // This might be over complicated now.
             let all_neighbours = span.neighbours.iter().enumerate().all(|(dir, neighbour)| {
                 if let Some(neighbour) = neighbour {
                     let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);

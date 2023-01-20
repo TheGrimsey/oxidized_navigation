@@ -38,11 +38,11 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 - [X] Quick "How to use" guide.
 
 - [X] Mark areas too close to walls as unwalkable based on character width.
-- [ ] Implement areas allowing to specify differing cost of traveling.
-- [ ] Built-in nav-mesh debug draw.
+- [X] Implement areas allowing to specify differing cost of traveling.
 - [ ] Allow creating nav-mesh from meshes (probably add an option to ``NavMeshAffector``).
 - [ ] Switch to the Bevy 0.9 plugin settings system.
-- [ ] Rebuild all tiles when ``NavMeshSettings`` are changed. *Ideally, one would want to have the ability to change the resolution of the nav-mesh when changing level.* 
+- [ ] Rebuild all tiles when ``NavMeshSettings`` are changed. *Ideally, one would want to have the ability to change the resolution of the nav-mesh when changing level & the resolution of individual tiles.* 
+- [ ] Built-in nav-mesh debug draw.
 
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of simply creating the data in the right format from the start.
 - [ ] Code Tests.

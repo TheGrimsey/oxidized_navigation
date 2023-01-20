@@ -41,7 +41,7 @@ use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
 use heightfields::{
     build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field,
-    erode_walkable_area,
+    erode_walkable_area, TriangleCollection,
 };
 use mesher::build_poly_mesh;
 use regions::build_regions;
@@ -84,11 +84,11 @@ const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 #[derive(Component, Default)]
 pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
 
-/// Optional component to define the area type of an entity.
+/// Optional component to define the area type of an entity. Setting this to ``None`` means that the entity isn't walkable.
 ///
 /// Any part of the nav-mesh generated from this entity will have this area type. Overlapping areas will prefer the higher area type.
 #[derive(Component)]
-pub struct NavMeshAreaType(u16);
+pub struct NavMeshAreaType(Option<u16>);
 
 /*
 *   Neighbours:
@@ -313,7 +313,10 @@ fn send_tile_rebuild_tasks_system(
     nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
     dirty_tiles: Res<DirtyTiles>,
-    collider_query: Query<(&Collider, &GlobalTransform), With<NavMeshAffector>>,
+    collider_query: Query<
+        (&Collider, &GlobalTransform, Option<&NavMeshAreaType>),
+        With<NavMeshAffector>,
+    >,
     mut generation_ticker: ResMut<GenerationTicker>,
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
@@ -342,7 +345,7 @@ fn send_tile_rebuild_tasks_system(
         let mut triangle_collections = Vec::with_capacity(affectors.len());
 
         let mut collider_iter = collider_query.iter_many(affectors.iter());
-        while let Some((collider, transform)) = collider_iter.fetch_next() {
+        while let Some((collider, transform, nav_mesh_affector)) = collider_iter.fetch_next() {
             let (raw_vertices, raw_triangles) = match collider.as_typed_shape() {
                 ColliderView::Ball(ball) => ball.raw.to_trimesh(5, 5),
                 ColliderView::Cuboid(cuboid) => cuboid.raw.to_trimesh(),
@@ -364,15 +367,26 @@ fn send_tile_rebuild_tasks_system(
                 ColliderView::RoundConvexPolyhedron(round_polyhedron) => {
                     round_polyhedron.raw.inner_shape.to_trimesh()
                 }
-                // TODO: All the following ones require me to think.
-                ColliderView::Triangle(_) => {
-                    warn!("Triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                ColliderView::Triangle(triangle) => {
+                    triangle_collections.push(TriangleCollection {
+                        global_transform: *transform,
+                        vertices: triangle.vertices().to_vec(),
+                        indices: vec![[0, 1, 2]],
+                        area: nav_mesh_affector.map_or(Some(0), |area_type| area_type.0),
+                    });
                     continue;
                 }
-                ColliderView::RoundTriangle(_) => {
-                    warn!("Rounded triangle colliders are not yet supported for nav-mesh generation, skipping for now..");
+                ColliderView::RoundTriangle(triangle) => {
+                    let inner_shape = triangle.inner_shape();
+                    triangle_collections.push(TriangleCollection {
+                        global_transform: *transform,
+                        vertices: inner_shape.vertices().to_vec(),
+                        indices: vec![[0, 1, 2]],
+                        area: nav_mesh_affector.map_or(Some(0), |area_type| area_type.0),
+                    });
                     continue;
                 }
+                // TODO: This one requires me to think.
                 ColliderView::Compound(_) => {
                     warn!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
                     continue;
@@ -388,7 +402,12 @@ fn send_tile_rebuild_tasks_system(
                 .map(|point| Vec3::new(point.x, point.y, point.z))
                 .collect();
 
-            triangle_collections.push((*transform, raw_vertices, raw_triangles));
+            triangle_collections.push(TriangleCollection {
+                global_transform: *transform,
+                vertices: raw_vertices,
+                indices: raw_triangles,
+                area: nav_mesh_affector.map_or(Some(0), |area_type| area_type.0),
+            });
         }
 
         // Step 2: Acquire generation & nav_mesh lock
@@ -423,12 +442,11 @@ async fn remove_tile(
         nav_mesh.remove_tile(tile_coord);
     }
 }
-
 async fn build_tile(
     generation: u64,
     tile_coord: UVec2,
     nav_mesh_settings: NavMeshSettings,
-    triangle_collections: Vec<(GlobalTransform, Vec<Vec3>, Vec<[u32; 3]>)>,
+    triangle_collections: Vec<TriangleCollection>,
     nav_mesh: Arc<RwLock<NavMeshTiles>>,
 ) {
     let voxelized_tile =
@@ -477,15 +495,9 @@ fn clear_dirty_tiles_system(mut dirty_tiles: ResMut<DirtyTiles>) {
 fn get_neighbour_index(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
     match dir {
         0 => index - 1,
-        1 => {
-            index
-                + usize::from(nav_mesh_settings.tile_width + nav_mesh_settings.walkable_radius * 2)
-        } // TODO: This requires explaination for borders.
+        1 => index + nav_mesh_settings.get_tile_side_with_border(),
         2 => index + 1,
-        3 => {
-            index
-                - usize::from(nav_mesh_settings.tile_width + nav_mesh_settings.walkable_radius * 2)
-        }
+        3 => index - nav_mesh_settings.get_tile_side_with_border(),
         _ => panic!("Not a valid direction"),
     }
 }

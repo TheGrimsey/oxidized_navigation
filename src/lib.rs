@@ -55,11 +55,26 @@ pub mod query;
 mod regions;
 pub mod tiles;
 
+/// State used to pause nav-mesh generation.
+#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum NavMeshGenerationState {
+    /// Operation as normal. Tiles are generated and updated.
+    #[default]
+    Running,
+    /// When this is set new tile update tasks won't be started but existing ones will finish.
+    Paused,
+}
+
+
 /// System label used by the crate's systems.
 #[derive(SystemLabel)]
 pub struct OxidizedNavigation;
 
-pub struct OxidizedNavigationPlugin;
+#[derive(Default)]
+pub struct OxidizedNavigationPlugin {
+    pub starting_state: NavMeshGenerationState
+}
+
 impl Plugin for OxidizedNavigationPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TileAffectors::default())
@@ -67,8 +82,10 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(NavMesh::default())
             .insert_resource(GenerationTicker::default());
 
+        app.add_state(self.starting_state);
+
         app.add_system_set(
-            SystemSet::new()
+            SystemSet::on_update(NavMeshGenerationState::Running)
                 .label(OxidizedNavigation)
                 .with_system(update_navmesh_affectors_system)
                 .with_system(send_tile_rebuild_tasks_system.after(update_navmesh_affectors_system))

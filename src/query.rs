@@ -53,7 +53,7 @@ pub fn find_path(
     start_pos: Vec3,
     end_pos: Vec3,
     position_search_radius: Option<f32>,
-    area_cost_multipliers: Option<&Vec<f32>>, // TODO: A Vec<> is likely not the best choice when there are a ton of area types. Might be some HashMap type thing we can use.
+    area_cost_multipliers: Option<&[f32]>, // TODO: A Vec<> is likely not the best choice when there are a ton of area types. Might be some HashMap type thing we can use.
 ) -> Result<Vec<(UVec2, u16)>, FindPathError> {
     let search_radius = position_search_radius.unwrap_or(5.0);
 
@@ -187,8 +187,8 @@ pub fn find_path(
 
                 // TODO: Ideally you want to be able to override this but for now we just go with the distance.
                 let node_cost_multiplier = area_cost_multipliers.map_or(1.0, |multipliers| {
-                    let area = nav_mesh.tiles.get(&neighbour_node.tile).unwrap().polygons
-                        [neighbour_node.polygon as usize]
+                    let area = nav_mesh.tiles.get(&best_tile).unwrap().polygons
+                        [best_polygon as usize]
                         .area;
 
                     *multipliers.get(area as usize).unwrap_or(&1.0)

@@ -18,7 +18,7 @@ use futures_lite::future;
 use oxidized_navigation::{
     query::{find_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
-    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
+    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, NavMeshGenerationState,
 };
 
 fn main() {
@@ -42,7 +42,9 @@ fn main() {
             max_contour_simplification_error: 1.1,
             max_edge_length: 80,
         })
-        .add_plugin(OxidizedNavigationPlugin)
+        .add_plugin(OxidizedNavigationPlugin {
+            starting_state: NavMeshGenerationState::Running, // Generate tile updates.
+        })
         // Rapier.
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
@@ -89,7 +91,7 @@ fn run_blocking_pathfinding(
             start_pos,
             end_pos,
             None,
-            Some(&vec![1.0, 0.5]),
+            Some(&[1.0, 0.5]),
         ) {
             Ok(path) => {
                 info!("Path found (BLOCKING): {:?}", path);
@@ -189,7 +191,7 @@ async fn async_path_find(
         start_pos,
         end_pos,
         position_search_radius,
-        Some(&vec![1.0, 0.5]),
+        Some(&[1.0, 0.5]),
     ) {
         Ok(path) => {
             info!("Path found (ASYNC): {:?}", path);

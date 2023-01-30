@@ -370,7 +370,7 @@ pub fn build_open_heightfield_tile(
         }
     }
 
-    link_neighbours(&mut open_tile, &nav_mesh_settings);
+    link_neighbours(&mut open_tile, nav_mesh_settings);
 
     open_tile
 }
@@ -387,12 +387,12 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
             continue;
         }
 
-        let row = i / tile_side as usize;
-        let column = i % tile_side as usize;
+        let row = i / tile_side;
+        let column = i % tile_side;
 
-        let x_positive_contained = column < (tile_side - 1).into();
+        let x_positive_contained = column < (tile_side - 1);
         let x_negative_contained = column > 0;
-        let z_positive_contained = row < (tile_side - 1).into();
+        let z_positive_contained = row < (tile_side - 1);
         let z_negative_contained = row > 0;
 
         x_positive.clear();
@@ -418,7 +418,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
         }
         if z_positive_contained {
             z_positive.extend(
-                open_tile.cells[i + tile_side as usize]
+                open_tile.cells[i + tile_side]
                     .spans
                     .iter()
                     .map(|span| (span.min, span.max)),
@@ -426,7 +426,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
         }
         if z_negative_contained {
             z_negative.extend(
-                open_tile.cells[i - tile_side as usize]
+                open_tile.cells[i - tile_side]
                     .spans
                     .iter()
                     .map(|span| (span.min, span.max)),

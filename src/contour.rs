@@ -619,23 +619,24 @@ fn simplify_contour(
             }
         }
 
-        if max_i.is_some() && max_deviation > (max_error * max_error) {
-            let max_i = max_i.unwrap(); // TODO: Let-chains make this nicer.
-            simplified.insert(
-                i + 1,
-                UVec4 {
-                    x: points[(max_i * 4) as usize],
-                    y: points[(max_i * 4 + 1) as usize],
-                    z: points[(max_i * 4 + 2) as usize],
-                    w: max_i,
-                },
-            );
-        } else {
-            i += 1;
+        match (max_i, max_deviation > (max_error * max_error)) {
+            (Some(max_i), true) => {
+                simplified.insert(
+                    i + 1,
+                    UVec4 {
+                        x: points[(max_i * 4) as usize],
+                        y: points[(max_i * 4 + 1) as usize],
+                        z: points[(max_i * 4 + 2) as usize],
+                        w: max_i,
+                    },
+                );
+            },
+            _ => {
+                i += 1;
+            }
         }
     }
 
-    // We don't split long edges. For now... I guess eventually it might be needed. :)
     // SPLIT LONG EDGES.
     {
         let mut i = 0;

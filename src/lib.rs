@@ -24,8 +24,10 @@
 
 use std::sync::{Arc, RwLock};
 
+use bevy::ecs::schedule::common_conditions;
 use bevy::prelude::{
-    error, warn, Deref, DerefMut, IntoSystemDescriptor, Or, SystemLabel, SystemSet, Vec3, With,
+    error, warn, Deref, DerefMut, Or, States, SystemSet,
+    Vec3, With, IntoSystemSetConfig,
 };
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
@@ -36,8 +38,8 @@ use bevy::{
     },
     utils::{HashMap, HashSet},
 };
-use bevy_rapier3d::prelude::ColliderView;
-use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
+//use bevy_rapier3d::prelude::ColliderView;
+//use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
 use heightfields::{
     build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field,
@@ -56,7 +58,7 @@ mod regions;
 pub mod tiles;
 
 /// State used to pause nav-mesh generation.
-#[derive(Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(States, Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum NavMeshGenerationState {
     /// Operation as normal. Tiles are generated and updated.
     #[default]
@@ -65,14 +67,13 @@ pub enum NavMeshGenerationState {
     Paused,
 }
 
-
 /// System label used by the crate's systems.
-#[derive(SystemLabel)]
+#[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct OxidizedNavigation;
 
 #[derive(Default)]
 pub struct OxidizedNavigationPlugin {
-    pub starting_state: NavMeshGenerationState
+    pub starting_state: NavMeshGenerationState,
 }
 
 impl Plugin for OxidizedNavigationPlugin {
@@ -82,14 +83,16 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(NavMesh::default())
             .insert_resource(GenerationTicker::default());
 
-        app.add_state(self.starting_state);
+        app.add_state::<NavMeshGenerationState>();
 
-        app.add_system_set(
-            SystemSet::on_update(NavMeshGenerationState::Running)
-                .label(OxidizedNavigation)
-                .with_system(update_navmesh_affectors_system)
-                .with_system(send_tile_rebuild_tasks_system.after(update_navmesh_affectors_system))
-                .with_system(clear_dirty_tiles_system.after(send_tile_rebuild_tasks_system)),
+        app.add_systems(
+            (
+                update_navmesh_affectors_system,
+                send_tile_rebuild_tasks_system,
+                clear_dirty_tiles_system,
+            )
+                .chain()
+                .in_set(OxidizedNavigation.run_if(common_conditions::in_state(NavMeshGenerationState::Running))),
         );
     }
 }

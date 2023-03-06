@@ -18,7 +18,7 @@ use futures_lite::future;
 use oxidized_navigation::{
     query::{find_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
-    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, NavMeshGenerationState,
+    NavMesh, NavMeshAffector, NavMeshGenerationState, NavMeshSettings, OxidizedNavigationPlugin,
 };
 
 fn main() {

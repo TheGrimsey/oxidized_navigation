@@ -630,7 +630,7 @@ fn simplify_contour(
                         w: max_i,
                     },
                 );
-            },
+            }
             _ => {
                 i += 1;
             }

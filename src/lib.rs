@@ -24,10 +24,9 @@
 
 use std::sync::{Arc, RwLock};
 
-use bevy::ecs::schedule::common_conditions;
 use bevy::prelude::{
-    error, warn, Deref, DerefMut, Or, States, SystemSet,
-    Vec3, With, IntoSystemSetConfig,
+    error, warn, Deref, DerefMut, Or, SystemSet,
+    Vec3, With, IntoSystemConfigs,
 };
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
@@ -38,8 +37,8 @@ use bevy::{
     },
     utils::{HashMap, HashSet},
 };
-//use bevy_rapier3d::prelude::ColliderView;
-//use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
+use bevy_rapier3d::prelude::ColliderView;
+use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
 use heightfields::{
     build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field,
@@ -57,24 +56,12 @@ pub mod query;
 mod regions;
 pub mod tiles;
 
-/// State used to pause nav-mesh generation.
-#[derive(States, Default, Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum NavMeshGenerationState {
-    /// Operation as normal. Tiles are generated and updated.
-    #[default]
-    Running,
-    /// When this is set new tile update tasks won't be started but existing ones will finish.
-    Paused,
-}
-
 /// System label used by the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct OxidizedNavigation;
 
 #[derive(Default)]
-pub struct OxidizedNavigationPlugin {
-    pub starting_state: NavMeshGenerationState,
-}
+pub struct OxidizedNavigationPlugin;
 
 impl Plugin for OxidizedNavigationPlugin {
     fn build(&self, app: &mut App) {
@@ -83,8 +70,6 @@ impl Plugin for OxidizedNavigationPlugin {
             .insert_resource(NavMesh::default())
             .insert_resource(GenerationTicker::default());
 
-        app.add_state::<NavMeshGenerationState>();
-
         app.add_systems(
             (
                 update_navmesh_affectors_system,
@@ -92,7 +77,7 @@ impl Plugin for OxidizedNavigationPlugin {
                 clear_dirty_tiles_system,
             )
                 .chain()
-                .in_set(OxidizedNavigation.run_if(common_conditions::in_state(NavMeshGenerationState::Running))),
+                .in_set(OxidizedNavigation),
         );
     }
 }

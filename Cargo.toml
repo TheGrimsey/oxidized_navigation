@@ -1,7 +1,7 @@
 [package]
 name = "oxidized_navigation"
 description = "A Nav-Mesh generation plugin for Bevy Engine."
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 authors = ["TheGrimsey"]
@@ -14,10 +14,10 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", default-features = false }
-#bevy_rapier3d = { git = "https://github.com/devil-ira/bevy_rapier", branch = "bevy-0.10" }
+bevy = { version = "0.10", default-features = false }
+bevy_rapier3d = { version = "0.21" }
 smallvec = { version = "1.10", features = [ "union" ]}
 [dev-dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = [ "bevy_winit", "bevy_render", "x11" ] }
+bevy = { version = "0.10", default-features = false, features = [ "bevy_winit", "bevy_render", "x11" ] }
 #bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
 futures-lite = "1.12.0"

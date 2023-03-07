@@ -12,13 +12,13 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     DefaultPlugins,
 };
-use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+//use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
 use oxidized_navigation::{
     query::{find_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
-    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, NavMeshGenerationState,
+    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
 
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
         // Default Plugins
         .add_plugins(DefaultPlugins)
         // Debug Lines for drawing nav-mesh.
-        .add_plugin(DebugLinesPlugin::default())
+        //.add_plugin(DebugLinesPlugin::default())
         .insert_resource(NavMeshSettings {
             cell_width: 0.25,
             cell_height: 0.1,
@@ -42,9 +42,7 @@ fn main() {
             max_contour_simplification_error: 1.1,
             max_edge_length: 80,
         })
-        .add_plugin(OxidizedNavigationPlugin {
-            starting_state: NavMeshGenerationState::Running, // Generate tile updates.
-        })
+        .add_plugin(OxidizedNavigationPlugin)
         // Rapier.
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
@@ -59,7 +57,7 @@ fn main() {
         .add_system(run_blocking_pathfinding)
         .add_system(run_async_pathfinding)
         .add_system(poll_pathfinding_tasks_system)
-        .add_system(draw_nav_mesh_system)
+        //.add_system(draw_nav_mesh_system)
         .run();
 }
 
@@ -73,7 +71,7 @@ fn run_blocking_pathfinding(
     keys: Res<Input<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
-    mut lines: ResMut<DebugLines>,
+    //mut lines: ResMut<DebugLines>,
 ) {
     if !keys.just_pressed(KeyCode::B) {
         return;
@@ -100,7 +98,7 @@ fn run_blocking_pathfinding(
                 match perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
                     Ok(string_path) => {
                         info!("String path (BLOCKING): {:?}", string_path);
-                        draw_path(&string_path, &mut lines, Color::RED);
+                        //draw_path(&string_path, &mut lines, Color::RED);
                     }
                     Err(error) => error!("Error with string path: {:?}", error),
                 };
@@ -156,13 +154,13 @@ fn run_async_pathfinding(
 // Poll existing tasks.
 fn poll_pathfinding_tasks_system(
     mut pathfinding_task: ResMut<AsyncPathfindingTasks>,
-    mut lines: ResMut<DebugLines>,
+    //mut lines: ResMut<DebugLines>,
 ) {
     // Go through and remove completed tasks.
     pathfinding_task.tasks.retain_mut(|task| {
         if let Some(string_path) = future::block_on(future::poll_once(task)).unwrap_or(None) {
             info!("Async path task finished with result: {:?}", string_path);
-            draw_path(&string_path, &mut lines, Color::BLUE);
+            //draw_path(&string_path, &mut lines, Color::BLUE);
 
             false
         } else {
@@ -212,11 +210,11 @@ async fn async_path_find(
 
 // General use path draw.
 
-fn draw_path(path: &[Vec3], lines: &mut DebugLines, color: Color) {
+/*fn draw_path(path: &[Vec3], lines: &mut DebugLines, color: Color) {
     for (a, b) in path.iter().zip(path.iter().skip(1)) {
         lines.line_colored(*a, *b, 15.0, color);
     }
-}
+}*/
 
 //
 //  Draw Nav-mesh.
@@ -224,7 +222,7 @@ fn draw_path(path: &[Vec3], lines: &mut DebugLines, color: Color) {
 //
 //  This uses the crate ``bevy_prototype_debug_lines``.
 //
-fn draw_nav_mesh_system(
+/*fn draw_nav_mesh_system(
     keys: Res<Input<KeyCode>>,
     nav_mesh: Res<NavMesh>,
     mut lines: ResMut<DebugLines>,
@@ -258,7 +256,7 @@ fn draw_nav_mesh_system(
             }
         }
     }
-}
+}*/
 
 fn setup_world_system(
     mut commands: Commands,
@@ -268,7 +266,7 @@ fn setup_world_system(
     // Plane
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Plane { size: 50.0 })),
+            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Plane { size: 50.0, subdivisions: 0 })),
             material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
             transform: Transform::IDENTITY,
             ..default()

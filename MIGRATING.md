@@ -1,3 +1,13 @@
+## 0.4
+
+## ``OxidizedNavigation`` system set is now an enum.
+
+To continue with previous behaviour you should configure the ``OxidizedNavigation::Main`` set. The ``RemovedComponent`` set should **not** be throttled as it reacts to removing navmesh affectors. Throttling it may cause it to miss affectors being removed.
+
+## ``NavMeshAffector`` component is now an empty type.
+
+Remove ``::default()`` from when inserting the component.
+
 ## 0.1 to 0.2
 
 ### ``OxidizedNavigationPlugin`` now takes a ``NavMeshGenerationState``.

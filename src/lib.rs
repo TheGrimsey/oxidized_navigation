@@ -26,7 +26,7 @@ use std::sync::{Arc, RwLock};
 
 use bevy::prelude::{
     error, warn, Deref, DerefMut, Or, SystemSet,
-    Vec3, With, IntoSystemConfigs,
+    Vec3, With, IntoSystemConfigs, RemovedComponents, IntoSystemConfig,
 };
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
@@ -56,9 +56,16 @@ pub mod query;
 mod regions;
 pub mod tiles;
 
-/// System label used by the crate's systems.
+/// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
-pub struct OxidizedNavigation;
+pub enum OxidizedNavigation {
+    /// Systems handling dirty marking when a NavMeshAffector component is removed.
+    /// Separated to make sure that even if Main is throttled the removal events will be caught.
+    RemovedComponent,
+    /// Main systems, this creates the tile generation tasks & handles reacting to NavMeshAffector changes.
+    Main,
+}
+
 
 #[derive(Default)]
 pub struct OxidizedNavigationPlugin;
@@ -68,7 +75,14 @@ impl Plugin for OxidizedNavigationPlugin {
         app.insert_resource(TileAffectors::default())
             .insert_resource(DirtyTiles::default())
             .insert_resource(NavMesh::default())
-            .insert_resource(GenerationTicker::default());
+            .insert_resource(GenerationTicker::default())
+            .insert_resource(NavMeshAffectorRelations::default());
+
+        app.add_system(
+            handle_removed_affectors_system
+                .before(send_tile_rebuild_tasks_system)
+                .in_set(OxidizedNavigation::RemovedComponent)
+        );
 
         app.add_systems(
             (
@@ -77,7 +91,7 @@ impl Plugin for OxidizedNavigationPlugin {
                 clear_dirty_tiles_system,
             )
                 .chain()
-                .in_set(OxidizedNavigation),
+                .in_set(OxidizedNavigation::Main),
         );
     }
 }
@@ -85,9 +99,12 @@ impl Plugin for OxidizedNavigationPlugin {
 const FLAG_BORDER_VERTEX: u32 = 0x10000;
 const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 
+#[derive(Resource, Default)]
+struct NavMeshAffectorRelations(HashMap<Entity, SmallVec<[UVec2; 4]>>);
+
 /// Component for entities that should affect the nav-mesh.
-#[derive(Component, Default)]
-pub struct NavMeshAffector(SmallVec<[UVec2; 4]>);
+#[derive(Component)]
+pub struct NavMeshAffector;
 
 /// Optional component to define the area type of an entity. Setting this to ``None`` means that the entity isn't walkable.
 ///
@@ -245,16 +262,18 @@ impl NavMesh {
 fn update_navmesh_affectors_system(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
+    mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
     mut query: Query<
-        (Entity, &mut NavMeshAffector, &Collider, &GlobalTransform),
-        Or<(Changed<GlobalTransform>, Changed<Collider>)>,
+        (Entity, &Collider, &GlobalTransform),
+        (Or<(Changed<GlobalTransform>, Changed<Collider>, Changed<NavMeshAffector>)>, With<NavMeshAffector>)
     >,
 ) {
     // Expand by 2 * walkable_radius to match with erode_walkable_area.
     let border_expansion =
         f32::from(nav_mesh_settings.walkable_radius * 2) * nav_mesh_settings.cell_width;
-    for (e, mut affector, collider, global_transform) in query.iter_mut() {
+    
+    query.for_each_mut(|(e, collider, global_transform)| {
         let transform = global_transform.compute_transform();
         let iso = Isometry::new(
             transform.translation.into(),
@@ -281,33 +300,53 @@ fn update_navmesh_affectors_system(
         );
         let max_tile = nav_mesh_settings.get_tile_containing_position(max_vec);
 
-        // Remove from previous.
-        for old_tile in affector.0.iter().filter(|tile_coord| {
-            min_tile.x > tile_coord.x
-                || min_tile.y > tile_coord.y
-                || max_tile.x < tile_coord.x
-                || max_tile.y < tile_coord.y
-        }) {
-            if let Some(affectors) = tile_affectors.get_mut(old_tile) {
-                affectors.remove(&e);
-                dirty_tiles.0.insert(*old_tile);
+        let relation = if let Some(relation) = affector_relations.0.get_mut(&e) {
+            // Remove from previous.
+            for old_tile in relation.iter().filter(|tile_coord| {
+                min_tile.x > tile_coord.x
+                    || min_tile.y > tile_coord.y
+                    || max_tile.x < tile_coord.x
+                    || max_tile.y < tile_coord.y
+            }) {
+                if let Some(affectors) = tile_affectors.get_mut(old_tile) {
+                    affectors.remove(&e);
+                    dirty_tiles.0.insert(*old_tile);
+                }
             }
-        }
-        affector.0.clear();
+            relation.clear();
 
+            relation
+        } else {
+            affector_relations.0.insert_unique_unchecked(e, SmallVec::default()).1
+        };
+        
         for x in min_tile.x..=max_tile.x {
             for y in min_tile.y..=max_tile.y {
                 let tile_coord = UVec2::new(x, y);
 
-                if !tile_affectors.contains_key(&tile_coord) {
-                    tile_affectors.insert(tile_coord, HashSet::default());
-                }
-
-                let affectors = tile_affectors.get_mut(&tile_coord).unwrap();
+                let affectors = if let Some(affectors) = tile_affectors.get_mut(&tile_coord) {
+                    affectors
+                } else {
+                    tile_affectors.insert_unique_unchecked(tile_coord, HashSet::default()).1
+                };
                 affectors.insert(e);
 
-                affector.0.push(tile_coord);
+                relation.push(tile_coord);
                 dirty_tiles.0.insert(tile_coord);
+            }
+        }
+    });
+}
+
+fn handle_removed_affectors_system(
+    mut removed_affectors: RemovedComponents<NavMeshAffector>,
+    mut affector_relations: ResMut<NavMeshAffectorRelations>,
+    mut dirty_tiles: ResMut<DirtyTiles>,
+) {
+    for removed in removed_affectors.iter() {
+        if let Some(relations) = affector_relations.0.remove(&removed) {
+            for tile in relations {
+                dirty_tiles.0.insert(tile);
             }
         }
     }

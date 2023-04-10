@@ -1,3 +1,8 @@
+## 0.4.0 (2023-04-??)
+
+- Nav-Mesh generation now correctly reacts to removing the ``NavMeshAffector`` component.
+- ``NavMeshAffector`` is now an empty type, the data has been moved to a resource to enable the above change.
+
 ## 0.3.0 (2023-03-07)
 
 - Updated to Bevy 0.10

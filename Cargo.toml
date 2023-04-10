@@ -1,7 +1,7 @@
 [package]
 name = "oxidized_navigation"
 description = "A Nav-Mesh generation plugin for Bevy Engine."
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 
 authors = ["TheGrimsey"]
@@ -19,5 +19,5 @@ bevy_rapier3d = { version = "0.21" }
 smallvec = { version = "1.10", features = [ "union" ]}
 [dev-dependencies]
 bevy = { version = "0.10", default-features = false, features = [ "bevy_winit", "bevy_render", "x11" ] }
-#bevy_prototype_debug_lines = { version = "0.9", features = ["3d"] }
+bevy_prototype_debug_lines = { version = "0.10", features = ["3d"] }
 futures-lite = "1.12.0"

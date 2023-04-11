@@ -251,7 +251,7 @@ fn draw_nav_mesh_system(
                     let a = tile.vertices[indices[i] as usize];
                     let b = tile.vertices[indices[(i + 1) % indices.len()] as usize];
 
-                    lines.line_colored(a, b, 10.0, tile_color);
+                    lines.line_colored(a, b, 5.0, tile_color);
                 }
             }
 
@@ -329,8 +329,9 @@ fn spawn_or_despawn_affector_system(
         return;
     }
 
-    if let Some(spawned_entity) = *spawned_entity {
-        commands.entity(spawned_entity).despawn_recursive();
+    if let Some(entity) = *spawned_entity {
+        commands.entity(entity).despawn_recursive();
+        *spawned_entity = None;
     } else {
         let entity = commands.spawn((
             PbrBundle {

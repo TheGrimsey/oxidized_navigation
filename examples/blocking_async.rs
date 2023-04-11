@@ -60,7 +60,8 @@ fn main() {
             run_blocking_pathfinding,
             run_async_pathfinding,
             poll_pathfinding_tasks_system,
-            draw_nav_mesh_system
+            draw_nav_mesh_system,
+            spawn_or_despawn_affector_system
         ))
         .run();
 }
@@ -317,10 +318,40 @@ fn setup_world_system(
     });
 }
 
+fn spawn_or_despawn_affector_system(
+    keys: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned_entity: Local<Option<Entity>>
+) {
+    if !keys.just_pressed(KeyCode::X) {
+        return;
+    }
+
+    if let Some(spawned_entity) = *spawned_entity {
+        commands.entity(spawned_entity).despawn_recursive();
+    } else {
+        let entity = commands.spawn((
+            PbrBundle {
+                mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
+                material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                transform: Transform::from_xyz(5.0, 0.8, -5.0),
+                ..default()
+            },
+            Collider::cuboid(1.25, 1.25, 1.25),
+            NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+        )).id();
+
+        *spawned_entity = Some(entity);
+    }
+}
+
 fn info_system() {
     info!("=========================================");
     info!("| Press A to run ASYNC path finding.    |");
     info!("| Press B to run BLOCKING path finding. |");
     info!("| Press M to draw nav-mesh.             |");
+    info!("| Press X to spawn or despawn red cube. |");
     info!("=========================================");
 }

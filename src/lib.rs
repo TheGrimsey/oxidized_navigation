@@ -66,17 +66,19 @@ pub enum OxidizedNavigation {
     Main,
 }
 
-
-#[derive(Default)]
-pub struct OxidizedNavigationPlugin;
+pub struct OxidizedNavigationPlugin {
+    pub settings: NavMeshSettings
+}
 
 impl Plugin for OxidizedNavigationPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(TileAffectors::default())
-            .insert_resource(DirtyTiles::default())
-            .insert_resource(NavMesh::default())
-            .insert_resource(GenerationTicker::default())
-            .insert_resource(NavMeshAffectorRelations::default());
+        app.insert_resource(self.settings.clone());
+
+        app.init_resource::<TileAffectors>()
+            .init_resource::<DirtyTiles>()
+            .init_resource::<NavMesh>()
+            .init_resource::<GenerationTicker>()
+            .init_resource::<NavMeshAffectorRelations>();
 
         app.add_system(
             handle_removed_affectors_system

@@ -16,7 +16,7 @@ use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
 use oxidized_navigation::{
-    query::{find_path, perform_string_pulling_on_path},
+    query::{find_polygon_path, perform_string_pulling_on_path, find_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
@@ -27,22 +27,23 @@ fn main() {
         .add_plugins(DefaultPlugins)
         // Debug Lines for drawing nav-mesh.
         .add_plugin(DebugLinesPlugin::default())
-        .insert_resource(NavMeshSettings {
-            cell_width: 0.25,
-            cell_height: 0.1,
-            tile_width: 100,
-            world_half_extents: 250.0,
-            world_bottom_bound: -100.0,
-            max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-            walkable_height: 20,
-            walkable_radius: 1,
-            step_height: 3,
-            min_region_area: 100,
-            merge_region_area: 500,
-            max_contour_simplification_error: 1.1,
-            max_edge_length: 80,
+        .add_plugin(OxidizedNavigationPlugin {
+            settings: NavMeshSettings {
+                cell_width: 0.25,
+                cell_height: 0.1,
+                tile_width: 100,
+                world_half_extents: 250.0,
+                world_bottom_bound: -100.0,
+                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
+                walkable_height: 20,
+                walkable_radius: 1,
+                step_height: 3,
+                min_region_area: 100,
+                merge_region_area: 500,
+                max_contour_simplification_error: 1.1,
+                max_edge_length: 80,
+            }
         })
-        .add_plugin(OxidizedNavigationPlugin)
         // Rapier.
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
@@ -88,7 +89,7 @@ fn run_blocking_pathfinding(
         let end_pos = Vec3::new(-15.0, 1.0, -15.0);
 
         // Run pathfinding to get a polygon path.
-        match find_path(
+        match find_polygon_path(
             &nav_mesh,
             &nav_mesh_settings,
             start_pos,
@@ -187,7 +188,7 @@ async fn async_path_find(
         return None;
     };
 
-    // Run pathfinding to get a polygon path.
+    // Run pathfinding to get a path.
     match find_path(
         &nav_mesh,
         &nav_mesh_settings,
@@ -197,15 +198,8 @@ async fn async_path_find(
         Some(&[1.0, 0.5]),
     ) {
         Ok(path) => {
-            info!("Path found (ASYNC): {:?}", path);
-            // Convert polygon path to a path of Vec3s.
-            match perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
-                Ok(string_path) => {
-                    info!("String path (ASYNC): {:?}", string_path);
-                    return Some(string_path);
-                }
-                Err(error) => error!("Error with string path: {:?}", error),
-            };
+            info!("Found path (ASYNC): {:?}", path);
+            return Some(path);
         }
         Err(error) => error!("Error with pathfinding: {:?}", error),
     }

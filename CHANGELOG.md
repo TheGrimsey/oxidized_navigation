@@ -1,3 +1,9 @@
+## 0.5.0 (Unreleased)
+
+- ``find_path`` has been renamed ``find_polygon_path``
+- A new ``find_path`` function has been added that does both polygon path finding and stringpulling in one.
+- ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings`` 
+
 ## 0.4.0 (2023-04-11)
 
 - Nav-Mesh generation now correctly reacts to removing the ``NavMeshAffector`` component.

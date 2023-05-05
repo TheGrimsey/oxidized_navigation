@@ -1,4 +1,5 @@
-//! Module for querying the nav-mesh
+//! Module for querying the nav-mesh.
+
 use bevy::prelude::{UVec2, Vec3};
 
 use crate::{
@@ -27,9 +28,9 @@ struct NavMeshNode {
     parent: Option<usize>,
 }
 
-/// Errors returned by [find_path]
+/// Errors returned by [find_polygon_path]
 #[derive(Debug)]
-pub enum FindPathError {
+pub enum FindPolygonPathError {
     /// Nav-mesh couldn't be retrieved from lock.
     NavMeshUnavailable,
     /// No polygon found near ``start_pos``.
@@ -47,22 +48,22 @@ pub enum FindPathError {
 /// * ``end_pos`` - Destination position for the path, i.e where you want to go.
 /// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
 /// * ``area_cost_multipliers`` - Multipliers for area cost, use to prioritize or deprioritize taking certain paths. Values not present default to 1.0. Lesser value means the path costs less.
-pub fn find_path(
+pub fn find_polygon_path(
     nav_mesh: &NavMeshTiles,
     nav_mesh_settings: &NavMeshSettings,
     start_pos: Vec3,
     end_pos: Vec3,
     position_search_radius: Option<f32>,
-    area_cost_multipliers: Option<&[f32]>, // TODO: A Vec<> is likely not the best choice when there are a ton of area types. Might be some HashMap type thing we can use.
-) -> Result<Vec<(UVec2, u16)>, FindPathError> {
+    area_cost_multipliers: Option<&[f32]>, // TODO: A slice might not be the best choice when there are many area types.
+) -> Result<Vec<(UVec2, u16)>, FindPolygonPathError> {
     let search_radius = position_search_radius.unwrap_or(5.0);
 
     let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, start_pos, search_radius) else {
-        return Err(FindPathError::NoValidStartPolygon);
+        return Err(FindPolygonPathError::NoValidStartPolygon);
     };
 
     let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, end_pos, search_radius) else {
-        return Err(FindPathError::NoValidEndPolygon);
+        return Err(FindPolygonPathError::NoValidEndPolygon);
     };
 
     if start_tile == end_tile && start_poly == end_poly {
@@ -433,6 +434,44 @@ pub fn perform_string_pulling_on_path(
     }
 
     Ok(string_path)
+}
+
+#[derive(Debug)]
+pub enum FindPathError {
+    PolygonPath(FindPolygonPathError),
+    StringPulling(StringPullingError)
+}
+
+/// Performs A* pathfinding and string pulling on the supplied nav-mesh.
+/// Returns the path as `Vec<Vec3>` or [FindPathError]
+///
+/// * ``nav_mesh`` - Nav-mesh to pathfind across.
+/// * ``nav_mesh_settings`` - Nav-mesh settings used to generate ``nav_mesh``.
+/// * ``start_pos`` - Starting position for the path.
+/// * ``end_pos`` - Destination position for the path, i.e where you want to go.
+/// * ``position_search_radius`` - Radius to search for a start & end polygon in. In world units. If **``None``** is supplied a default value of ``5.0`` is used.
+/// * ``area_cost_multipliers`` - Multipliers for area cost, use to prioritize or deprioritize taking certain paths. Values not present default to 1.0. Lesser value means the path costs less.
+pub fn find_path(
+    nav_mesh: &NavMeshTiles,
+    nav_mesh_settings: &NavMeshSettings,
+    start_pos: Vec3,
+    end_pos: Vec3,
+    position_search_radius: Option<f32>,
+    area_cost_multipliers: Option<&[f32]>,
+) -> Result<Vec<Vec3>, FindPathError>{
+    match find_polygon_path(
+        nav_mesh,
+        nav_mesh_settings,
+        start_pos,
+        end_pos,
+        position_search_radius,
+        area_cost_multipliers,
+    ) {
+        Ok(path) => {
+            perform_string_pulling_on_path(nav_mesh, start_pos, end_pos, &path).map_err(FindPathError::StringPulling)
+        }
+        Err(error) => Err(FindPathError::PolygonPath(error)),
+    }
 }
 
 fn triangle_area_2d(a: Vec3, b: Vec3, c: Vec3) -> f32 {

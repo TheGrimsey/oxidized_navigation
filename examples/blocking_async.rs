@@ -12,11 +12,11 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     DefaultPlugins,
 };
-//use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
 use oxidized_navigation::{
-    query::{find_path, perform_string_pulling_on_path},
+    query::{find_polygon_path, perform_string_pulling_on_path, find_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
@@ -26,23 +26,24 @@ fn main() {
         // Default Plugins
         .add_plugins(DefaultPlugins)
         // Debug Lines for drawing nav-mesh.
-        //.add_plugin(DebugLinesPlugin::default())
-        .insert_resource(NavMeshSettings {
-            cell_width: 0.25,
-            cell_height: 0.1,
-            tile_width: 100,
-            world_half_extents: 250.0,
-            world_bottom_bound: -100.0,
-            max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-            walkable_height: 20,
-            walkable_radius: 1,
-            step_height: 3,
-            min_region_area: 100,
-            merge_region_area: 500,
-            max_contour_simplification_error: 1.1,
-            max_edge_length: 80,
+        .add_plugin(DebugLinesPlugin::default())
+        .add_plugin(OxidizedNavigationPlugin {
+            settings: NavMeshSettings {
+                cell_width: 0.25,
+                cell_height: 0.1,
+                tile_width: 100,
+                world_half_extents: 250.0,
+                world_bottom_bound: -100.0,
+                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
+                walkable_height: 20,
+                walkable_radius: 1,
+                step_height: 3,
+                min_region_area: 100,
+                merge_region_area: 500,
+                max_contour_simplification_error: 1.1,
+                max_edge_length: 80,
+            }
         })
-        .add_plugin(OxidizedNavigationPlugin)
         // Rapier.
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
@@ -52,12 +53,17 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(AsyncPathfindingTasks::default())
-        .add_startup_system(setup_world_system)
-        .add_startup_system(info_system)
-        .add_system(run_blocking_pathfinding)
-        .add_system(run_async_pathfinding)
-        .add_system(poll_pathfinding_tasks_system)
-        //.add_system(draw_nav_mesh_system)
+        .add_startup_systems((
+            setup_world_system,
+            info_system
+        ))
+        .add_systems((
+            run_blocking_pathfinding,
+            run_async_pathfinding,
+            poll_pathfinding_tasks_system,
+            draw_nav_mesh_system,
+            spawn_or_despawn_affector_system
+        ))
         .run();
 }
 
@@ -71,7 +77,7 @@ fn run_blocking_pathfinding(
     keys: Res<Input<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
-    //mut lines: ResMut<DebugLines>,
+    mut lines: ResMut<DebugLines>,
 ) {
     if !keys.just_pressed(KeyCode::B) {
         return;
@@ -83,7 +89,7 @@ fn run_blocking_pathfinding(
         let end_pos = Vec3::new(-15.0, 1.0, -15.0);
 
         // Run pathfinding to get a polygon path.
-        match find_path(
+        match find_polygon_path(
             &nav_mesh,
             &nav_mesh_settings,
             start_pos,
@@ -98,7 +104,7 @@ fn run_blocking_pathfinding(
                 match perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
                     Ok(string_path) => {
                         info!("String path (BLOCKING): {:?}", string_path);
-                        //draw_path(&string_path, &mut lines, Color::RED);
+                        draw_path(&string_path, &mut lines, Color::RED);
                     }
                     Err(error) => error!("Error with string path: {:?}", error),
                 };
@@ -154,13 +160,13 @@ fn run_async_pathfinding(
 // Poll existing tasks.
 fn poll_pathfinding_tasks_system(
     mut pathfinding_task: ResMut<AsyncPathfindingTasks>,
-    //mut lines: ResMut<DebugLines>,
+    mut lines: ResMut<DebugLines>,
 ) {
     // Go through and remove completed tasks.
     pathfinding_task.tasks.retain_mut(|task| {
         if let Some(string_path) = future::block_on(future::poll_once(task)).unwrap_or(None) {
             info!("Async path task finished with result: {:?}", string_path);
-            //draw_path(&string_path, &mut lines, Color::BLUE);
+            draw_path(&string_path, &mut lines, Color::BLUE);
 
             false
         } else {
@@ -182,7 +188,7 @@ async fn async_path_find(
         return None;
     };
 
-    // Run pathfinding to get a polygon path.
+    // Run pathfinding to get a path.
     match find_path(
         &nav_mesh,
         &nav_mesh_settings,
@@ -192,15 +198,8 @@ async fn async_path_find(
         Some(&[1.0, 0.5]),
     ) {
         Ok(path) => {
-            info!("Path found (ASYNC): {:?}", path);
-            // Convert polygon path to a path of Vec3s.
-            match perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
-                Ok(string_path) => {
-                    info!("String path (ASYNC): {:?}", string_path);
-                    return Some(string_path);
-                }
-                Err(error) => error!("Error with string path: {:?}", error),
-            };
+            info!("Found path (ASYNC): {:?}", path);
+            return Some(path);
         }
         Err(error) => error!("Error with pathfinding: {:?}", error),
     }
@@ -210,11 +209,11 @@ async fn async_path_find(
 
 // General use path draw.
 
-/*fn draw_path(path: &[Vec3], lines: &mut DebugLines, color: Color) {
+fn draw_path(path: &[Vec3], lines: &mut DebugLines, color: Color) {
     for (a, b) in path.iter().zip(path.iter().skip(1)) {
         lines.line_colored(*a, *b, 15.0, color);
     }
-}*/
+}
 
 //
 //  Draw Nav-mesh.
@@ -222,7 +221,7 @@ async fn async_path_find(
 //
 //  This uses the crate ``bevy_prototype_debug_lines``.
 //
-/*fn draw_nav_mesh_system(
+fn draw_nav_mesh_system(
     keys: Res<Input<KeyCode>>,
     nav_mesh: Res<NavMesh>,
     mut lines: ResMut<DebugLines>,
@@ -246,7 +245,7 @@ async fn async_path_find(
                     let a = tile.vertices[indices[i] as usize];
                     let b = tile.vertices[indices[(i + 1) % indices.len()] as usize];
 
-                    lines.line_colored(a, b, 10.0, tile_color);
+                    lines.line_colored(a, b, 5.0, tile_color);
                 }
             }
 
@@ -256,7 +255,7 @@ async fn async_path_find(
             }
         }
     }
-}*/
+}
 
 fn setup_world_system(
     mut commands: Commands,
@@ -272,7 +271,7 @@ fn setup_world_system(
             ..default()
         },
         Collider::cuboid(25.0, 0.1, 25.0),
-        NavMeshAffector::default(), // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
     // Cube
@@ -284,7 +283,7 @@ fn setup_world_system(
             ..default()
         },
         Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector::default(), // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
     // Thin wall
@@ -296,7 +295,7 @@ fn setup_world_system(
             ..default()
         },
         Collider::cuboid(0.05, 0.05, 0.05),
-        NavMeshAffector::default(), // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
     // light
@@ -313,10 +312,41 @@ fn setup_world_system(
     });
 }
 
+fn spawn_or_despawn_affector_system(
+    keys: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned_entity: Local<Option<Entity>>
+) {
+    if !keys.just_pressed(KeyCode::X) {
+        return;
+    }
+
+    if let Some(entity) = *spawned_entity {
+        commands.entity(entity).despawn_recursive();
+        *spawned_entity = None;
+    } else {
+        let entity = commands.spawn((
+            PbrBundle {
+                mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
+                material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                transform: Transform::from_xyz(5.0, 0.8, -5.0),
+                ..default()
+            },
+            Collider::cuboid(1.25, 1.25, 1.25),
+            NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+        )).id();
+
+        *spawned_entity = Some(entity);
+    }
+}
+
 fn info_system() {
     info!("=========================================");
     info!("| Press A to run ASYNC path finding.    |");
     info!("| Press B to run BLOCKING path finding. |");
     info!("| Press M to draw nav-mesh.             |");
+    info!("| Press X to spawn or despawn red cube. |");
     info!("=========================================");
 }

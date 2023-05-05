@@ -1,3 +1,77 @@
+## 0.5
+
+## ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``
+
+You no longer have to remember to separately insert the ``NavMeshSettings`` resource.
+
+```rust
+// 0.4
+app.insert_resource(NavMeshSettings {
+    // etc...
+});
+app.add_plugin(OxidizedNavigationPlugin);
+
+// 0.5
+app.add_plugin(OxidizedNavigationPlugin {
+    settings: NavMeshSettings {
+        // etc..
+    }
+});
+```
+
+
+## ``find_path`` now performs string pulling as well as path finding.
+
+``find_polygon_path`` acts as ``find_path`` did previously if you only want the polygon path.
+
+```rust
+// 0.4
+match find_path(
+        &nav_mesh,
+        &nav_mesh_settings,
+        start_pos,
+        end_pos,
+        position_search_radius,
+        area_cost_multiplier,
+    ) {
+        Ok(path) => {
+            // Convert polygon path to a path of Vec3s.
+            match perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
+                Ok(string_path) => {
+                    return Some(string_path);
+                }
+                Err(error) => // Handle error
+            };
+        }
+        Err(error) => // Handle error
+    }
+// 0.5
+match find_path(
+        &nav_mesh,
+        &nav_mesh_settings,
+        start_pos,
+        end_pos,
+        position_search_radius,
+        area_cost_multiplier,
+    ) {
+        Ok(string_path) => {
+            return Some(string_path);
+        }
+        Err(error) => // Handle error
+    }
+```
+
+
+## 0.4
+
+## ``OxidizedNavigation`` system set is now an enum.
+
+To continue with previous behaviour you should configure the ``OxidizedNavigation::Main`` set. The ``RemovedComponent`` set should **not** be throttled as it reacts to removing navmesh affectors. Throttling it may cause it to miss affectors being removed.
+
+## ``NavMeshAffector`` component is now an empty type.
+
+Remove ``::default()`` from when inserting the component.
+
 ## 0.1 to 0.2
 
 ### ``OxidizedNavigationPlugin`` now takes a ``NavMeshGenerationState``.

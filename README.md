@@ -30,6 +30,9 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 | 0.2.0         | 0.9.X        | 0.20                   |
 | 0.1.X         | 0.9.X        | 0.19                   |
 
+**Using an unsupported Rapier version will cause Oxidized Navigation to fail as it tries to get wrongly versioned components.**
+In this case you may be able to [override which version Oxidized Navigation depends on](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html).
+
 ## Non-exhaustive TODO-list:
 
 - [X] Generate poly meshes for single tiles.

@@ -2,7 +2,8 @@
 
 - ``find_path`` has been renamed ``find_polygon_path``
 - A new ``find_path`` function has been added that does both polygon path finding and stringpulling in one.
-- ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings`` 
+- ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``
+- Refactors to geometry gathering, the game should now be blocked less when tile rebuilding starts. 
 
 ## 0.4.0 (2023-04-11)
 

@@ -15,7 +15,7 @@ pub struct PolyMesh {
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
 pub const VERTICES_IN_TRIANGLE: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
-pub fn build_poly_mesh(contour_set: &ContourSet, nav_mesh_settings: &NavMeshSettings) -> PolyMesh {
+pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSettings) -> PolyMesh {
     let mut max_vertices = 0;
     let mut max_tris = 0;
     let mut max_verts_per_contour = 0;

@@ -1,6 +1,9 @@
 use std::{cmp::Ordering, ops::Div};
 
-use bevy::prelude::{GlobalTransform, IVec3, UVec2, Vec3};
+use bevy::prelude::{IVec3, UVec2, Vec3, Transform};
+use bevy_rapier3d::rapier::prelude::HeightField;
+
+use crate::conversion::Triangles;
 
 use super::{get_neighbour_index, NavMeshSettings};
 
@@ -34,7 +37,7 @@ pub(super) struct OpenSpan {
     pub(super) max: Option<u16>,
     pub(super) neighbours: [Option<u16>; 4],
     pub(super) tile_index: usize, // The index of this span in the whole tile.
-    pub(super) region: u16, // Region if non-zero. We could use option for this if we had some optimization for size.
+    pub(super) region: u16, // Region if non-zero.
     pub(super) area: Option<u16>,
 }
 
@@ -47,17 +50,22 @@ pub struct OpenTile {
     pub(super) span_count: usize, // Total spans in all cells.
     pub(super) max_regions: u16,
 }
-
-pub struct TriangleCollection {
-    pub(super) global_transform: GlobalTransform,
-    pub(super) vertices: Vec<Vec3>,
-    pub(super) indices: Vec<[u32; 3]>,
+pub(super) struct TriangleCollection {
+    pub(super) transform: Transform,
+    pub(super) triangles: Triangles,
     pub(super) area: Option<u16>,
 }
 
-pub fn build_heightfield_tile(
+pub(super) struct HeightFieldCollection {
+    pub(super) transform: Transform,
+    pub(super) heightfield: HeightField,
+    pub(super) area: Option<u16>,
+}
+
+pub(super) fn build_heightfield_tile(
     tile_coord: UVec2,
     triangle_collections: Vec<TriangleCollection>,
+    heightfields: Vec<HeightFieldCollection>,
     nav_mesh_settings: &NavMeshSettings,
 ) -> VoxelizedTile {
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
@@ -73,170 +81,191 @@ pub fn build_heightfield_tile(
         nav_mesh_settings.world_bottom_bound,
         tile_origin.y,
     );
-
-    let max_vertices = triangle_collections
-        .iter()
-        .fold(0, |acc, val| acc.max(val.vertices.len()));
-    let mut translated_vertices = Vec::with_capacity(max_vertices);
+    
+    let mut translated_vertices = Vec::with_capacity(3);
 
     for collection in triangle_collections.iter() {
-        let transform = collection
-            .global_transform
-            .compute_transform()
-            .with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
+        let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
-        translated_vertices.clear();
-        translated_vertices.extend(
-            collection
-                .vertices
-                .iter()
-                .map(|vertex| transform.transform_point(*vertex) - tile_origin),
-        ); // Transform vertices.
+        match &collection.triangles {
+            Triangles::Triangle(vertices) => {
+                let translated_vertices = vertices.map(|vertex| transform.transform_point(vertex) - tile_origin);
 
-        for triangle in collection.indices.iter() {
-            let a = translated_vertices[triangle[0] as usize];
-            let b = translated_vertices[triangle[1] as usize];
-            let c = translated_vertices[triangle[2] as usize];
-
-            let min_bound = a.min(b).min(c).div(nav_mesh_settings.cell_width).as_ivec3();
-            let max_bound = a.max(b).max(c).div(nav_mesh_settings.cell_width).as_ivec3();
-
-            // Check if triangle is completely outside the tile.
-            if max_bound.x < 0
-                || max_bound.z < 0
-                || min_bound.x > tile_max_bound.x
-                || min_bound.z > tile_max_bound.z
-            {
-                continue;
-            }
-
-            let clamped_bound_min = min_bound.max(IVec3::ZERO);
-            let clamped_bound_max = max_bound.min(tile_max_bound);
-
-            let ab = b - a;
-            let ac = c - a;
-            let normal = ab.cross(ac).normalize();
-            let slope = normal.dot(Vec3::Y).acos();
-            let traversable = slope < nav_mesh_settings.max_traversable_slope_radians;
-
-            let vertices = [a, b, c, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO];
-
-            // For cache reasons we go.
-            // --> X
-            // Z
-            // |
-            // V
-            // X is column. Z is row.
-            // Which means we iterate Z first.
-            for z in clamped_bound_min.z..=clamped_bound_max.z {
-                let row_clip_min = z as f32 * nav_mesh_settings.cell_width;
-                let row_clip_max = row_clip_min + nav_mesh_settings.cell_width;
-
-                // Clip polygon to the row.
-                let (_, _, row_min_clip_vert_count, row_min_clip_verts) =
-                    divide_polygon(&vertices, 3, row_clip_min, 2);
-                let (row_vert_count, row_verts, _, _) = divide_polygon(
-                    &row_min_clip_verts,
-                    row_min_clip_vert_count,
-                    row_clip_max,
-                    2,
-                );
-                if row_vert_count < 3 {
-                    continue;
+                process_triangle(translated_vertices[0], translated_vertices[1], translated_vertices[2], nav_mesh_settings, tile_max_bound, tile_side, &mut voxel_tile, collection.area);
+            },
+            Triangles::TriMesh(vertices, triangles) => {
+                translated_vertices.clear();
+                translated_vertices.extend(
+                    vertices
+                        .iter()
+                        .map(|vertex| transform.transform_point(*vertex) - tile_origin),
+                ); // Transform vertices.
+        
+                for triangle in triangles.iter() {
+                    let a = translated_vertices[triangle[0] as usize];
+                    let b = translated_vertices[triangle[1] as usize];
+                    let c = translated_vertices[triangle[2] as usize];
+        
+                    process_triangle(a, b, c, nav_mesh_settings, tile_max_bound, tile_side, &mut voxel_tile, collection.area);
                 }
+            },
+        }
+    }
 
-                // Calculate the column footprint of the row.
-                let mut column_min_vert_x = row_verts[0].x;
-                let mut column_max_vert_x = row_verts[0].x;
-                for vertex in row_verts.iter().take(row_vert_count).skip(1) {
-                    column_min_vert_x = column_min_vert_x.min(vertex.x);
-                    column_max_vert_x = column_max_vert_x.max(vertex.x);
-                }
-                let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
-                let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
-                    .min((tile_side - 1) as i32);
+    for collection in heightfields.iter() {
+        let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
-                for x in column_min..=column_max {
-                    let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
-                    let column_clip_max = column_clip_min + nav_mesh_settings.cell_width;
+        for triangle in collection.heightfield.triangles() {
+            let a = transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z)) - tile_origin;
+            let b = transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z)) - tile_origin;
+            let c = transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z)) - tile_origin;
 
-                    // Clip polygon to column.
-                    let (_, _, column_min_clip_vert_count, column_min_clip_verts) =
-                        divide_polygon(&row_verts, row_vert_count, column_clip_min, 0);
-                    let (column_vert_count, column_verts, _, _) = divide_polygon(
-                        &column_min_clip_verts,
-                        column_min_clip_vert_count,
-                        column_clip_max,
-                        0,
-                    );
-                    if column_vert_count < 3 {
-                        continue;
-                    }
-
-                    let mut square_min_height = column_verts[0].y;
-                    let mut square_max_height = column_verts[0].y;
-                    for vertex in column_verts.iter().take(column_vert_count).skip(1) {
-                        square_min_height = square_min_height.min(vertex.y);
-                        square_max_height = square_max_height.max(vertex.y);
-                    }
-
-                    square_min_height = square_min_height.max(0.0);
-                    if square_max_height < 0.0 {
-                        continue;
-                    }
-
-                    let min_height = (square_min_height / nav_mesh_settings.cell_height) as u16;
-                    let max_height = (square_max_height / nav_mesh_settings.cell_height) as u16;
-
-                    let index = x as usize + z as usize * tile_side;
-                    let cell = &mut voxel_tile.cells[index];
-
-                    let mut new_span = HeightSpan {
-                        min: min_height,
-                        max: max_height,
-                        traversable,
-                        area: collection.area,
-                    };
-
-                    if cell.spans.is_empty() {
-                        cell.spans.push(new_span);
-                        continue;
-                    }
-                    // We need to go over all existing ones.
-                    let mut i = 0;
-                    while i < cell.spans.len() {
-                        let existing_span = &cell.spans[i];
-                        if existing_span.min > new_span.max {
-                            // i is beyond the new span. We can insert!
-                            break;
-                        } else if existing_span.max < new_span.min {
-                            // i is before the new span. Continue until we hit one that isn't.
-                            i += 1;
-                            continue;
-                        }
-                        // An overlap!
-                        match existing_span.max.cmp(&new_span.max) {
-                            Ordering::Greater => {
-                                new_span.traversable = existing_span.traversable;
-                                new_span.max = existing_span.max;
-                                new_span.area = existing_span.area;
-                            }
-                            Ordering::Equal => {
-                                new_span.traversable |= existing_span.traversable;
-                                // Higher area number has higher priority.
-                                new_span.area = new_span.area.max(existing_span.area);
-                            }
-                            Ordering::Less => {}
-                        }
-                        cell.spans.remove(i);
-                    }
-                    cell.spans.insert(i, new_span);
-                }
-            }
+            process_triangle(a, b, c, nav_mesh_settings, tile_max_bound, tile_side, &mut voxel_tile, collection.area);
         }
     }
 
     voxel_tile
+}
+
+fn process_triangle(a: Vec3, b: Vec3, c: Vec3, nav_mesh_settings: &NavMeshSettings, tile_max_bound: IVec3, tile_side: usize, voxel_tile: &mut VoxelizedTile, area: Option<u16>) {
+    let min_bound = a.min(b).min(c).div(nav_mesh_settings.cell_width).as_ivec3();
+    let max_bound = a.max(b).max(c).div(nav_mesh_settings.cell_width).as_ivec3();
+
+    // Check if triangle is completely outside the tile.
+    if max_bound.x < 0
+        || max_bound.z < 0
+        || min_bound.x > tile_max_bound.x
+        || min_bound.z > tile_max_bound.z
+    {
+        return;
+    }
+
+    let clamped_bound_min = min_bound.max(IVec3::ZERO);
+    let clamped_bound_max = max_bound.min(tile_max_bound);
+    let traversable = is_triangle_traversable(&a, &b, &c, nav_mesh_settings);
+    let vertices = [a, b, c, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO];
+
+    // For cache reasons we go.
+    // --> X
+    // Z
+    // |
+    // V
+    // X is column. Z is row.
+    // Which means we iterate Z first.
+    for z in clamped_bound_min.z..=clamped_bound_max.z {
+        let row_clip_min = z as f32 * nav_mesh_settings.cell_width;
+        let row_clip_max = row_clip_min + nav_mesh_settings.cell_width;
+
+        // Clip polygon to the row.
+        let (_, _, row_min_clip_vert_count, row_min_clip_verts) =
+            divide_polygon(&vertices, 3, row_clip_min, 2);
+        let (row_vert_count, row_verts, _, _) = divide_polygon(
+            &row_min_clip_verts,
+            row_min_clip_vert_count,
+            row_clip_max,
+            2,
+        );
+        if row_vert_count < 3 {
+            continue;
+        }
+
+        // Calculate the column footprint of the row.
+        let mut column_min_vert_x = row_verts[0].x;
+        let mut column_max_vert_x = row_verts[0].x;
+        for vertex in row_verts.iter().take(row_vert_count).skip(1) {
+            column_min_vert_x = column_min_vert_x.min(vertex.x);
+            column_max_vert_x = column_max_vert_x.max(vertex.x);
+        }
+        let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
+        let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
+            .min((tile_side - 1) as i32);
+
+        for x in column_min..=column_max {
+            let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
+            let column_clip_max = column_clip_min + nav_mesh_settings.cell_width;
+
+            // Clip polygon to column.
+            let (_, _, column_min_clip_vert_count, column_min_clip_verts) =
+                divide_polygon(&row_verts, row_vert_count, column_clip_min, 0);
+            let (column_vert_count, column_verts, _, _) = divide_polygon(
+                &column_min_clip_verts,
+                column_min_clip_vert_count,
+                column_clip_max,
+                0,
+            );
+            if column_vert_count < 3 {
+                continue;
+            }
+
+            let mut square_min_height = column_verts[0].y;
+            let mut square_max_height = column_verts[0].y;
+            for vertex in column_verts.iter().take(column_vert_count).skip(1) {
+                square_min_height = square_min_height.min(vertex.y);
+                square_max_height = square_max_height.max(vertex.y);
+            }
+
+            square_min_height = square_min_height.max(0.0);
+            if square_max_height < 0.0 {
+                continue;
+            }
+
+            let min_height = (square_min_height / nav_mesh_settings.cell_height) as u16;
+            let max_height = (square_max_height / nav_mesh_settings.cell_height) as u16;
+
+            let index = x as usize + z as usize * tile_side;
+            let cell = &mut voxel_tile.cells[index];
+
+            let mut new_span = HeightSpan {
+                min: min_height,
+                max: max_height,
+                traversable,
+                area,
+            };
+
+            if cell.spans.is_empty() {
+                cell.spans.push(new_span);
+                continue;
+            }
+            // We need to go over all existing ones.
+            let mut i = 0;
+            while i < cell.spans.len() {
+                let existing_span = &cell.spans[i];
+                if existing_span.min > new_span.max {
+                    // i is beyond the new span. We can insert!
+                    break;
+                } else if existing_span.max < new_span.min {
+                    // i is before the new span. Continue until we hit one that isn't.
+                    i += 1;
+                    continue;
+                }
+                // An overlap!
+                match existing_span.max.cmp(&new_span.max) {
+                    Ordering::Greater => {
+                        new_span.traversable = existing_span.traversable;
+                        new_span.max = existing_span.max;
+                        new_span.area = existing_span.area;
+                    }
+                    Ordering::Equal => {
+                        new_span.traversable |= existing_span.traversable;
+                        // Higher area number has higher priority.
+                        new_span.area = new_span.area.max(existing_span.area);
+                    }
+                    Ordering::Less => {}
+                }
+                cell.spans.remove(i);
+            }
+            cell.spans.insert(i, new_span);
+        }
+    }
+}
+
+fn is_triangle_traversable(a: &Vec3, b: &Vec3, c: &Vec3, nav_mesh_settings: &NavMeshSettings) -> bool {
+    let ab = *b - *a;
+    let ac = *c - *a;
+    let normal = ab.cross(ac).normalize();
+    let slope = normal.dot(Vec3::Y).acos();
+    
+    slope < nav_mesh_settings.max_traversable_slope_radians
 }
 
 /*
@@ -303,7 +332,7 @@ fn divide_polygon(
 }
 
 pub fn build_open_heightfield_tile(
-    voxelized_tile: &VoxelizedTile,
+    voxelized_tile: VoxelizedTile,
     nav_mesh_settings: &NavMeshSettings,
 ) -> OpenTile {
     let mut cells = vec![OpenCell::default(); voxelized_tile.cells.len()];

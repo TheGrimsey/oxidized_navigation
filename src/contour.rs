@@ -36,7 +36,7 @@ struct ContourRegion {
     holes: Vec<ContourHole>,
 }
 
-pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings) -> ContourSet {
+pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) -> ContourSet {
     let max_contours = open_tile.max_regions.max(8);
     let mut contour_set = ContourSet {
         contours: Vec::with_capacity(max_contours.into()),
@@ -86,7 +86,7 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
             walk_contour(
                 cell_index,
                 span_index,
-                open_tile,
+                &open_tile,
                 nav_mesh_settings,
                 &mut boundry_flags,
                 &mut vertices,
@@ -101,7 +101,7 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
             );
 
             // Remove degenerate segments.
-            remove_denegerate_segments(&mut simplified_vertices);
+            remove_degenerate_segments(&mut simplified_vertices);
 
             if simplified_vertices.len() >= 3 {
                 let new_contour = Contour {
@@ -711,7 +711,7 @@ fn point_distance_from_segment(point: IVec2, seg_a: IVec2, seg_b: IVec2) -> f32 
     delta_x * delta_x + delta_y * delta_y
 }
 
-fn remove_denegerate_segments(simplified: &mut Vec<UVec4>) {
+fn remove_degenerate_segments(simplified: &mut Vec<UVec4>) {
     // Remove adjacent vertices which are equal on xz-plane,
     let mut i = 0;
     while i < simplified.len() {

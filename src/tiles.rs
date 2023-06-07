@@ -605,7 +605,7 @@ fn find_connecting_polygons_in_tile(
 }
 
 pub(super) fn create_nav_mesh_tile_from_poly_mesh(
-    poly_mesh: &PolyMesh,
+    poly_mesh: PolyMesh,
     tile_coord: UVec2,
     nav_mesh_settings: &NavMeshSettings,
 ) -> NavMeshTile {
@@ -656,7 +656,7 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
 
     NavMeshTile {
         vertices,
-        edges: poly_mesh.edges.clone(),
+        edges: poly_mesh.edges,
         polygons,
     }
 }

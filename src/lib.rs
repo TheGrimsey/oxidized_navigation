@@ -24,31 +24,26 @@
 
 use std::sync::{Arc, RwLock};
 
-use bevy::prelude::{
-    error, warn, Deref, DerefMut, Or, SystemSet,
-    Vec3, With, IntoSystemConfigs, RemovedComponents, IntoSystemConfig,
-};
 use bevy::tasks::AsyncComputeTaskPool;
 use bevy::{
     ecs::system::Resource,
-    prelude::{
-        App, Changed, Component, Entity, GlobalTransform, IVec4, Plugin, Query, Res, ResMut, UVec2,
-        UVec4, Vec2,
-    },
+    prelude::*,
     utils::{HashMap, HashSet},
 };
 use bevy_rapier3d::prelude::ColliderView;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
+use conversion::{GeometryToConvert, ColliderType, convert_geometry_collections, GeometryCollection};
 use heightfields::{
     build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field,
-    erode_walkable_area, TriangleCollection,
+    erode_walkable_area, HeightFieldCollection,
 };
 use mesher::build_poly_mesh;
 use regions::build_regions;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 
+mod conversion;
 mod contour;
 mod heightfields;
 mod mesher;
@@ -388,49 +383,48 @@ fn send_tile_rebuild_tasks_system(
         }
 
         // Step 1: Gather data.
-        let mut triangle_collections = Vec::with_capacity(affectors.len());
+        let mut geometry_collections = Vec::with_capacity(affectors.len());
+        // Storing heightfields separately because they are massive.
+        let mut heightfield_collections = Vec::new();
 
         let mut collider_iter = collider_query.iter_many(affectors.iter());
-        while let Some((collider, transform, nav_mesh_affector)) = collider_iter.fetch_next() {
-            let (raw_vertices, raw_triangles) = match collider.as_typed_shape() {
-                ColliderView::Ball(ball) => ball.raw.to_trimesh(5, 5),
-                ColliderView::Cuboid(cuboid) => cuboid.raw.to_trimesh(),
-                ColliderView::Capsule(capsule) => capsule.raw.to_trimesh(5, 5),
-                ColliderView::TriMesh(trimesh) => {
-                    (trimesh.raw.vertices().to_vec(), trimesh.indices().to_vec())
-                }
-                ColliderView::HeightField(heightfield) => heightfield.raw.to_trimesh(),
-                ColliderView::ConvexPolyhedron(polyhedron) => polyhedron.raw.to_trimesh(),
-                ColliderView::Cylinder(cylinder) => cylinder.raw.to_trimesh(5),
-                ColliderView::Cone(cone) => cone.raw.to_trimesh(5),
-                ColliderView::RoundCuboid(round_cuboid) => {
-                    round_cuboid.raw.inner_shape.to_trimesh()
-                }
-                ColliderView::RoundCylinder(round_cylinder) => {
-                    round_cylinder.raw.inner_shape.to_trimesh(5)
-                }
-                ColliderView::RoundCone(round_cone) => round_cone.raw.inner_shape.to_trimesh(5),
-                ColliderView::RoundConvexPolyhedron(round_polyhedron) => {
-                    round_polyhedron.raw.inner_shape.to_trimesh()
-                }
-                ColliderView::Triangle(triangle) => {
-                    triangle_collections.push(TriangleCollection {
-                        global_transform: *transform,
-                        vertices: triangle.vertices().to_vec(),
-                        indices: vec![[0, 1, 2]],
-                        area: nav_mesh_affector.map_or(Some(0), |area_type| area_type.0),
+        while let Some((collider, global_transform, nav_mesh_affector)) = collider_iter.fetch_next() {
+            let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
+
+            let type_to_convert = match collider.as_typed_shape() {
+                ColliderView::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball.raw)),
+                ColliderView::Cuboid(cuboid) => GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid.raw)),
+                ColliderView::Capsule(capsule) => GeometryToConvert::Collider(ColliderType::Capsule(*capsule.raw)),
+                ColliderView::TriMesh(trimesh) => GeometryToConvert::RapierTriMesh(trimesh.raw.vertices().to_vec(), trimesh.indices().to_vec()),
+                ColliderView::HeightField(heightfield) => {
+                    heightfield_collections.push(HeightFieldCollection {
+                        transform: global_transform.compute_transform(),
+                        heightfield: heightfield.raw.clone(),
+                        area,
                     });
+
                     continue;
+                },
+                ColliderView::ConvexPolyhedron(polyhedron) => {
+                    let tri = polyhedron.raw.to_trimesh();
+
+                    GeometryToConvert::RapierTriMesh(tri.0, tri.1)
+                },
+                ColliderView::Cylinder(cylinder) => GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder.raw)),
+                ColliderView::Cone(cone) => GeometryToConvert::Collider(ColliderType::Cone(*cone.raw)),
+                ColliderView::RoundCuboid(round_cuboid) => GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.raw.inner_shape)),
+                ColliderView::RoundCylinder(round_cylinder) => GeometryToConvert::Collider(ColliderType::Cylinder(round_cylinder.raw.inner_shape)),
+                ColliderView::RoundCone(round_cone) => GeometryToConvert::Collider(ColliderType::Cone(round_cone.raw.inner_shape)),
+                ColliderView::RoundConvexPolyhedron(round_polyhedron) => {
+                    let tri = round_polyhedron.inner_shape().raw.to_trimesh();
+
+                    GeometryToConvert::RapierTriMesh(tri.0, tri.1)
                 }
+                ColliderView::Triangle(triangle) => GeometryToConvert::Collider(ColliderType::Triangle(*triangle.raw)),
                 ColliderView::RoundTriangle(triangle) => {
                     let inner_shape = triangle.inner_shape();
-                    triangle_collections.push(TriangleCollection {
-                        global_transform: *transform,
-                        vertices: inner_shape.vertices().to_vec(),
-                        indices: vec![[0, 1, 2]],
-                        area: nav_mesh_affector.map_or(Some(0), |area_type| area_type.0),
-                    });
-                    continue;
+
+                    GeometryToConvert::Collider(ColliderType::Triangle(*inner_shape.raw))
                 }
                 // TODO: This one requires me to think.
                 ColliderView::Compound(_) => {
@@ -443,16 +437,10 @@ fn send_tile_rebuild_tasks_system(
                 ColliderView::Segment(_) => continue,   /* This is a line segment. */
             };
 
-            let raw_vertices = raw_vertices
-                .iter()
-                .map(|point| Vec3::new(point.x, point.y, point.z))
-                .collect();
-
-            triangle_collections.push(TriangleCollection {
-                global_transform: *transform,
-                vertices: raw_vertices,
-                indices: raw_triangles,
-                area: nav_mesh_affector.map_or(Some(0), |area_type| area_type.0),
+            geometry_collections.push(GeometryCollection {
+                transform: global_transform.compute_transform(),
+                geometry_to_convert: type_to_convert,
+                area,
             });
         }
 
@@ -466,7 +454,8 @@ fn send_tile_rebuild_tasks_system(
             generation,
             *tile_coord,
             nav_mesh_settings.clone(),
-            triangle_collections,
+            geometry_collections,
+            heightfield_collections,
             nav_mesh,
         ));
         task.detach();
@@ -492,14 +481,16 @@ async fn build_tile(
     generation: u64,
     tile_coord: UVec2,
     nav_mesh_settings: NavMeshSettings,
-    triangle_collections: Vec<TriangleCollection>,
+    geometry_collections: Vec<GeometryCollection>,
+    heightfields: Vec<HeightFieldCollection>,
     nav_mesh: Arc<RwLock<NavMeshTiles>>,
 ) {
-    let voxelized_tile =
-        build_heightfield_tile(tile_coord, triangle_collections, &nav_mesh_settings);
+    let triangle_collection = convert_geometry_collections(geometry_collections);
 
-    let mut open_tile = build_open_heightfield_tile(&voxelized_tile, &nav_mesh_settings);
-    std::mem::drop(voxelized_tile);
+    let voxelized_tile =
+        build_heightfield_tile(tile_coord, triangle_collection, heightfields, &nav_mesh_settings);
+
+    let mut open_tile = build_open_heightfield_tile(voxelized_tile, &nav_mesh_settings);
 
     // Remove areas that are too close to a wall.
     erode_walkable_area(&mut open_tile, &nav_mesh_settings);
@@ -507,15 +498,12 @@ async fn build_tile(
     calculate_distance_field(&mut open_tile, &nav_mesh_settings);
     build_regions(&mut open_tile, &nav_mesh_settings);
 
-    let contour_set = build_contours(&open_tile, &nav_mesh_settings);
-    std::mem::drop(open_tile);
+    let contour_set = build_contours(open_tile, &nav_mesh_settings);
 
-    let poly_mesh = build_poly_mesh(&contour_set, &nav_mesh_settings);
-    std::mem::drop(contour_set);
+    let poly_mesh = build_poly_mesh(contour_set, &nav_mesh_settings);
 
     let nav_mesh_tile =
-        create_nav_mesh_tile_from_poly_mesh(&poly_mesh, tile_coord, &nav_mesh_settings);
-    std::mem::drop(poly_mesh);
+        create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, &nav_mesh_settings);
 
     let Ok(mut nav_mesh) = nav_mesh.write() else {
         error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");

@@ -50,6 +50,7 @@ pub struct Polygon {
 /// A single nav-mesh tile.
 #[derive(Debug)]
 pub struct NavMeshTile {
+    /// Vertices in world space.
     pub vertices: Vec<Vec3>,
     pub polygons: Vec<Polygon>,
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,

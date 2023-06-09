@@ -70,8 +70,8 @@ pub fn find_polygon_path(
         return Ok(vec![(start_tile, start_poly)]);
     }
 
-    let mut nodes = Vec::with_capacity(30);
-    let mut open_list = Vec::with_capacity(8);
+    let mut nodes = Vec::with_capacity(10);
+    let mut open_list = Vec::with_capacity(5);
 
     {
         let start_node = NavMeshNode {
@@ -258,7 +258,7 @@ pub fn find_polygon_path(
         }
     }
 
-    // Is this worth it? :shrug: It saves a lot of memory allocations which I think is important. All locations should also be pretty hot in cache in the next loop.
+    // Is this worth it? :shrug: It saves some memory allocations which I consider important. All locations should also be pretty hot in cache in the next loop.
     let path_count = {
         let mut count = 0;
         let mut parent = Some(last_best_node);
@@ -282,7 +282,7 @@ pub fn find_polygon_path(
     }
 
     path.reverse();
-
+    
     Ok(path)
 }
 
@@ -320,7 +320,7 @@ pub fn perform_string_pulling_on_path(
     let end_pos = end_tile
         .get_closest_point_in_polygon(&end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
 
-    let mut string_path = Vec::with_capacity(path.len() + 2);
+    let mut string_path = Vec::with_capacity(path.len()/3 + 2);
     string_path.push(start_pos);
 
     if path.len() > 1 {

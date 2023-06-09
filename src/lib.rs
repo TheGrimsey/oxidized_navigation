@@ -24,13 +24,14 @@
 
 use std::sync::{Arc, RwLock};
 
-use bevy::tasks::AsyncComputeTaskPool;
+use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
     ecs::system::Resource,
     prelude::*,
     utils::{HashMap, HashSet},
 };
 use bevy_rapier3d::prelude::ColliderView;
+use bevy_rapier3d::rapier::prelude::HeightField;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
 use conversion::{GeometryToConvert, ColliderType, convert_geometry_collections, GeometryCollection};
@@ -73,7 +74,8 @@ impl Plugin for OxidizedNavigationPlugin {
             .init_resource::<DirtyTiles>()
             .init_resource::<NavMesh>()
             .init_resource::<GenerationTicker>()
-            .init_resource::<NavMeshAffectorRelations>();
+            .init_resource::<NavMeshAffectorRelations>()
+            .init_resource::<ActiveGenerationTasks>();
 
         app.add_system(
             handle_removed_affectors_system
@@ -81,11 +83,14 @@ impl Plugin for OxidizedNavigationPlugin {
                 .in_set(OxidizedNavigation::RemovedComponent)
         );
 
+        app.add_system(
+            remove_finished_tasks.in_set(OxidizedNavigation::Main).before(send_tile_rebuild_tasks_system),
+        );
+
         app.add_systems(
             (
                 update_navmesh_affectors_system,
-                send_tile_rebuild_tasks_system,
-                clear_dirty_tiles_system,
+                send_tile_rebuild_tasks_system.run_if(can_generate_new_tiles),
             )
                 .chain()
                 .in_set(OxidizedNavigation::Main),
@@ -98,6 +103,9 @@ const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 
 #[derive(Resource, Default)]
 struct NavMeshAffectorRelations(HashMap<Entity, SmallVec<[UVec2; 4]>>);
+
+#[derive(Resource, Default)]
+struct ActiveGenerationTasks(Vec<Task<()>>);
 
 /// Component for entities that should affect the nav-mesh.
 #[derive(Component)]
@@ -190,6 +198,11 @@ pub struct NavMeshSettings {
     ///
     /// **Suggested value range**: [1.1, 1.5]
     pub max_contour_simplification_error: f32,
+
+    /// Max tiles to generate at once.
+    /// 
+    /// Adjust as memory allows. More tiles generating at once will have a higher memory footprint.
+    pub max_tile_generation_tasks: u16,
 }
 impl NavMeshSettings {
     /// Returns the length of a tile's side in world units.
@@ -340,42 +353,57 @@ fn handle_removed_affectors_system(
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
 ) {
-    for removed in removed_affectors.iter() {
-        if let Some(relations) = affector_relations.0.remove(&removed) {
-            for tile in relations {
-                dirty_tiles.0.insert(tile);
-            }
+    for relations in removed_affectors.iter().filter_map(|removed| affector_relations.0.remove(&removed)) {
+        for tile in relations {
+            dirty_tiles.0.insert(tile);
         }
     }
 }
 
+fn can_generate_new_tiles(
+    active_generation_tasks: Res<ActiveGenerationTasks>,
+    dirty_tiles: Res<DirtyTiles>,
+    nav_mesh_settings: Res<NavMeshSettings>,
+) -> bool {
+    active_generation_tasks.0.len() < nav_mesh_settings.max_tile_generation_tasks.into()
+        && !dirty_tiles.0.is_empty()
+}
+
 fn send_tile_rebuild_tasks_system(
+    mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
+    mut generation_ticker: ResMut<GenerationTicker>,
+    mut dirty_tiles: ResMut<DirtyTiles>,
+    mut tiles_to_generate: Local<Vec<UVec2>>,
+    mut heightfields: Local<HashMap<Entity, Arc<HeightField>>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
-    dirty_tiles: Res<DirtyTiles>,
     collider_query: Query<
-        (&Collider, &GlobalTransform, Option<&NavMeshAreaType>),
+        (Entity, &Collider, &GlobalTransform, Option<&NavMeshAreaType>),
         With<NavMeshAffector>,
     >,
-    mut generation_ticker: ResMut<GenerationTicker>,
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
+    
+    let max_task_count = nav_mesh_settings.max_tile_generation_tasks as usize - active_generation_tasks.0.len();
+    tiles_to_generate.extend(dirty_tiles.0.iter().take(max_task_count));
+    
+    for tile_coord in tiles_to_generate.drain(..) {
+        dirty_tiles.0.remove(&tile_coord);
 
-    for tile_coord in dirty_tiles.0.iter() {
-        let Some(affectors) = tile_affectors.get(tile_coord) else {
+        generation_ticker.0 += 1;
+
+        let Some(affectors) = tile_affectors.get(&tile_coord) else {
             // Spawn task to remove tile.
-            generation_ticker.0 += 1;
-            thread_pool.spawn(remove_tile(generation_ticker.0, *tile_coord, nav_mesh.0.clone())).detach();
+            thread_pool.spawn(remove_tile(generation_ticker.0, tile_coord, nav_mesh.0.clone())).detach();
             continue;
         };
         if affectors.is_empty() {
             // Spawn task to remove tile.
-            generation_ticker.0 += 1;
             thread_pool
                 .spawn(remove_tile(
                     generation_ticker.0,
-                    *tile_coord,
+                    tile_coord,
                     nav_mesh.0.clone(),
                 ))
                 .detach();
@@ -388,7 +416,7 @@ fn send_tile_rebuild_tasks_system(
         let mut heightfield_collections = Vec::new();
 
         let mut collider_iter = collider_query.iter_many(affectors.iter());
-        while let Some((collider, global_transform, nav_mesh_affector)) = collider_iter.fetch_next() {
+        while let Some((entity, collider, global_transform, nav_mesh_affector)) = collider_iter.fetch_next() {
             let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
 
             let type_to_convert = match collider.as_typed_shape() {
@@ -397,9 +425,20 @@ fn send_tile_rebuild_tasks_system(
                 ColliderView::Capsule(capsule) => GeometryToConvert::Collider(ColliderType::Capsule(*capsule.raw)),
                 ColliderView::TriMesh(trimesh) => GeometryToConvert::RapierTriMesh(trimesh.raw.vertices().to_vec(), trimesh.indices().to_vec()),
                 ColliderView::HeightField(heightfield) => {
+                    // Deduplicate heightfields.
+                    let heightfield = if let Some(heightfield) = heightfields.get(&entity) {
+                        heightfield.clone()
+                    } else {
+                        let heightfield = Arc::new(heightfield.raw.clone());
+
+                        heightfields.insert(entity, heightfield.clone());
+
+                        heightfield
+                    };
+
                     heightfield_collections.push(HeightFieldCollection {
                         transform: global_transform.compute_transform(),
-                        heightfield: heightfield.raw.clone(),
+                        heightfield,
                         area,
                     });
 
@@ -444,22 +483,28 @@ fn send_tile_rebuild_tasks_system(
             });
         }
 
-        // Step 2: Acquire generation & nav_mesh lock
-        generation_ticker.0 += 1;
-        let generation = generation_ticker.0;
+        // Step 2: Acquire nav_mesh lock
         let nav_mesh = nav_mesh.0.clone();
 
         // Step 3: Make it a task.
         let task = thread_pool.spawn(build_tile(
-            generation,
-            *tile_coord,
+            generation_ticker.0,
+            tile_coord,
             nav_mesh_settings.clone(),
             geometry_collections,
             heightfield_collections,
             nav_mesh,
         ));
-        task.detach();
+
+        active_generation_tasks.0.push(task);
     }
+    heightfields.clear();
+}
+
+fn remove_finished_tasks(
+    mut active_generation_tasks: ResMut<ActiveGenerationTasks> 
+) {
+    active_generation_tasks.0.retain(|task| !task.is_finished());
 }
 
 async fn remove_tile(
@@ -515,10 +560,6 @@ async fn build_tile(
 
         nav_mesh.add_tile(tile_coord, nav_mesh_tile, &nav_mesh_settings);
     }
-}
-
-fn clear_dirty_tiles_system(mut dirty_tiles: ResMut<DirtyTiles>) {
-    dirty_tiles.0.clear();
 }
 
 /*

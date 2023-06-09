@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, ops::Div};
+use std::{cmp::Ordering, ops::Div, sync::Arc};
 
 use bevy::prelude::{IVec3, UVec2, Vec3, Transform};
 use bevy_rapier3d::rapier::prelude::HeightField;
@@ -58,7 +58,7 @@ pub(super) struct TriangleCollection {
 
 pub(super) struct HeightFieldCollection {
     pub(super) transform: Transform,
-    pub(super) heightfield: HeightField,
+    pub(super) heightfield: Arc<HeightField>,
     pub(super) area: Option<u16>,
 }
 

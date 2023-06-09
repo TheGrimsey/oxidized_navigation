@@ -42,6 +42,7 @@ fn main() {
                 merge_region_area: 500,
                 max_contour_simplification_error: 1.1,
                 max_edge_length: 80,
+                max_tile_generation_tasks: 9
             }
         })
         // Rapier.

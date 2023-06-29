@@ -1,3 +1,7 @@
+## 0.5.1 (2023-06-29)
+
+- Minor update to README. Otherwise identical to 0.5.0
+
 ## 0.5.0 (2023-06-29)
 
 - ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``

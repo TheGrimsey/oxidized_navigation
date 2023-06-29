@@ -1,9 +1,10 @@
-## 0.5.0 (Unreleased)
+## 0.5.0 (2023-06-29)
 
+- ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``
 - ``find_path`` has been renamed ``find_polygon_path``
 - A new ``find_path`` function has been added that does both polygon path finding and stringpulling in one.
-- ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``
-- Refactors to geometry gathering, the game should now be blocked less when tile rebuilding starts. 
+- Defer much of geometry handling to async task, frame should now be blocked less.
+- Added ``max_tile_generation_tasks`` to optionally limit how many tiles can be generated concurrently. 
 
 ## 0.4.0 (2023-04-11)
 

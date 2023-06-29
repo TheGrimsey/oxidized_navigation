@@ -40,10 +40,10 @@ match find_path(
                 Ok(string_path) => {
                     return Some(string_path);
                 }
-                Err(error) => // Handle error
+                Err(error) => {} // Handle error
             };
         }
-        Err(error) => // Handle error
+        Err(error) => {} // Handle error
     }
 // 0.5
 match find_path(
@@ -57,10 +57,9 @@ match find_path(
         Ok(string_path) => {
             return Some(string_path);
         }
-        Err(error) => // Handle error
+        Err(error) =>  {} // Handle error
     }
 ```
-
 
 ## 0.4
 

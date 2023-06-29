@@ -198,10 +198,10 @@ pub struct NavMeshSettings {
     /// **Suggested value range**: [1.1, 1.5]
     pub max_contour_simplification_error: f32,
 
-    /// Max tiles to generate at once.
+    /// Optional max tiles to generate at once. A value of ``None`` will result in no limit.
     /// 
-    /// Adjust as memory allows. More tiles generating at once will have a higher memory footprint.
-    pub max_tile_generation_tasks: u16,
+    /// Adjust this to control memory & CPU usage. More tiles generating at once will have a higher memory footprint.
+    pub max_tile_generation_tasks: Option<u16>,
 }
 impl NavMeshSettings {
     /// Returns the length of a tile's side in world units.
@@ -364,7 +364,7 @@ fn can_generate_new_tiles(
     dirty_tiles: Res<DirtyTiles>,
     nav_mesh_settings: Res<NavMeshSettings>,
 ) -> bool {
-    active_generation_tasks.0.len() < nav_mesh_settings.max_tile_generation_tasks.into()
+    nav_mesh_settings.max_tile_generation_tasks.map_or(true, |max_tile_generation_tasks| active_generation_tasks.0.len() < max_tile_generation_tasks.into())
         && !dirty_tiles.0.is_empty()
 }
 
@@ -384,7 +384,7 @@ fn send_tile_rebuild_tasks_system(
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
     
-    let max_task_count = nav_mesh_settings.max_tile_generation_tasks as usize - active_generation_tasks.0.len();
+    let max_task_count = nav_mesh_settings.max_tile_generation_tasks.unwrap_or(u16::MAX) as usize - active_generation_tasks.0.len();
     tiles_to_generate.extend(dirty_tiles.0.iter().take(max_task_count));
     
     for tile_coord in tiles_to_generate.drain(..) {

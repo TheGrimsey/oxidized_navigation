@@ -8,9 +8,8 @@ Takes in [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders from 
 
 ## Quick-start:
 **Nav-mesh generation:**
-1. Insert an instance of the ``NavMeshSettings`` resource into your Bevy app.
-2. Add ``OxidizedNavigationPlugin`` as a plugin.
-3. Attach a ``NavMeshAffector`` component and a rapier collider to any entity you want to affect the nav-mesh.
+1. Add ``OxidizedNavigationPlugin`` as a plugin.
+2. Attach a ``NavMeshAffector`` component and a rapier collider to any entity you want to affect the nav-mesh.
 
 *At this point nav-meshes will be automatically generated whenever the collider or ``GlobalTransform`` of any entity with a ``NavMeshAffector`` is changed.*
 

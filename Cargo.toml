@@ -14,11 +14,25 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [dependencies]
-bevy = { version = "0.10", default-features = false }
-bevy_rapier3d = { version = "0.21" }
-smallvec = { version = "1.10", features = [ "union" ]}
+# bevy = { version = "0.10", default-features = false }
+bevy = { git = "https://github.com/bevyengine/bevy", default-features = false }
+# bevy_rapier3d = { version = "0.21" }
+# bevy_rapier3d = { git = "https://github.com/devil-ira/bevy_rapier.git", branch = "bevy-0.11" }
+bevy_rapier3d = { git = "https://github.com/pyrotechnick/bevy_rapier.git", branch = "bevy-0.11" }
+smallvec = { version = "1.10", features = ["union"] }
 [dev-dependencies]
-bevy = { version = "0.10", default-features = false, features = [ "bevy_winit", "bevy_render", "x11" ] }
-bevy_prototype_debug_lines = { version = "0.10", features = ["3d"] }
+# bevy = { version = "0.10", default-features = false, features = [ "bevy_winit", "bevy_render", "x11" ] }
+bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = [
+    "bevy_winit",
+    "bevy_render",
+    "x11",
+    "tonemapping_luts",
+    "ktx2",
+    "zstd",
+] }
 futures-lite = "1.12.0"
 bevy_editor_pls = "0.4.0"
+
+[patch.crates-io]
+bevy = { git = "https://github.com/bevyengine/bevy" }
+nalgebra = { git = "https://github.com/Dig-Doug/nalgebra", branch = "glam-024" }

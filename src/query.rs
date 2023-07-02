@@ -282,7 +282,7 @@ pub fn find_polygon_path(
     }
 
     path.reverse();
-    
+
     Ok(path)
 }
 
@@ -320,7 +320,7 @@ pub fn perform_string_pulling_on_path(
     let end_pos = end_tile
         .get_closest_point_in_polygon(&end_tile.polygons[path.last().unwrap().1 as usize], end_pos);
 
-    let mut string_path = Vec::with_capacity(path.len()/3 + 2);
+    let mut string_path = Vec::with_capacity(path.len() / 3 + 2);
     string_path.push(start_pos);
 
     if path.len() > 1 {
@@ -439,7 +439,7 @@ pub fn perform_string_pulling_on_path(
 #[derive(Debug)]
 pub enum FindPathError {
     PolygonPath(FindPolygonPathError),
-    StringPulling(StringPullingError)
+    StringPulling(StringPullingError),
 }
 
 /// Performs A* pathfinding and string pulling on the supplied nav-mesh.
@@ -458,7 +458,7 @@ pub fn find_path(
     end_pos: Vec3,
     position_search_radius: Option<f32>,
     area_cost_multipliers: Option<&[f32]>,
-) -> Result<Vec<Vec3>, FindPathError>{
+) -> Result<Vec<Vec3>, FindPathError> {
     match find_polygon_path(
         nav_mesh,
         nav_mesh_settings,
@@ -467,9 +467,8 @@ pub fn find_path(
         position_search_radius,
         area_cost_multipliers,
     ) {
-        Ok(path) => {
-            perform_string_pulling_on_path(nav_mesh, start_pos, end_pos, &path).map_err(FindPathError::StringPulling)
-        }
+        Ok(path) => perform_string_pulling_on_path(nav_mesh, start_pos, end_pos, &path)
+            .map_err(FindPathError::StringPulling),
         Err(error) => Err(FindPathError::PolygonPath(error)),
     }
 }

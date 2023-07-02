@@ -12,11 +12,10 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     DefaultPlugins,
 };
-use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
 use oxidized_navigation::{
-    query::{find_polygon_path, perform_string_pulling_on_path, find_path},
+    query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
@@ -26,8 +25,7 @@ fn main() {
         // Default Plugins
         .add_plugins(DefaultPlugins)
         // Debug Lines for drawing nav-mesh.
-        .add_plugin(DebugLinesPlugin::default())
-        .add_plugin(OxidizedNavigationPlugin {
+        .add_plugins(OxidizedNavigationPlugin {
             settings: NavMeshSettings {
                 cell_width: 0.25,
                 cell_height: 0.1,
@@ -42,29 +40,31 @@ fn main() {
                 merge_region_area: 500,
                 max_contour_simplification_error: 1.1,
                 max_edge_length: 80,
-                max_tile_generation_tasks: Some(9)
-            }
+                max_tile_generation_tasks: Some(9),
+            },
         })
         // Rapier.
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .insert_resource(RapierConfiguration {
             physics_pipeline_active: false,
             ..Default::default()
         })
         .insert_resource(AsyncPathfindingTasks::default())
-        .add_startup_systems((
-            setup_world_system,
-            info_system
-        ))
-        .add_systems((
-            run_blocking_pathfinding,
-            run_async_pathfinding,
-            poll_pathfinding_tasks_system,
-            draw_nav_mesh_system,
-            spawn_or_despawn_affector_system
-        ))
+        .insert_resource(DrawNavMesh(false))
+        .add_systems(Startup, (setup_world_system, info_system))
+        .add_systems(
+            Update,
+            (
+                run_blocking_pathfinding,
+                run_async_pathfinding,
+                poll_pathfinding_tasks_system,
+                draw_nav_mesh_system,
+                spawn_or_despawn_affector_system,
+            ),
+        )
+        .add_systems(PostUpdate, draw_path)
         .run();
 }
 
@@ -75,10 +75,10 @@ fn main() {
 //  Running pathfinding in a system.
 //
 fn run_blocking_pathfinding(
+    mut commands: Commands,
     keys: Res<Input<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
-    mut lines: ResMut<DebugLines>,
 ) {
     if !keys.just_pressed(KeyCode::B) {
         return;
@@ -105,7 +105,11 @@ fn run_blocking_pathfinding(
                 match perform_string_pulling_on_path(&nav_mesh, start_pos, end_pos, &path) {
                     Ok(string_path) => {
                         info!("String path (BLOCKING): {:?}", string_path);
-                        draw_path(&string_path, &mut lines, Color::RED);
+                        commands.spawn(DrawPath {
+                            timer: Timer::from_seconds(4.0, TimerMode::Once),
+                            pulled_path: string_path,
+                            color: Color::RED,
+                        });
                     }
                     Err(error) => error!("Error with string path: {:?}", error),
                 };
@@ -160,14 +164,18 @@ fn run_async_pathfinding(
 
 // Poll existing tasks.
 fn poll_pathfinding_tasks_system(
+    mut commands: Commands,
     mut pathfinding_task: ResMut<AsyncPathfindingTasks>,
-    mut lines: ResMut<DebugLines>,
 ) {
     // Go through and remove completed tasks.
     pathfinding_task.tasks.retain_mut(|task| {
         if let Some(string_path) = future::block_on(future::poll_once(task)).unwrap_or(None) {
             info!("Async path task finished with result: {:?}", string_path);
-            draw_path(&string_path, &mut lines, Color::BLUE);
+            commands.spawn(DrawPath {
+                timer: Timer::from_seconds(4.0, TimerMode::Once),
+                pulled_path: string_path.clone(),
+                color: Color::BLUE,
+            });
 
             false
         } else {
@@ -208,29 +216,51 @@ async fn async_path_find(
     None
 }
 
-// General use path draw.
+#[derive(Component)]
+struct DrawPath {
+    timer: Timer,
+    pulled_path: Vec<Vec3>,
+    color: Color,
+}
 
-fn draw_path(path: &[Vec3], lines: &mut DebugLines, color: Color) {
-    for (a, b) in path.iter().zip(path.iter().skip(1)) {
-        lines.line_colored(*a, *b, 15.0, color);
+// Helper function to draw a path for the timer's duration.
+fn draw_path(
+    mut commands: Commands,
+    mut path_query: Query<(Entity, &mut DrawPath)>,
+    time: Res<Time>,
+    mut gizmos: Gizmos,
+) {
+    for (entity, mut draw_path) in path_query.iter_mut() {
+        if draw_path.timer.tick(time.delta()).just_finished() {
+            commands.entity(entity).despawn();
+        } else {
+            gizmos.linestrip(draw_path.pulled_path.clone(), draw_path.color);
+        }
     }
 }
 
+#[derive(Resource)]
+struct DrawNavMesh(bool);
+
 //
 //  Draw Nav-mesh.
-//  Press M to run.
+//  Press M to toggle drawing the navmesh..
 //
 //  This uses the crate ``bevy_prototype_debug_lines``.
 //
 fn draw_nav_mesh_system(
     keys: Res<Input<KeyCode>>,
     nav_mesh: Res<NavMesh>,
-    mut lines: ResMut<DebugLines>,
+    mut draw_nav_mesh: ResMut<DrawNavMesh>,
+    mut gizmos: Gizmos,
 ) {
-    if !keys.just_pressed(KeyCode::M) {
-        return;
+    if keys.just_pressed(KeyCode::M) {
+        draw_nav_mesh.0 = !draw_nav_mesh.0;
     }
 
+    if !draw_nav_mesh.0 {
+        return;
+    }
     if let Ok(nav_mesh) = nav_mesh.get().read() {
         for (tile_coord, tile) in nav_mesh.get_tiles().iter() {
             let tile_color = Color::Rgba {
@@ -246,21 +276,19 @@ fn draw_nav_mesh_system(
                     let a = tile.vertices[indices[i] as usize];
                     let b = tile.vertices[indices[(i + 1) % indices.len()] as usize];
 
-                    lines.line_colored(a, b, 5.0, tile_color);
+                    gizmos.line(a, b, tile_color);
                 }
             }
 
             // Draw vertex points.
             for vertex in tile.vertices.iter() {
-                lines.line_colored(*vertex, *vertex + Vec3::Y, 10.0, tile_color);
+                gizmos.line(*vertex, *vertex + Vec3::Y, tile_color);
             }
         }
     }
 }
 
-fn setup_world_system(
-    mut commands: Commands,
-) {
+fn setup_world_system(mut commands: Commands) {
     // light
     commands.spawn(PointLightBundle {
         transform: Transform::from_xyz(4.0, 8.0, 4.0),
@@ -277,15 +305,16 @@ fn setup_world_system(
     let heightfield_heights = (0..(50*50)).map(|value| {
         let position = value / 50;
 
-        (position as f32 / 10.0).sin() / 10.0
-    }).collect();
+            (position as f32 / 10.0).sin() / 10.0
+        })
+        .collect();
     info!("heights: {heightfield_heights:?}");
 
     // Heightfield.
     commands.spawn((
         TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
         Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
-        NavMeshAffector
+        NavMeshAffector,
     ));
 }
 
@@ -294,7 +323,7 @@ fn spawn_or_despawn_affector_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut spawned_entity: Local<Option<Entity>>
+    mut spawned_entity: Local<Option<Entity>>,
 ) {
     if !keys.just_pressed(KeyCode::X) {
         return;
@@ -304,16 +333,18 @@ fn spawn_or_despawn_affector_system(
         commands.entity(entity).despawn_recursive();
         *spawned_entity = None;
     } else {
-        let entity = commands.spawn((
-            PbrBundle {
-                mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
-                material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
-                transform: Transform::from_xyz(5.0, 0.8, -5.0),
-                ..default()
-            },
-            Collider::cuboid(1.25, 1.25, 1.25),
-            NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
-        )).id();
+        let entity = commands
+            .spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
+                    material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                    transform: Transform::from_xyz(5.0, 0.8, -5.0),
+                    ..default()
+                },
+                Collider::cuboid(1.25, 1.25, 1.25),
+                NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+            ))
+            .id();
 
         *spawned_entity = Some(entity);
     }

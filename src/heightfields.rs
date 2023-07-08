@@ -50,6 +50,7 @@ pub struct OpenTile {
     pub(super) span_count: usize, // Total spans in all cells.
     pub(super) max_regions: u16,
 }
+
 pub(super) struct TriangleCollection {
     pub(super) transform: Transform,
     pub(super) triangles: Triangles,
@@ -82,7 +83,7 @@ pub(super) fn build_heightfield_tile(
         tile_origin.y,
     );
     
-    let mut translated_vertices = Vec::with_capacity(3);
+    let mut translated_vertices = Vec::default();
 
     for collection in triangle_collections.iter() {
         let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
@@ -157,6 +158,7 @@ fn process_triangle(a: Vec3, b: Vec3, c: Vec3, nav_mesh_settings: &NavMeshSettin
         let row_clip_max = row_clip_min + nav_mesh_settings.cell_width;
 
         // Clip polygon to the row.
+        // TODO: This is awful & too complicated.
         let (_, _, row_min_clip_vert_count, row_min_clip_verts) =
             divide_polygon(&vertices, 3, row_clip_min, 2);
         let (row_vert_count, row_verts, _, _) = divide_polygon(
@@ -237,22 +239,30 @@ fn process_triangle(a: Vec3, b: Vec3, c: Vec3, nav_mesh_settings: &NavMeshSettin
                     // i is before the new span. Continue until we hit one that isn't.
                     i += 1;
                     continue;
-                }
-                // An overlap!
-                match existing_span.max.cmp(&new_span.max) {
-                    Ordering::Greater => {
-                        new_span.traversable = existing_span.traversable;
+                } else {
+                    match existing_span.max.cmp(&new_span.max) {
+                        Ordering::Greater => {
+                            new_span.traversable = existing_span.traversable;
+                            new_span.area = existing_span.area;
+                        }
+                        Ordering::Equal => {
+                            new_span.traversable |= existing_span.traversable;
+                            // Higher area number has higher priority.
+                            new_span.area = new_span.area.max(existing_span.area);
+                        }
+                        Ordering::Less => {}
+                    }
+
+                    // Extend new span to existing span's size.
+                    if existing_span.min < new_span.min {
+                        new_span.min = existing_span.min;
+                    }
+                    if existing_span.max > new_span.max {
                         new_span.max = existing_span.max;
-                        new_span.area = existing_span.area;
                     }
-                    Ordering::Equal => {
-                        new_span.traversable |= existing_span.traversable;
-                        // Higher area number has higher priority.
-                        new_span.area = new_span.area.max(existing_span.area);
-                    }
-                    Ordering::Less => {}
+
+                    cell.spans.remove(i);
                 }
-                cell.spans.remove(i);
             }
             cell.spans.insert(i, new_span);
         }
@@ -349,10 +359,11 @@ pub fn build_open_heightfield_tile(
 
         let mut iter = cell.spans.iter().peekable();
         while let Some(span) = iter.next() {
-            if !span.traversable {
-                // Skip untraversable. Not filtered because we still need to peek at them.
-                continue;
-            }
+            let area = if span.traversable {
+                span.area
+            } else {
+                None
+            };
 
             if let Some(next_span) = iter.peek() {
                 // Need to check if space is large enough.
@@ -360,7 +371,7 @@ pub fn build_open_heightfield_tile(
                     open_spans.push(OpenSpan {
                         min: span.max,
                         max: Some(next_span.min),
-                        area: span.area,
+                        area,
                         ..Default::default()
                     });
                 }
@@ -369,7 +380,7 @@ pub fn build_open_heightfield_tile(
                 open_spans.push(OpenSpan {
                     min: span.max,
                     max: None,
-                    area: span.area,
+                    area,
                     ..Default::default()
                 });
             }

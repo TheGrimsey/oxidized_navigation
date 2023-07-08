@@ -12,6 +12,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     DefaultPlugins,
 };
+use bevy_editor_pls::EditorPlugin;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
@@ -49,6 +50,7 @@ fn main() {
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(EditorPlugin::default())
         .insert_resource(RapierConfiguration {
             physics_pipeline_active: false,
             ..Default::default()
@@ -281,6 +283,18 @@ fn setup_world_system(
             mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
             material: materials.add(Color::rgb(0.1, 0.1, 0.5).into()),
             transform: Transform::from_xyz(-5.0, 0.8, -5.0),
+            ..default()
+        },
+        Collider::cuboid(1.25, 1.25, 1.25),
+        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+    ));
+
+    // Tall Cube
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
+            material: materials.add(Color::rgb(0.1, 0.75, 0.5).into()),
+            transform: Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
             ..default()
         },
         Collider::cuboid(1.25, 1.25, 1.25),

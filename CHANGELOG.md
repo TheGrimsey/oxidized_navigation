@@ -1,3 +1,7 @@
+## 0.5.2 (2023-07-08)
+
+- Fix an oversight causing inconsistencies in voxel tile generation.
+
 ## 0.5.1 (2023-06-29)
 
 - Minor update to README. Otherwise identical to 0.5.0

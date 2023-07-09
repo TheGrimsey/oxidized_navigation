@@ -24,31 +24,31 @@ use oxidized_navigation::{
 fn main() {
     App::new()
         // Default Plugins
-        .add_plugins(DefaultPlugins)
-        // Debug Lines for drawing nav-mesh.
-        .add_plugins(OxidizedNavigationPlugin {
-            settings: NavMeshSettings {
-                cell_width: 0.25,
-                cell_height: 0.1,
-                tile_width: 100,
-                world_half_extents: 250.0,
-                world_bottom_bound: -100.0,
-                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-                walkable_height: 20,
-                walkable_radius: 1,
-                step_height: 3,
-                min_region_area: 100,
-                merge_region_area: 500,
-                max_contour_simplification_error: 1.1,
-                max_edge_length: 80,
-                max_tile_generation_tasks: Some(9),
+        .add_plugins((
+            DefaultPlugins,
+            OxidizedNavigationPlugin {
+                settings: NavMeshSettings {
+                    cell_width: 0.25,
+                    cell_height: 0.1,
+                    tile_width: 100,
+                    world_half_extents: 250.0,
+                    world_bottom_bound: -100.0,
+                    max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
+                    walkable_height: 20,
+                    walkable_radius: 1,
+                    step_height: 3,
+                    min_region_area: 100,
+                    merge_region_area: 500,
+                    max_contour_simplification_error: 1.1,
+                    max_edge_length: 80,
+                    max_tile_generation_tasks: Some(9),
+                },
             },
-        })
-        // Rapier.
-        // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
-        // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
-        .add_plugin(EditorPlugin::default())
+            // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
+            // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
+            RapierPhysicsPlugin::<NoUserData>::default(),
+            EditorPlugin::default(),
+        ))
         .insert_resource(RapierConfiguration {
             physics_pipeline_active: false,
             ..Default::default()

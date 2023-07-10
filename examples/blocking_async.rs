@@ -323,7 +323,8 @@ fn setup_world_system(
         PbrBundle {
             mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
             material: materials.add(Color::rgb(0.1, 0.75, 0.5).into()),
-            transform: Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
+            transform: Transform::from_xyz(-0.179, 18.419, -27.744)
+                .with_scale(Vec3::new(15.0, 15.0, 15.0)),
             ..default()
         },
         Collider::cuboid(1.25, 1.25, 1.25),

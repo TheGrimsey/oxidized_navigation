@@ -82,7 +82,7 @@ pub(super) fn build_heightfield_tile(
         nav_mesh_settings.world_bottom_bound,
         tile_origin.y,
     );
-    
+
     let mut translated_vertices = Vec::default();
 
     for collection in triangle_collections.iter() {
@@ -404,11 +404,7 @@ pub fn build_open_heightfield_tile(
 
         let mut iter = cell.spans.iter().peekable();
         while let Some(span) = iter.next() {
-            let area = if span.traversable {
-                span.area
-            } else {
-                None
-            };
+            let area = if span.traversable { span.area } else { None };
 
             if let Some(next_span) = iter.peek() {
                 // Need to check if space is large enough.

@@ -301,8 +301,9 @@ fn setup_world_system(mut commands: Commands) {
         ..default()
     });
 
-    let heightfield_heights = (0..(50*50)).map(|value| {
-        let position = value / 50;
+    let heightfield_heights = (0..(50 * 50))
+        .map(|value| {
+            let position = value / 50;
 
             (position as f32 / 10.0).sin() / 10.0
         })

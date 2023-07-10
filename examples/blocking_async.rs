@@ -12,7 +12,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     DefaultPlugins,
 };
-use bevy_editor_pls::EditorPlugin;
+// use bevy_editor_pls::EditorPlugin;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
 use oxidized_navigation::{
@@ -47,7 +47,7 @@ fn main() {
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
             RapierPhysicsPlugin::<NoUserData>::default(),
-            EditorPlugin::default(),
+            // EditorPlugin::default(),
         ))
         .insert_resource(RapierConfiguration {
             physics_pipeline_active: false,

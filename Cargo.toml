@@ -28,4 +28,4 @@ bevy = { version = "0.11", default-features = false, features = [
     "zstd",
 ] }
 futures-lite = "1.12.0"
-bevy_editor_pls = "0.4.0"
+# bevy_editor_pls = "0.4.0"

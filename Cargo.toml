@@ -15,8 +15,7 @@ categories = ["game-development"]
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
-# bevy_rapier3d = { version = "0.21" }
-bevy_rapier3d = { git = "https://github.com/devil-ira/bevy_rapier.git", branch = "bevy-0.11" }
+bevy_rapier3d = { version = "0.22" }
 smallvec = { version = "1.10", features = ["union"] }
 [dev-dependencies]
 bevy = { version = "0.11", default-features = false, features = [

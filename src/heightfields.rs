@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
-use bevy::prelude::{IVec3, UVec2, Vec3, Transform};
+use bevy::prelude::{IVec3, Transform, UVec2, Vec3};
 use bevy_rapier3d::rapier::prelude::HeightField;
 
 use crate::conversion::Triangles;
@@ -37,7 +37,7 @@ pub(super) struct OpenSpan {
     pub(super) max: Option<u16>,
     pub(super) neighbours: [Option<u16>; 4],
     pub(super) tile_index: usize, // The index of this span in the whole tile.
-    pub(super) region: u16, // Region if non-zero.
+    pub(super) region: u16,       // Region if non-zero.
     pub(super) area: Option<u16>,
 }
 
@@ -82,7 +82,7 @@ pub(super) fn build_heightfield_tile(
         nav_mesh_settings.world_bottom_bound,
         tile_origin.y,
     );
-    
+
     let mut translated_vertices = Vec::default();
 
     for collection in triangle_collections.iter() {
@@ -90,10 +90,20 @@ pub(super) fn build_heightfield_tile(
 
         match &collection.triangles {
             Triangles::Triangle(vertices) => {
-                let translated_vertices = vertices.map(|vertex| transform.transform_point(vertex) - tile_origin);
+                let translated_vertices =
+                    vertices.map(|vertex| transform.transform_point(vertex) - tile_origin);
 
-                process_triangle(translated_vertices[0], translated_vertices[1], translated_vertices[2], nav_mesh_settings, tile_max_bound, tile_side, &mut voxel_tile, collection.area);
-            },
+                process_triangle(
+                    translated_vertices[0],
+                    translated_vertices[1],
+                    translated_vertices[2],
+                    nav_mesh_settings,
+                    tile_max_bound,
+                    tile_side,
+                    &mut voxel_tile,
+                    collection.area,
+                );
+            }
             Triangles::TriMesh(vertices, triangles) => {
                 translated_vertices.clear();
                 translated_vertices.extend(
@@ -101,15 +111,24 @@ pub(super) fn build_heightfield_tile(
                         .iter()
                         .map(|vertex| transform.transform_point(*vertex) - tile_origin),
                 ); // Transform vertices.
-        
+
                 for triangle in triangles.iter() {
                     let a = translated_vertices[triangle[0] as usize];
                     let b = translated_vertices[triangle[1] as usize];
                     let c = translated_vertices[triangle[2] as usize];
-        
-                    process_triangle(a, b, c, nav_mesh_settings, tile_max_bound, tile_side, &mut voxel_tile, collection.area);
+
+                    process_triangle(
+                        a,
+                        b,
+                        c,
+                        nav_mesh_settings,
+                        tile_max_bound,
+                        tile_side,
+                        &mut voxel_tile,
+                        collection.area,
+                    );
                 }
-            },
+            }
         }
     }
 
@@ -117,18 +136,39 @@ pub(super) fn build_heightfield_tile(
         let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         for triangle in collection.heightfield.triangles() {
-            let a = transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z)) - tile_origin;
-            let b = transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z)) - tile_origin;
-            let c = transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z)) - tile_origin;
+            let a = transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z))
+                - tile_origin;
+            let b = transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z))
+                - tile_origin;
+            let c = transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z))
+                - tile_origin;
 
-            process_triangle(a, b, c, nav_mesh_settings, tile_max_bound, tile_side, &mut voxel_tile, collection.area);
+            process_triangle(
+                a,
+                b,
+                c,
+                nav_mesh_settings,
+                tile_max_bound,
+                tile_side,
+                &mut voxel_tile,
+                collection.area,
+            );
         }
     }
 
     voxel_tile
 }
 
-fn process_triangle(a: Vec3, b: Vec3, c: Vec3, nav_mesh_settings: &NavMeshSettings, tile_max_bound: IVec3, tile_side: usize, voxel_tile: &mut VoxelizedTile, area: Option<u16>) {
+fn process_triangle(
+    a: Vec3,
+    b: Vec3,
+    c: Vec3,
+    nav_mesh_settings: &NavMeshSettings,
+    tile_max_bound: IVec3,
+    tile_side: usize,
+    voxel_tile: &mut VoxelizedTile,
+    area: Option<u16>,
+) {
     let min_bound = a.min(b).min(c).div(nav_mesh_settings.cell_width).as_ivec3();
     let max_bound = a.max(b).max(c).div(nav_mesh_settings.cell_width).as_ivec3();
 
@@ -179,8 +219,8 @@ fn process_triangle(a: Vec3, b: Vec3, c: Vec3, nav_mesh_settings: &NavMeshSettin
             column_max_vert_x = column_max_vert_x.max(vertex.x);
         }
         let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
-        let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
-            .min((tile_side - 1) as i32);
+        let column_max =
+            ((column_max_vert_x / nav_mesh_settings.cell_width) as i32).min((tile_side - 1) as i32);
 
         for x in column_min..=column_max {
             let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
@@ -269,12 +309,17 @@ fn process_triangle(a: Vec3, b: Vec3, c: Vec3, nav_mesh_settings: &NavMeshSettin
     }
 }
 
-fn is_triangle_traversable(a: &Vec3, b: &Vec3, c: &Vec3, nav_mesh_settings: &NavMeshSettings) -> bool {
+fn is_triangle_traversable(
+    a: &Vec3,
+    b: &Vec3,
+    c: &Vec3,
+    nav_mesh_settings: &NavMeshSettings,
+) -> bool {
     let ab = *b - *a;
     let ac = *c - *a;
     let normal = ab.cross(ac).normalize();
     let slope = normal.dot(Vec3::Y).acos();
-    
+
     slope < nav_mesh_settings.max_traversable_slope_radians
 }
 
@@ -359,11 +404,7 @@ pub fn build_open_heightfield_tile(
 
         let mut iter = cell.spans.iter().peekable();
         while let Some(span) = iter.next() {
-            let area = if span.traversable {
-                span.area
-            } else {
-                None
-            };
+            let area = if span.traversable { span.area } else { None };
 
             if let Some(next_span) = iter.peek() {
                 // Need to check if space is large enough.

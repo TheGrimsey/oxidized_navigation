@@ -33,7 +33,9 @@ use bevy_rapier3d::prelude::ColliderView;
 use bevy_rapier3d::rapier::prelude::HeightField;
 use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
 use contour::build_contours;
-use conversion::{GeometryToConvert, ColliderType, convert_geometry_collections, GeometryCollection};
+use conversion::{
+    convert_geometry_collections, ColliderType, GeometryCollection, GeometryToConvert,
+};
 use heightfields::{
     build_heightfield_tile, build_open_heightfield_tile, calculate_distance_field,
     erode_walkable_area, HeightFieldCollection,
@@ -43,8 +45,8 @@ use regions::build_regions;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 
-mod conversion;
 mod contour;
+mod conversion;
 mod heightfields;
 mod mesher;
 pub mod query;
@@ -62,7 +64,7 @@ pub enum OxidizedNavigation {
 }
 
 pub struct OxidizedNavigationPlugin {
-    pub settings: NavMeshSettings
+    pub settings: NavMeshSettings,
 }
 
 impl Plugin for OxidizedNavigationPlugin {
@@ -76,17 +78,22 @@ impl Plugin for OxidizedNavigationPlugin {
             .init_resource::<NavMeshAffectorRelations>()
             .init_resource::<ActiveGenerationTasks>();
 
-        app.add_system(
+        app.add_systems(
+            Update,
             handle_removed_affectors_system
                 .before(send_tile_rebuild_tasks_system)
-                .in_set(OxidizedNavigation::RemovedComponent)
-        );
-
-        app.add_system(
-            remove_finished_tasks.in_set(OxidizedNavigation::Main).before(send_tile_rebuild_tasks_system),
+                .in_set(OxidizedNavigation::RemovedComponent),
         );
 
         app.add_systems(
+            Update,
+            remove_finished_tasks
+                .in_set(OxidizedNavigation::Main)
+                .before(send_tile_rebuild_tasks_system),
+        );
+
+        app.add_systems(
+            Update,
             (
                 update_navmesh_affectors_system,
                 send_tile_rebuild_tasks_system.run_if(can_generate_new_tiles),
@@ -199,7 +206,7 @@ pub struct NavMeshSettings {
     pub max_contour_simplification_error: f32,
 
     /// Optional max tiles to generate at once. A value of ``None`` will result in no limit.
-    /// 
+    ///
     /// Adjust this to control memory & CPU usage. More tiles generating at once will have a higher memory footprint.
     pub max_tile_generation_tasks: Option<u16>,
 }
@@ -275,13 +282,20 @@ fn update_navmesh_affectors_system(
     mut dirty_tiles: ResMut<DirtyTiles>,
     mut query: Query<
         (Entity, &Collider, &GlobalTransform),
-        (Or<(Changed<GlobalTransform>, Changed<Collider>, Changed<NavMeshAffector>)>, With<NavMeshAffector>)
+        (
+            Or<(
+                Changed<GlobalTransform>,
+                Changed<Collider>,
+                Changed<NavMeshAffector>,
+            )>,
+            With<NavMeshAffector>,
+        ),
     >,
 ) {
     // Expand by 2 * walkable_radius to match with erode_walkable_area.
     let border_expansion =
         f32::from(nav_mesh_settings.walkable_radius * 2) * nav_mesh_settings.cell_width;
-    
+
     query.for_each_mut(|(e, collider, global_transform)| {
         let transform = global_transform.compute_transform();
         let iso = Isometry::new(
@@ -326,9 +340,12 @@ fn update_navmesh_affectors_system(
 
             relation
         } else {
-            affector_relations.0.insert_unique_unchecked(e, SmallVec::default()).1
+            affector_relations
+                .0
+                .insert_unique_unchecked(e, SmallVec::default())
+                .1
         };
-        
+
         for x in min_tile.x..=max_tile.x {
             for y in min_tile.y..=max_tile.y {
                 let tile_coord = UVec2::new(x, y);
@@ -336,7 +353,9 @@ fn update_navmesh_affectors_system(
                 let affectors = if let Some(affectors) = tile_affectors.get_mut(&tile_coord) {
                     affectors
                 } else {
-                    tile_affectors.insert_unique_unchecked(tile_coord, HashSet::default()).1
+                    tile_affectors
+                        .insert_unique_unchecked(tile_coord, HashSet::default())
+                        .1
                 };
                 affectors.insert(e);
 
@@ -352,7 +371,10 @@ fn handle_removed_affectors_system(
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
 ) {
-    for relations in removed_affectors.iter().filter_map(|removed| affector_relations.0.remove(&removed)) {
+    for relations in removed_affectors
+        .iter()
+        .filter_map(|removed| affector_relations.0.remove(&removed))
+    {
         for tile in relations {
             dirty_tiles.0.insert(tile);
         }
@@ -364,7 +386,11 @@ fn can_generate_new_tiles(
     dirty_tiles: Res<DirtyTiles>,
     nav_mesh_settings: Res<NavMeshSettings>,
 ) -> bool {
-    nav_mesh_settings.max_tile_generation_tasks.map_or(true, |max_tile_generation_tasks| active_generation_tasks.0.len() < max_tile_generation_tasks.into())
+    nav_mesh_settings
+        .max_tile_generation_tasks
+        .map_or(true, |max_tile_generation_tasks| {
+            active_generation_tasks.0.len() < max_tile_generation_tasks.into()
+        })
         && !dirty_tiles.0.is_empty()
 }
 
@@ -378,15 +404,23 @@ fn send_tile_rebuild_tasks_system(
     nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
     collider_query: Query<
-        (Entity, &Collider, &GlobalTransform, Option<&NavMeshAreaType>),
+        (
+            Entity,
+            &Collider,
+            &GlobalTransform,
+            Option<&NavMeshAreaType>,
+        ),
         With<NavMeshAffector>,
     >,
 ) {
     let thread_pool = AsyncComputeTaskPool::get();
-    
-    let max_task_count = nav_mesh_settings.max_tile_generation_tasks.unwrap_or(u16::MAX) as usize - active_generation_tasks.0.len();
+
+    let max_task_count = nav_mesh_settings
+        .max_tile_generation_tasks
+        .unwrap_or(u16::MAX) as usize
+        - active_generation_tasks.0.len();
     tiles_to_generate.extend(dirty_tiles.0.iter().take(max_task_count));
-    
+
     for tile_coord in tiles_to_generate.drain(..) {
         dirty_tiles.0.remove(&tile_coord);
 
@@ -415,14 +449,25 @@ fn send_tile_rebuild_tasks_system(
         let mut heightfield_collections = Vec::new();
 
         let mut collider_iter = collider_query.iter_many(affectors.iter());
-        while let Some((entity, collider, global_transform, nav_mesh_affector)) = collider_iter.fetch_next() {
+        while let Some((entity, collider, global_transform, nav_mesh_affector)) =
+            collider_iter.fetch_next()
+        {
             let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
 
             let type_to_convert = match collider.as_typed_shape() {
-                ColliderView::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball.raw)),
-                ColliderView::Cuboid(cuboid) => GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid.raw)),
-                ColliderView::Capsule(capsule) => GeometryToConvert::Collider(ColliderType::Capsule(*capsule.raw)),
-                ColliderView::TriMesh(trimesh) => GeometryToConvert::RapierTriMesh(trimesh.raw.vertices().to_vec(), trimesh.indices().to_vec()),
+                ColliderView::Ball(ball) => {
+                    GeometryToConvert::Collider(ColliderType::Ball(*ball.raw))
+                }
+                ColliderView::Cuboid(cuboid) => {
+                    GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid.raw))
+                }
+                ColliderView::Capsule(capsule) => {
+                    GeometryToConvert::Collider(ColliderType::Capsule(*capsule.raw))
+                }
+                ColliderView::TriMesh(trimesh) => GeometryToConvert::RapierTriMesh(
+                    trimesh.raw.vertices().to_vec(),
+                    trimesh.indices().to_vec(),
+                ),
                 ColliderView::HeightField(heightfield) => {
                     // Deduplicate heightfields.
                     let heightfield = if let Some(heightfield) = heightfields.get(&entity) {
@@ -442,23 +487,35 @@ fn send_tile_rebuild_tasks_system(
                     });
 
                     continue;
-                },
+                }
                 ColliderView::ConvexPolyhedron(polyhedron) => {
                     let tri = polyhedron.raw.to_trimesh();
 
                     GeometryToConvert::RapierTriMesh(tri.0, tri.1)
-                },
-                ColliderView::Cylinder(cylinder) => GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder.raw)),
-                ColliderView::Cone(cone) => GeometryToConvert::Collider(ColliderType::Cone(*cone.raw)),
-                ColliderView::RoundCuboid(round_cuboid) => GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.raw.inner_shape)),
-                ColliderView::RoundCylinder(round_cylinder) => GeometryToConvert::Collider(ColliderType::Cylinder(round_cylinder.raw.inner_shape)),
-                ColliderView::RoundCone(round_cone) => GeometryToConvert::Collider(ColliderType::Cone(round_cone.raw.inner_shape)),
+                }
+                ColliderView::Cylinder(cylinder) => {
+                    GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder.raw))
+                }
+                ColliderView::Cone(cone) => {
+                    GeometryToConvert::Collider(ColliderType::Cone(*cone.raw))
+                }
+                ColliderView::RoundCuboid(round_cuboid) => {
+                    GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.raw.inner_shape))
+                }
+                ColliderView::RoundCylinder(round_cylinder) => GeometryToConvert::Collider(
+                    ColliderType::Cylinder(round_cylinder.raw.inner_shape),
+                ),
+                ColliderView::RoundCone(round_cone) => {
+                    GeometryToConvert::Collider(ColliderType::Cone(round_cone.raw.inner_shape))
+                }
                 ColliderView::RoundConvexPolyhedron(round_polyhedron) => {
                     let tri = round_polyhedron.inner_shape().raw.to_trimesh();
 
                     GeometryToConvert::RapierTriMesh(tri.0, tri.1)
                 }
-                ColliderView::Triangle(triangle) => GeometryToConvert::Collider(ColliderType::Triangle(*triangle.raw)),
+                ColliderView::Triangle(triangle) => {
+                    GeometryToConvert::Collider(ColliderType::Triangle(*triangle.raw))
+                }
                 ColliderView::RoundTriangle(triangle) => {
                     let inner_shape = triangle.inner_shape();
 
@@ -500,9 +557,7 @@ fn send_tile_rebuild_tasks_system(
     heightfields.clear();
 }
 
-fn remove_finished_tasks(
-    mut active_generation_tasks: ResMut<ActiveGenerationTasks> 
-) {
+fn remove_finished_tasks(mut active_generation_tasks: ResMut<ActiveGenerationTasks>) {
     active_generation_tasks.0.retain(|task| !task.is_finished());
 }
 
@@ -531,8 +586,12 @@ async fn build_tile(
 ) {
     let triangle_collection = convert_geometry_collections(geometry_collections);
 
-    let voxelized_tile =
-        build_heightfield_tile(tile_coord, triangle_collection, heightfields, &nav_mesh_settings);
+    let voxelized_tile = build_heightfield_tile(
+        tile_coord,
+        triangle_collection,
+        heightfields,
+        &nav_mesh_settings,
+    );
 
     let mut open_tile = build_open_heightfield_tile(voxelized_tile, &nav_mesh_settings);
 

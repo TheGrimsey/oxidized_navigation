@@ -14,11 +14,17 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [dependencies]
-bevy = { version = "0.10", default-features = false }
-bevy_rapier3d = { version = "0.21" }
-smallvec = { version = "1.10", features = [ "union" ]}
+bevy = { version = "0.11", default-features = false }
+bevy_rapier3d = { version = "0.22" }
+smallvec = { version = "1.10", features = ["union"] }
 [dev-dependencies]
-bevy = { version = "0.10", default-features = false, features = [ "bevy_winit", "bevy_render", "x11" ] }
-bevy_prototype_debug_lines = { version = "0.10", features = ["3d"] }
+bevy = { version = "0.11", default-features = false, features = [
+    "bevy_winit",
+    "bevy_render",
+    "x11",
+    "tonemapping_luts",
+    "ktx2",
+    "zstd",
+] }
 futures-lite = "1.12.0"
-bevy_editor_pls = "0.4.0"
+# bevy_editor_pls = "0.4.0"

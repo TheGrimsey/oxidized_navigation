@@ -1,4 +1,5 @@
-use bevy::{prelude::{Plugin, App, Resource, Update, Res, Gizmos, IntoSystemConfigs, Color, Vec3, Commands, Component, Query, Entity, any_with_component}, time::{Timer, Time}, reflect::Reflect};
+//! Module for debug draws.
+use bevy::{prelude::{Plugin, App, Resource, Update, Res, Gizmos, IntoSystemConfigs, Color, Vec3, Commands, Component, Query, Entity, any_with_component, ReflectResource}, time::{Timer, Time}, reflect::Reflect};
 
 use crate::NavMesh;
 
@@ -6,6 +7,7 @@ pub struct OxidizedNavigationDebugDrawPlugin;
 impl Plugin for OxidizedNavigationDebugDrawPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DrawNavMesh>();
+        app.register_type::<DrawNavMesh>();
 
         app.add_systems(Update, (
             draw_nav_mesh_system.run_if(should_draw_nav_mesh),
@@ -15,6 +17,7 @@ impl Plugin for OxidizedNavigationDebugDrawPlugin {
 }
 
 #[derive(Default, Resource, Reflect)]
+#[reflect(Resource)]
 /// Whether to draw the nav-mesh or not.
 pub struct DrawNavMesh(pub bool);
 

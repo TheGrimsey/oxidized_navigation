@@ -39,8 +39,7 @@ In this case you may be able to [override which version Oxidized Navigation depe
 
 - [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks)
 - [ ] Allow creating nav-mesh from meshes (probably add an option to ``NavMeshAffector``).
-- [ ] Rebuild all tiles when ``NavMeshSettings`` are changed. 
-- [ ] Built-in nav-mesh debug draw.
+- [ ] Rebuild all tiles when ``NavMeshSettings`` are changed.
 - [ ] Nav-mesh "layers" using different ``NavMeshSettings``.
 
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of creating data in the right format from the start.

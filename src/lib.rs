@@ -52,6 +52,8 @@ mod mesher;
 pub mod query;
 mod regions;
 pub mod tiles;
+#[cfg(feature = "debug_draw")]
+pub mod debug_draw;
 
 /// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]

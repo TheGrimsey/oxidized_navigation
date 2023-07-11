@@ -1,3 +1,7 @@
+## 0.6.0 (2023-07-11)
+- Update to Bevy 0.11. (Courtesy of @Elabaja)
+- Integrated nav-mesh debug draw in ``OxidizedNavigationDebugDrawPlugin`` (Updated debug drawing also courtesy of @Elabaja)
+
 ## 0.5.2 (2023-07-08)
 
 - Fix an oversight causing inconsistencies in voxel tile generation.

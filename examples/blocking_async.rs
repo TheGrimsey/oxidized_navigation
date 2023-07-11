@@ -18,7 +18,7 @@ use futures_lite::future;
 use oxidized_navigation::{
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
-    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
+    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
 };
 
 fn main() {
@@ -42,19 +42,18 @@ fn main() {
                     max_contour_simplification_error: 1.1,
                     max_edge_length: 80,
                     max_tile_generation_tasks: Some(9),
-                },
+                }
             },
+            OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
             RapierPhysicsPlugin::<NoUserData>::default(),
-            // EditorPlugin::default(),
         ))
         .insert_resource(RapierConfiguration {
             physics_pipeline_active: false,
             ..Default::default()
         })
         .insert_resource(AsyncPathfindingTasks::default())
-        .insert_resource(DrawNavMesh(false))
         .add_systems(Startup, (setup_world_system, info_system))
         .add_systems(
             Update,
@@ -62,11 +61,10 @@ fn main() {
                 run_blocking_pathfinding,
                 run_async_pathfinding,
                 poll_pathfinding_tasks_system,
-                draw_nav_mesh_system,
+                toggle_nav_mesh_system,
                 spawn_or_despawn_affector_system,
             ),
         )
-        .add_systems(PostUpdate, draw_path)
         .run();
 }
 
@@ -108,7 +106,7 @@ fn run_blocking_pathfinding(
                     Ok(string_path) => {
                         info!("String path (BLOCKING): {:?}", string_path);
                         commands.spawn(DrawPath {
-                            timer: Timer::from_seconds(4.0, TimerMode::Once),
+                            timer: Some(Timer::from_seconds(4.0, TimerMode::Once)),
                             pulled_path: string_path,
                             color: Color::RED,
                         });
@@ -174,7 +172,7 @@ fn poll_pathfinding_tasks_system(
         if let Some(string_path) = future::block_on(future::poll_once(task)).unwrap_or(None) {
             info!("Async path task finished with result: {:?}", string_path);
             commands.spawn(DrawPath {
-                timer: Timer::from_seconds(4.0, TimerMode::Once),
+                timer: Some(Timer::from_seconds(4.0, TimerMode::Once)),
                 pulled_path: string_path,
                 color: Color::BLUE,
             });
@@ -218,71 +216,16 @@ async fn async_path_find(
     None
 }
 
-#[derive(Component)]
-struct DrawPath {
-    timer: Timer,
-    pulled_path: Vec<Vec3>,
-    color: Color,
-}
-
-// Helper function to draw a path for the timer's duration.
-fn draw_path(
-    mut commands: Commands,
-    mut path_query: Query<(Entity, &mut DrawPath)>,
-    time: Res<Time>,
-    mut gizmos: Gizmos,
-) {
-    for (entity, mut draw_path) in path_query.iter_mut() {
-        if draw_path.timer.tick(time.delta()).just_finished() {
-            commands.entity(entity).despawn();
-        } else {
-            gizmos.linestrip(draw_path.pulled_path.clone(), draw_path.color);
-        }
-    }
-}
-
-#[derive(Resource)]
-struct DrawNavMesh(bool);
-
 //
-//  Draw Nav-mesh.
-//  Press M to run.
+//  Toggle drawing Nav-mesh.
+//  Press M to toggle drawing the navmesh.
 //
-fn draw_nav_mesh_system(
+fn toggle_nav_mesh_system(
     keys: Res<Input<KeyCode>>,
-    nav_mesh: Res<NavMesh>,
-    mut gizmos: Gizmos,
     mut show_navmesh: ResMut<DrawNavMesh>,
 ) {
     if keys.just_pressed(KeyCode::M) {
         show_navmesh.0 = !show_navmesh.0;
-    }
-
-    if show_navmesh.0 {
-        if let Ok(nav_mesh) = nav_mesh.get().read() {
-            for (tile_coord, tile) in nav_mesh.get_tiles().iter() {
-                let tile_color = Color::Rgba {
-                    red: 0.0,
-                    green: (tile_coord.x % 10) as f32 / 10.0,
-                    blue: (tile_coord.y % 10) as f32 / 10.0,
-                    alpha: 1.0,
-                };
-                // Draw polygons.
-                for poly in tile.polygons.iter() {
-                    let indices = &poly.indices;
-                    for i in 0..indices.len() {
-                        let a = tile.vertices[indices[i] as usize];
-                        let b = tile.vertices[indices[(i + 1) % indices.len()] as usize];
-                        gizmos.line(a, b, tile_color);
-                    }
-                }
-
-                // Draw vertex points.
-                for vertex in tile.vertices.iter() {
-                    gizmos.line(*vertex, *vertex + Vec3::Y, tile_color);
-                }
-            }
-        }
     }
 }
 
@@ -393,7 +336,7 @@ fn info_system() {
     info!("=========================================");
     info!("| Press A to run ASYNC path finding.    |");
     info!("| Press B to run BLOCKING path finding. |");
-    info!("| Press M to draw nav-mesh.             |");
+    info!("| Press M to toggle drawing nav-mesh.   |");
     info!("| Press X to spawn or despawn red cube. |");
     info!("=========================================");
 }

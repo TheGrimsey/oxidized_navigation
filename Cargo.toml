@@ -14,6 +14,8 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [features]
+default = ["rapier"]
+rapier = ["bevy_rapier3d"]
 debug_draw = []
 
 [[example]]
@@ -26,7 +28,8 @@ required-features = ["debug_draw"]
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
-bevy_rapier3d = { version = "0.22" }
+bevy_rapier3d = { version = "0.22", optional = true }
+parry3d = "0.13.5"
 smallvec = { version = "1.10", features = ["union"] }
 [dev-dependencies]
 bevy = { version = "0.11", default-features = false, features = [

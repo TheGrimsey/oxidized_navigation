@@ -1,9 +1,14 @@
 use bevy::prelude::{Transform, Vec3};
-use bevy_rapier3d::{
+use parry3d::{
+    math::Real,
     na::Point3,
-    prelude::Real,
-    rapier::prelude::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
+    shape::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
 };
+// use bevy_rapier3d::{
+//     na::Point3,
+//     prelude::Real,
+//     rapier::prelude::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
+// };
 
 use crate::heightfields::TriangleCollection;
 
@@ -24,7 +29,7 @@ pub(super) enum ColliderType {
 
 pub(super) enum GeometryToConvert {
     Collider(ColliderType),
-    RapierTriMesh(Vec<Point3<Real>>, Vec<[u32; 3]>),
+    ParryTriMesh(Vec<Point3<Real>>, Vec<[u32; 3]>),
 }
 
 pub(super) enum Triangles {
@@ -72,7 +77,7 @@ pub(super) fn convert_geometry(geometry_to_convert: GeometryToConvert) -> Triang
 
             Triangles::TriMesh(vertices, triangles)
         }
-        GeometryToConvert::RapierTriMesh(mut vertices, triangles) => {
+        GeometryToConvert::ParryTriMesh(mut vertices, triangles) => {
             let vertices = vertices
                 .drain(..)
                 .map(|point| Vec3::new(point.x, point.y, point.z))

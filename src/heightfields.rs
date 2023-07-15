@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
 use bevy::prelude::{IVec3, Transform, UVec2, Vec3};
-use bevy_rapier3d::rapier::prelude::HeightField;
+use parry3d::shape::HeightField;
 
 use crate::conversion::Triangles;
 

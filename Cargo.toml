@@ -16,19 +16,25 @@ categories = ["game-development"]
 [features]
 default = ["rapier"]
 rapier = ["bevy_rapier3d"]
+xpbd = ["bevy_xpbd_3d"]
 debug_draw = []
 
 [[example]]
-name = "blocking_async"
-required-features = ["debug_draw"]
+name = "blocking_async_rapier"
+required-features = ["debug_draw", "rapier"]
+
+[[example]]
+name = "blocking_async_xpbd"
+required-features = ["debug_draw", "xpbd"]
 
 [[example]]
 name = "heightfield"
-required-features = ["debug_draw"]
+required-features = ["debug_draw", "rapier"]
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
 bevy_rapier3d = { version = "0.22", optional = true }
+bevy_xpbd_3d = { version = "0.2", optional = true }
 parry3d = "0.13.5"
 smallvec = { version = "1.10", features = ["union"] }
 [dev-dependencies]

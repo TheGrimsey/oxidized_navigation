@@ -21,6 +21,7 @@
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 
+use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
 use bevy::tasks::{AsyncComputeTaskPool, Task};
@@ -29,7 +30,6 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
-use bevy_rapier3d::prelude::Collider as RapierCollider;
 use colliders::Collider;
 use contour::build_contours;
 use conversion::{
@@ -50,13 +50,13 @@ use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 pub mod colliders;
 mod contour;
 mod conversion;
+#[cfg(feature = "debug_draw")]
+pub mod debug_draw;
 mod heightfields;
 mod mesher;
 pub mod query;
 mod regions;
 pub mod tiles;
-#[cfg(feature = "debug_draw")]
-pub mod debug_draw;
 
 /// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
@@ -68,11 +68,28 @@ pub enum OxidizedNavigation {
     Main,
 }
 
-pub struct OxidizedNavigationPlugin {
+pub struct OxidizedNavigationPlugin<C: Component + Collider> {
     pub settings: NavMeshSettings,
+    pub _collider_type: PhantomData<C>,
 }
 
-impl Plugin for OxidizedNavigationPlugin {
+impl<C> OxidizedNavigationPlugin<C>
+where
+    C: Component + Collider,
+{
+    #[must_use]
+    pub fn new(settings: NavMeshSettings) -> OxidizedNavigationPlugin<C> {
+        OxidizedNavigationPlugin::<C> {
+            settings,
+            _collider_type: PhantomData::<C>,
+        }
+    }
+}
+
+impl<C> Plugin for OxidizedNavigationPlugin<C>
+where
+    C: Component + Collider,
+{
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings.clone());
 
@@ -86,7 +103,7 @@ impl Plugin for OxidizedNavigationPlugin {
         app.add_systems(
             Update,
             handle_removed_affectors_system
-                .before(send_tile_rebuild_tasks_system::<RapierCollider>)
+                .before(send_tile_rebuild_tasks_system::<C>)
                 .in_set(OxidizedNavigation::RemovedComponent),
         );
 
@@ -94,14 +111,14 @@ impl Plugin for OxidizedNavigationPlugin {
             Update,
             remove_finished_tasks
                 .in_set(OxidizedNavigation::Main)
-                .before(send_tile_rebuild_tasks_system::<RapierCollider>),
+                .before(send_tile_rebuild_tasks_system::<C>),
         );
 
         app.add_systems(
             Update,
             (
-                update_navmesh_affectors_system::<RapierCollider>,
-                send_tile_rebuild_tasks_system::<RapierCollider>.run_if(can_generate_new_tiles),
+                update_navmesh_affectors_system::<C>,
+                send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),
             )
                 .chain()
                 .in_set(OxidizedNavigation::Main),
@@ -315,7 +332,7 @@ fn update_navmesh_affectors_system<C: Component + Collider>(
             transform.translation.into(),
             transform.rotation.to_scaled_axis().into(),
         );
-        let local_aabb = collider.compute_local_aabb();
+        let local_aabb = collider.t_compute_local_aabb();
         let aabb = local_aabb
             .scaled(&Vector3::new(
                 transform.scale.x,
@@ -468,7 +485,7 @@ fn send_tile_rebuild_tasks_system<C: Component + Collider>(
         {
             let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
 
-            let type_to_convert = match collider.as_typed_shape() {
+            let type_to_convert = match collider.into_typed_shape() {
                 TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)),
                 TypedShape::Cuboid(cuboid) => {
                     GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid))

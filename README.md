@@ -37,17 +37,15 @@ In this case you may be able to [override which version Oxidized Navigation depe
 
 ## Non-exhaustive TODO-list:
 
-- [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks)
 - [ ] Allow creating nav-mesh from meshes (probably add an option to ``NavMeshAffector``).
 - [ ] Rebuild all tiles when ``NavMeshSettings`` are changed.
-- [ ] Nav-mesh "layers" using different ``NavMeshSettings``.
 
+- [ ] Nav-mesh "layers" using different ``NavMeshSettings``.
+- [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks)
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of creating data in the right format from the start.
-- [ ] Code Tests.
-- [ ] Benchmarks for tile generation & pathfinding. 
-- [ ] Optimize linking tiles. (At a cost of memory we can save time linking by storing indices of polygons with OffMesh links)
+- [ ] Benchmarks for tile generation & pathfinding.
 - [ ] Adjust memory representation for cache usage. (Some data is only used when linking tiles)
 
 ## Debug draw.
 
-Whilst not included in the plugin currently, you can use [Bevy Prototype Debug Lines](https://crates.io/crates/bevy_prototype_debug_lines) and the ``draw_nav_mesh_system`` in the ``blocking_async`` example to render the nav mesh.
+Debug draw is available behind the ``debug_draw`` feature and using the ``OxidizedNavigationDebugDrawPlugin`` see usage in examples.

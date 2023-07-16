@@ -113,7 +113,15 @@ const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 struct NavMeshAffectorRelations(HashMap<Entity, SmallVec<[UVec2; 4]>>);
 
 #[derive(Resource, Default)]
-struct ActiveGenerationTasks(Vec<Task<()>>);
+pub struct ActiveGenerationTasks(Vec<Task<()>>);
+impl ActiveGenerationTasks {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 /// Component for entities that should affect the nav-mesh.
 #[derive(Component)]

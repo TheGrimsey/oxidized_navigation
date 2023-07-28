@@ -1,3 +1,5 @@
+//! A simple example showing how to use oxidized_navigation with a custom component using parry3d colliders.
+
 use bevy::prelude::*;
 use oxidized_navigation::{
     colliders::OxidizedCollider,
@@ -81,12 +83,25 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(shape::Cube { size: 2.0 }.into()),
-            material: materials.add(Color::rgb(0.4, 0.5, 0.7).into()),
+            material: materials.add(Color::rgb(0.4, 0.5, 0.9).into()),
             transform: Transform::from_xyz(2.0, 1.0, -3.0),
             ..default()
         },
         MyParryCollider {
             collider: SharedShape::cuboid(1.0, 1.0, 1.0),
+        },
+        NavMeshAffector,
+    ));
+
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(shape::Cube { size: 0.1 }.into()),
+            material: materials.add(Color::rgb(0.4, 0.8, 0.9).into()),
+            transform: Transform::from_xyz(-3.0, 0.6, 3.0).with_scale(Vec3::new(30.0, 12.0, 1.0)),
+            ..default()
+        },
+        MyParryCollider {
+            collider: SharedShape::cuboid(1.5, 0.6, 0.05),
         },
         NavMeshAffector,
     ));

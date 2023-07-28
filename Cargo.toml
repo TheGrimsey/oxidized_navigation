@@ -31,6 +31,10 @@ required-features = ["debug_draw", "xpbd"]
 name = "heightfield"
 required-features = ["debug_draw", "rapier"]
 
+[[example]]
+name = "parry"
+required-features = ["debug_draw"]
+
 [dependencies]
 bevy = { version = "0.11", default-features = false }
 bevy_rapier3d = { version = "0.22", optional = true }

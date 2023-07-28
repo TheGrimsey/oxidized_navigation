@@ -4,11 +4,6 @@ use parry3d::{
     na::Point3,
     shape::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
 };
-// use bevy_rapier3d::{
-//     na::Point3,
-//     prelude::Real,
-//     rapier::prelude::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
-// };
 
 use crate::heightfields::TriangleCollection;
 

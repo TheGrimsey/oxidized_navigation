@@ -30,7 +30,7 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
-use colliders::Collider;
+use colliders::OxidizedCollider;
 use contour::build_contours;
 use conversion::{
     convert_geometry_collections, ColliderType, GeometryCollection, GeometryToConvert,
@@ -68,14 +68,14 @@ pub enum OxidizedNavigation {
     Main,
 }
 
-pub struct OxidizedNavigationPlugin<C: Component + Collider> {
+pub struct OxidizedNavigationPlugin<ColliderComponent> {
     pub settings: NavMeshSettings,
-    pub _collider_type: PhantomData<C>,
+    pub _collider_type: PhantomData<ColliderComponent>,
 }
 
 impl<C> OxidizedNavigationPlugin<C>
 where
-    C: Component + Collider,
+    C: OxidizedCollider,
 {
     #[must_use]
     pub fn new(settings: NavMeshSettings) -> OxidizedNavigationPlugin<C> {
@@ -88,7 +88,7 @@ where
 
 impl<C> Plugin for OxidizedNavigationPlugin<C>
 where
-    C: Component + Collider,
+    C: OxidizedCollider,
 {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings.clone());
@@ -305,7 +305,7 @@ impl NavMesh {
     }
 }
 
-fn update_navmesh_affectors_system<C: Component + Collider>(
+fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
@@ -424,7 +424,7 @@ fn can_generate_new_tiles(
         && !dirty_tiles.0.is_empty()
 }
 
-fn send_tile_rebuild_tasks_system<C: Component + Collider>(
+fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
     mut generation_ticker: ResMut<GenerationTicker>,
     mut dirty_tiles: ResMut<DirtyTiles>,

@@ -1,9 +1,9 @@
 use bevy_xpbd_3d::prelude::Collider as XpbdCollider;
 use parry3d::{bounding_volume::Aabb, shape::TypedShape};
 
-use super::Collider;
+use super::OxidizedCollider;
 
-impl Collider for XpbdCollider {
+impl OxidizedCollider for XpbdCollider {
     fn into_typed_shape(&self) -> TypedShape {
         self.as_typed_shape()
     }

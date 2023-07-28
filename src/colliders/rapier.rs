@@ -1,9 +1,9 @@
 use bevy_rapier3d::prelude::Collider as RapierCollider;
 use parry3d::{bounding_volume::Aabb, shape::TypedShape};
 
-use super::Collider;
+use super::OxidizedCollider;
 
-impl Collider for RapierCollider {
+impl OxidizedCollider for RapierCollider {
     fn into_typed_shape(&self) -> TypedShape {
         self.raw.as_typed_shape()
     }

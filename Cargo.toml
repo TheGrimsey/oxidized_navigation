@@ -24,7 +24,7 @@ name = "blocking_async_rapier"
 required-features = ["debug_draw", "rapier"]
 
 [[example]]
-name = "blocking_async_xpbd"
+name = "xpbd"
 required-features = ["debug_draw", "xpbd"]
 
 [[example]]

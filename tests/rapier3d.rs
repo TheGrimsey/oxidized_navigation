@@ -1,15 +1,16 @@
 use std::time::Duration;
 
 use bevy::{prelude::*, scene::ScenePlugin};
-use bevy_rapier3d::prelude::{RapierPhysicsPlugin, NoUserData, Collider};
-use oxidized_navigation::{OxidizedNavigationPlugin, NavMeshSettings, NavMeshAffector, ActiveGenerationTasks, NavMesh, query::find_path};
+use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
+use oxidized_navigation::{
+    query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
+    OxidizedNavigationPlugin,
+};
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
 
-fn setup_world_system(
-    mut commands: Commands,
-) {
+fn setup_world_system(mut commands: Commands) {
     // Plane
     commands.spawn((
         TransformBundle::IDENTITY,
@@ -26,22 +27,24 @@ fn setup_world_system(
 
     // Tall Cube
     commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0))),
+        TransformBundle::from_transform(
+            Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
+        ),
         Collider::cuboid(1.25, 1.25, 1.25),
         NavMeshAffector,
     ));
 
     // Thin wall
     commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0))),
+        TransformBundle::from_transform(
+            Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
+        ),
         Collider::cuboid(0.05, 0.05, 0.05),
         NavMeshAffector,
     ));
 }
 
-fn setup_heightfield_system(
-    mut commands: Commands,
-) {
+fn setup_heightfield_system(mut commands: Commands) {
     let heightfield_heights = (0..(50 * 50))
         .map(|value| {
             let position = value / 50;
@@ -63,30 +66,28 @@ fn setup_app(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
         TransformPlugin,
-        OxidizedNavigationPlugin {
-            settings: NavMeshSettings {
-                cell_width: 0.25,
-                cell_height: 0.1,
-                tile_width: 100,
-                world_half_extents: 250.0,
-                world_bottom_bound: -100.0,
-                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-                walkable_height: 20,
-                walkable_radius: 1,
-                step_height: 3,
-                min_region_area: 100,
-                merge_region_area: 500,
-                max_contour_simplification_error: 1.1,
-                max_edge_length: 80,
-                max_tile_generation_tasks: Some(9), // Github Actions are limited to 7 GB.
-            }
-        },
+        OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
+            cell_width: 0.25,
+            cell_height: 0.1,
+            tile_width: 100,
+            world_half_extents: 250.0,
+            world_bottom_bound: -100.0,
+            max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
+            walkable_height: 20,
+            walkable_radius: 1,
+            step_height: 3,
+            min_region_area: 100,
+            merge_region_area: 500,
+            max_contour_simplification_error: 1.1,
+            max_edge_length: 80,
+            max_tile_generation_tasks: Some(9), // Github Actions are limited to 7 GB.
+        }),
         // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
         // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
         RapierPhysicsPlugin::<NoUserData>::default(),
         // Required by Rapier
         AssetPlugin::default(),
-        ScenePlugin
+        ScenePlugin,
     ));
     app.add_asset::<Mesh>();
     // Required by Rapier.
@@ -119,20 +120,13 @@ fn test_simple_navigation() {
     let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
     let nav_mesh = app.world.resource::<NavMesh>().get();
     let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
-    
+
     let start_pos = Vec3::new(5.0, 1.0, 5.0);
     let end_pos = Vec3::new(-15.0, 1.0, -15.0);
 
     // Run pathfinding to get a polygon path.
-    let path = find_path(
-        &nav_mesh,
-        nav_mesh_settings,
-        start_pos,
-        end_pos,
-        None,
-        None,
-    );
-    
+    let path = find_path(&nav_mesh, nav_mesh_settings, start_pos, end_pos, None, None);
+
     if let Err(error) = path {
         panic!("Pathfinding failed: {error:?}");
     }
@@ -151,20 +145,13 @@ fn test_heightfield_navigation() {
     let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
     let nav_mesh = app.world.resource::<NavMesh>().get();
     let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
-    
+
     let start_pos = Vec3::new(5.0, 1.0, 5.0);
     let end_pos = Vec3::new(-15.0, 1.0, -15.0);
 
     // Run pathfinding to get a polygon path.
-    let path = find_path(
-        &nav_mesh,
-        nav_mesh_settings,
-        start_pos,
-        end_pos,
-        None,
-        None,
-    );
-    
+    let path = find_path(&nav_mesh, nav_mesh_settings, start_pos, end_pos, None, None);
+
     if let Err(error) = path {
         panic!("Pathfinding failed: {error:?}");
     }

@@ -32,7 +32,10 @@ fn main() {
             PhysicsPlugins::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, (toggle_nav_mesh_system,))
+        .add_systems(
+            Update,
+            (toggle_nav_mesh_system, spawn_or_despawn_affector_system),
+        )
         .run();
 }
 
@@ -51,6 +54,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    print_controls();
+
     // Plane
     commands.spawn((
         PbrBundle {
@@ -115,4 +120,43 @@ fn setup(
             .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
         ..default()
     });
+}
+
+fn spawn_or_despawn_affector_system(
+    keys: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned_entity: Local<Option<Entity>>,
+) {
+    if !keys.just_pressed(KeyCode::X) {
+        return;
+    }
+
+    if let Some(entity) = *spawned_entity {
+        commands.entity(entity).despawn_recursive();
+        *spawned_entity = None;
+    } else {
+        let entity = commands
+            .spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
+                    material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                    transform: Transform::from_xyz(5.0, 0.8, 0.0),
+                    ..default()
+                },
+                Collider::cuboid(2.5, 2.5, 2.5),
+                NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+            ))
+            .id();
+
+        *spawned_entity = Some(entity);
+    }
+}
+
+fn print_controls() {
+    info!("=========================================");
+    info!("| Press M to draw nav-mesh.             |");
+    info!("| Press X to spawn or despawn red cube. |");
+    info!("=========================================");
 }

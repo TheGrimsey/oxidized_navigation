@@ -1,11 +1,13 @@
 //! Tiled **Runtime** Nav-mesh Generation for 3D worlds in [Bevy].
 //!
-//! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
+//! Takes in colliders that implement the `OxidizedCollider` trait from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
 //!
 //! ## Quick Start:
 //! **Nav-mesh generation:**
-//! 1. Add [OxidizedNavigationPlugin] as a plugin.
-//! 2. Attach a [NavMeshAffector] component and a rapier collider to any entity you want to affect the nav-mesh.
+//! 1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier" or "xpbd" features, custom parry3d colliders don't require enabling any features).
+//! 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `bevy_xpbd_3d`.
+//! 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for xpbd `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
+//! 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for Bevy Rapier3d and Bevy Xpbd3D `Collider`s) to any entity you want to affect the nav-mesh.
 //!
 //! *At this point nav-meshes will be automatically generated whenever the collider or [GlobalTransform] of any entity with a [NavMeshAffector] is changed.*
 //!
@@ -18,6 +20,8 @@
 //! *Also see the [examples] for how to run pathfinding in an async task which may be preferable.*
 //!
 //! [Bevy]: https://crates.io/crates/bevy
+//! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
+//! [Bevy XPBD 3D]: https://crates.io/crates/bevy_xpbd_3d
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 
@@ -70,7 +74,7 @@ pub enum OxidizedNavigation {
 
 pub struct OxidizedNavigationPlugin<ColliderComponent> {
     pub settings: NavMeshSettings,
-    pub _collider_type: PhantomData<ColliderComponent>,
+    _collider_type: PhantomData<ColliderComponent>,
 }
 
 impl<C> OxidizedNavigationPlugin<C>
@@ -332,7 +336,7 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
             transform.translation.into(),
             transform.rotation.to_scaled_axis().into(),
         );
-        let local_aabb = collider.t_compute_local_aabb();
+        let local_aabb = collider.oxidized_compute_local_aabb();
         let aabb = local_aabb
             .scaled(&Vector3::new(
                 transform.scale.x,
@@ -434,13 +438,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
     collider_query: Query<
-        (
-            Entity,
-            // &bevy_rapier3d::prelude::Collider,
-            &C,
-            &GlobalTransform,
-            Option<&NavMeshAreaType>,
-        ),
+        (Entity, &C, &GlobalTransform, Option<&NavMeshAreaType>),
         With<NavMeshAffector>,
     >,
 ) {
@@ -485,7 +483,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         {
             let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
 
-            let type_to_convert = match collider.into_typed_shape() {
+            let type_to_convert = match collider.oxidized_into_typed_shape() {
                 TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)),
                 TypedShape::Cuboid(cuboid) => {
                     GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid))

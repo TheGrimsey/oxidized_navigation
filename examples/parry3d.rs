@@ -31,7 +31,10 @@ fn main() {
             OxidizedNavigationDebugDrawPlugin,
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, toggle_nav_mesh_system)
+        .add_systems(
+            Update,
+            (toggle_nav_mesh_system, spawn_or_despawn_affector_system),
+        )
         .run();
 }
 
@@ -41,11 +44,11 @@ struct MyParryCollider {
 }
 
 impl OxidizedCollider for MyParryCollider {
-    fn into_typed_shape(&self) -> parry3d::shape::TypedShape {
+    fn oxidized_into_typed_shape(&self) -> parry3d::shape::TypedShape {
         self.collider.as_typed_shape()
     }
 
-    fn t_compute_local_aabb(&self) -> parry3d::bounding_volume::Aabb {
+    fn oxidized_compute_local_aabb(&self) -> parry3d::bounding_volume::Aabb {
         self.collider.compute_local_aabb()
     }
 }
@@ -55,6 +58,8 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    print_controls();
+
     commands.spawn(Camera3dBundle {
         transform: Transform::from_xyz(4.0, 10.0, 15.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
@@ -115,4 +120,45 @@ fn toggle_nav_mesh_system(keys: Res<Input<KeyCode>>, mut show_navmesh: ResMut<Dr
     if keys.just_pressed(KeyCode::M) {
         show_navmesh.0 = !show_navmesh.0;
     }
+}
+
+fn spawn_or_despawn_affector_system(
+    keys: Res<Input<KeyCode>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut spawned_entity: Local<Option<Entity>>,
+) {
+    if !keys.just_pressed(KeyCode::X) {
+        return;
+    }
+
+    if let Some(entity) = *spawned_entity {
+        commands.entity(entity).despawn_recursive();
+        *spawned_entity = None;
+    } else {
+        let entity = commands
+            .spawn((
+                PbrBundle {
+                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
+                    material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                    transform: Transform::from_xyz(5.0, 0.8, 5.0),
+                    ..default()
+                },
+                MyParryCollider {
+                    collider: SharedShape::cuboid(1.25, 1.25, 1.25),
+                },
+                NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+            ))
+            .id();
+
+        *spawned_entity = Some(entity);
+    }
+}
+
+fn print_controls() {
+    info!("=========================================");
+    info!("| Press M to draw nav-mesh.             |");
+    info!("| Press X to spawn or despawn red cube. |");
+    info!("=========================================");
 }

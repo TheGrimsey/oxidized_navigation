@@ -1,11 +1,13 @@
 //! Tiled **Runtime** Nav-mesh Generation for 3D worlds in [Bevy].
 //!
-//! Takes in [Bevy Rapier3D] colliders from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
+//! Takes in colliders that implement the `OxidizedCollider` trait from entities with the [NavMeshAffector] component and **asynchronously** generates tiles of navigation meshes based on [NavMeshSettings]. Nav-meshes can then be queried using [query::find_path].
 //!
 //! ## Quick Start:
 //! **Nav-mesh generation:**
-//! 1. Add [OxidizedNavigationPlugin] as a plugin.
-//! 2. Attach a [NavMeshAffector] component and a rapier collider to any entity you want to affect the nav-mesh.
+//! 1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier" or "xpbd" features, custom parry3d colliders don't require enabling any features).
+//! 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `bevy_xpbd_3d`.
+//! 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for xpbd `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
+//! 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for Bevy Rapier3d and Bevy Xpbd3D `Collider`s) to any entity you want to affect the nav-mesh.
 //!
 //! *At this point nav-meshes will be automatically generated whenever the collider or [GlobalTransform] of any entity with a [NavMeshAffector] is changed.*
 //!
@@ -19,8 +21,11 @@
 //!
 //! [Bevy]: https://crates.io/crates/bevy
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
+//! [Bevy XPBD 3D]: https://crates.io/crates/bevy_xpbd_3d
+//! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 
+use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
 use bevy::tasks::{AsyncComputeTaskPool, Task};
@@ -29,9 +34,7 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
-use bevy_rapier3d::prelude::ColliderView;
-use bevy_rapier3d::rapier::prelude::HeightField;
-use bevy_rapier3d::{na::Vector3, prelude::Collider, rapier::prelude::Isometry};
+use colliders::OxidizedCollider;
 use contour::build_contours;
 use conversion::{
     convert_geometry_collections, ColliderType, GeometryCollection, GeometryToConvert,
@@ -41,19 +44,23 @@ use heightfields::{
     erode_walkable_area, HeightFieldCollection,
 };
 use mesher::build_poly_mesh;
+use parry3d::math::Isometry;
+use parry3d::na::Vector3;
+use parry3d::shape::{HeightField, TypedShape};
 use regions::build_regions;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
 
+pub mod colliders;
 mod contour;
 mod conversion;
+#[cfg(feature = "debug_draw")]
+pub mod debug_draw;
 mod heightfields;
 mod mesher;
 pub mod query;
 mod regions;
 pub mod tiles;
-#[cfg(feature = "debug_draw")]
-pub mod debug_draw;
 
 /// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
@@ -65,11 +72,28 @@ pub enum OxidizedNavigation {
     Main,
 }
 
-pub struct OxidizedNavigationPlugin {
+pub struct OxidizedNavigationPlugin<ColliderComponent> {
     pub settings: NavMeshSettings,
+    _collider_type: PhantomData<ColliderComponent>,
 }
 
-impl Plugin for OxidizedNavigationPlugin {
+impl<C> OxidizedNavigationPlugin<C>
+where
+    C: OxidizedCollider,
+{
+    #[must_use]
+    pub fn new(settings: NavMeshSettings) -> OxidizedNavigationPlugin<C> {
+        OxidizedNavigationPlugin::<C> {
+            settings,
+            _collider_type: PhantomData::<C>,
+        }
+    }
+}
+
+impl<C> Plugin for OxidizedNavigationPlugin<C>
+where
+    C: OxidizedCollider,
+{
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings.clone());
 
@@ -83,7 +107,7 @@ impl Plugin for OxidizedNavigationPlugin {
         app.add_systems(
             Update,
             handle_removed_affectors_system
-                .before(send_tile_rebuild_tasks_system)
+                .before(send_tile_rebuild_tasks_system::<C>)
                 .in_set(OxidizedNavigation::RemovedComponent),
         );
 
@@ -91,14 +115,14 @@ impl Plugin for OxidizedNavigationPlugin {
             Update,
             remove_finished_tasks
                 .in_set(OxidizedNavigation::Main)
-                .before(send_tile_rebuild_tasks_system),
+                .before(send_tile_rebuild_tasks_system::<C>),
         );
 
         app.add_systems(
             Update,
             (
-                update_navmesh_affectors_system,
-                send_tile_rebuild_tasks_system.run_if(can_generate_new_tiles),
+                update_navmesh_affectors_system::<C>,
+                send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),
             )
                 .chain()
                 .in_set(OxidizedNavigation::Main),
@@ -285,17 +309,17 @@ impl NavMesh {
     }
 }
 
-fn update_navmesh_affectors_system(
+fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
     mut query: Query<
-        (Entity, &Collider, &GlobalTransform),
+        (Entity, &C, &GlobalTransform),
         (
             Or<(
                 Changed<GlobalTransform>,
-                Changed<Collider>,
+                Changed<C>,
                 Changed<NavMeshAffector>,
             )>,
             With<NavMeshAffector>,
@@ -312,7 +336,7 @@ fn update_navmesh_affectors_system(
             transform.translation.into(),
             transform.rotation.to_scaled_axis().into(),
         );
-        let local_aabb = collider.raw.compute_local_aabb();
+        let local_aabb = collider.oxidized_compute_local_aabb();
         let aabb = local_aabb
             .scaled(&Vector3::new(
                 transform.scale.x,
@@ -404,7 +428,7 @@ fn can_generate_new_tiles(
         && !dirty_tiles.0.is_empty()
 }
 
-fn send_tile_rebuild_tasks_system(
+fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
     mut generation_ticker: ResMut<GenerationTicker>,
     mut dirty_tiles: ResMut<DirtyTiles>,
@@ -414,12 +438,7 @@ fn send_tile_rebuild_tasks_system(
     nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
     collider_query: Query<
-        (
-            Entity,
-            &Collider,
-            &GlobalTransform,
-            Option<&NavMeshAreaType>,
-        ),
+        (Entity, &C, &GlobalTransform, Option<&NavMeshAreaType>),
         With<NavMeshAffector>,
     >,
 ) {
@@ -464,26 +483,24 @@ fn send_tile_rebuild_tasks_system(
         {
             let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
 
-            let type_to_convert = match collider.as_typed_shape() {
-                ColliderView::Ball(ball) => {
-                    GeometryToConvert::Collider(ColliderType::Ball(*ball.raw))
+            let type_to_convert = match collider.oxidized_into_typed_shape() {
+                TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)),
+                TypedShape::Cuboid(cuboid) => {
+                    GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid))
                 }
-                ColliderView::Cuboid(cuboid) => {
-                    GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid.raw))
+                TypedShape::Capsule(capsule) => {
+                    GeometryToConvert::Collider(ColliderType::Capsule(*capsule))
                 }
-                ColliderView::Capsule(capsule) => {
-                    GeometryToConvert::Collider(ColliderType::Capsule(*capsule.raw))
-                }
-                ColliderView::TriMesh(trimesh) => GeometryToConvert::RapierTriMesh(
-                    trimesh.raw.vertices().to_vec(),
+                TypedShape::TriMesh(trimesh) => GeometryToConvert::ParryTriMesh(
+                    trimesh.vertices().to_vec(),
                     trimesh.indices().to_vec(),
                 ),
-                ColliderView::HeightField(heightfield) => {
+                TypedShape::HeightField(heightfield) => {
                     // Deduplicate heightfields.
                     let heightfield = if let Some(heightfield) = heightfields.get(&entity) {
                         heightfield.clone()
                     } else {
-                        let heightfield = Arc::new(heightfield.raw.clone());
+                        let heightfield = Arc::new(heightfield.clone());
 
                         heightfields.insert(entity, heightfield.clone());
 
@@ -498,48 +515,47 @@ fn send_tile_rebuild_tasks_system(
 
                     continue;
                 }
-                ColliderView::ConvexPolyhedron(polyhedron) => {
-                    let tri = polyhedron.raw.to_trimesh();
+                TypedShape::ConvexPolyhedron(polyhedron) => {
+                    let tri = polyhedron.to_trimesh();
 
-                    GeometryToConvert::RapierTriMesh(tri.0, tri.1)
+                    GeometryToConvert::ParryTriMesh(tri.0, tri.1)
                 }
-                ColliderView::Cylinder(cylinder) => {
-                    GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder.raw))
+                TypedShape::Cylinder(cylinder) => {
+                    GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder))
                 }
-                ColliderView::Cone(cone) => {
-                    GeometryToConvert::Collider(ColliderType::Cone(*cone.raw))
+                TypedShape::Cone(cone) => {
+                    GeometryToConvert::Collider(ColliderType::Cone(*cone))
                 }
-                ColliderView::RoundCuboid(round_cuboid) => {
-                    GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.raw.inner_shape))
+                TypedShape::RoundCuboid(round_cuboid) => {
+                    GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.inner_shape))
                 }
-                ColliderView::RoundCylinder(round_cylinder) => GeometryToConvert::Collider(
-                    ColliderType::Cylinder(round_cylinder.raw.inner_shape),
+                TypedShape::RoundCylinder(round_cylinder) => GeometryToConvert::Collider(
+                    ColliderType::Cylinder(round_cylinder.inner_shape),
                 ),
-                ColliderView::RoundCone(round_cone) => {
-                    GeometryToConvert::Collider(ColliderType::Cone(round_cone.raw.inner_shape))
+                TypedShape::RoundCone(round_cone) => {
+                    GeometryToConvert::Collider(ColliderType::Cone(round_cone.inner_shape))
                 }
-                ColliderView::RoundConvexPolyhedron(round_polyhedron) => {
-                    let tri = round_polyhedron.inner_shape().raw.to_trimesh();
+                TypedShape::RoundConvexPolyhedron(round_polyhedron) => {
+                    let tri = round_polyhedron.inner_shape.to_trimesh();
 
-                    GeometryToConvert::RapierTriMesh(tri.0, tri.1)
+                    GeometryToConvert::ParryTriMesh(tri.0, tri.1)
                 }
-                ColliderView::Triangle(triangle) => {
-                    GeometryToConvert::Collider(ColliderType::Triangle(*triangle.raw))
+                TypedShape::Triangle(triangle) => {
+                    GeometryToConvert::Collider(ColliderType::Triangle(*triangle))
                 }
-                ColliderView::RoundTriangle(triangle) => {
-                    let inner_shape = triangle.inner_shape();
-
-                    GeometryToConvert::Collider(ColliderType::Triangle(*inner_shape.raw))
+                TypedShape::RoundTriangle(triangle) => {
+                    GeometryToConvert::Collider(ColliderType::Triangle(triangle.inner_shape))
                 }
                 // TODO: This one requires me to think.
-                ColliderView::Compound(_) => {
+                TypedShape::Compound(_) => {
                     warn!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
                     continue;
                 }
                 // These ones do not make sense in this.
-                ColliderView::HalfSpace(_) => continue, /* This is like an infinite plane? We don't care. */
-                ColliderView::Polyline(_) => continue,  /* This is a line. */
-                ColliderView::Segment(_) => continue,   /* This is a line segment. */
+                TypedShape::HalfSpace(_) => continue, /* This is like an infinite plane? We don't care. */
+                TypedShape::Polyline(_) => continue,  /* This is a line. */
+                TypedShape::Segment(_) => continue,   /* This is a line segment. */
+                TypedShape::Custom(_) => unimplemented!("Custom shapes are not yet supported for nav-mesh generation, skipping for now.."),
             };
 
             geometry_collections.push(GeometryCollection {

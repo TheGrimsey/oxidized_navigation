@@ -14,27 +14,49 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [features]
-debug_draw = []
+default = []
+rapier = ["bevy_rapier3d"]
+xpbd = ["bevy_xpbd_3d"]
+debug_draw = ["bevy/bevy_gizmos"]
 
 [[example]]
-name = "blocking_async"
-required-features = ["debug_draw"]
+name = "blocking_async_rapier"
+required-features = ["debug_draw", "rapier"]
+
+[[example]]
+name = "xpbd"
+required-features = ["debug_draw", "xpbd"]
 
 [[example]]
 name = "heightfield"
+required-features = ["debug_draw", "rapier"]
+
+[[example]]
+name = "parry3d"
 required-features = ["debug_draw"]
+
+[[test]]
+name = "rapier3d"
+required-features = ["rapier"]
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
-bevy_rapier3d = { version = "0.22" }
+bevy_rapier3d = { version = "0.22", optional = true }
+bevy_xpbd_3d = { version = "0.2", optional = true }
+# parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
+nalgebra = { version = "0.32", features = ["convert-glam024"] }
+parry3d = "0.13.5"
 smallvec = { version = "1.10", features = ["union"] }
+
 [dev-dependencies]
 bevy = { version = "0.11", default-features = false, features = [
-    "bevy_winit",
+    "bevy_asset",
+    "bevy_pbr",
     "bevy_render",
+    "bevy_winit",
     "x11",
-    "tonemapping_luts",
     "ktx2",
+    "tonemapping_luts",
     "zstd",
 ] }
 futures-lite = "1.12.0"

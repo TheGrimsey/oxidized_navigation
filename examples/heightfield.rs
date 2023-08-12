@@ -15,33 +15,32 @@ use bevy::{
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use futures_lite::future;
 use oxidized_navigation::{
+    debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
-    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, debug_draw::{OxidizedNavigationDebugDrawPlugin, DrawNavMesh, DrawPath},
+    NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
 
 fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            OxidizedNavigationPlugin {
-                settings: NavMeshSettings {
-                    cell_width: 0.25,
-                    cell_height: 0.1,
-                    tile_width: 100,
-                    world_half_extents: 250.0,
-                    world_bottom_bound: -100.0,
-                    max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-                    walkable_height: 20,
-                    walkable_radius: 1,
-                    step_height: 3,
-                    min_region_area: 100,
-                    merge_region_area: 500,
-                    max_contour_simplification_error: 1.1,
-                    max_edge_length: 80,
-                    max_tile_generation_tasks: Some(9),
-                },
-            },
+            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
+                cell_width: 0.25,
+                cell_height: 0.1,
+                tile_width: 100,
+                world_half_extents: 250.0,
+                world_bottom_bound: -100.0,
+                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
+                walkable_height: 20,
+                walkable_radius: 1,
+                step_height: 3,
+                min_region_area: 100,
+                merge_region_area: 500,
+                max_contour_simplification_error: 1.1,
+                max_edge_length: 80,
+                max_tile_generation_tasks: Some(9),
+            }),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
@@ -218,10 +217,7 @@ async fn async_path_find(
 //  Draw Nav-mesh.
 //  Press M to toggle drawing the navmesh.
 //
-fn draw_nav_mesh_system(
-    keys: Res<Input<KeyCode>>,
-    mut draw_nav_mesh: ResMut<DrawNavMesh>,
-) {
+fn draw_nav_mesh_system(keys: Res<Input<KeyCode>>, mut draw_nav_mesh: ResMut<DrawNavMesh>) {
     if keys.just_pressed(KeyCode::M) {
         draw_nav_mesh.0 = !draw_nav_mesh.0;
     }

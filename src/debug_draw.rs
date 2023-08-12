@@ -1,5 +1,12 @@
 //! Module for debug draws.
-use bevy::{prelude::{Plugin, App, Resource, Update, Res, Gizmos, IntoSystemConfigs, Color, Vec3, Commands, Component, Query, Entity, any_with_component, ReflectResource}, time::{Timer, Time}, reflect::Reflect};
+use bevy::{
+    prelude::{
+        any_with_component, App, Color, Commands, Component, Entity, Gizmos, IntoSystemConfigs,
+        Plugin, Query, ReflectResource, Res, Resource, Update, Vec3,
+    },
+    reflect::Reflect,
+    time::{Time, Timer},
+};
 
 use crate::NavMesh;
 
@@ -9,10 +16,13 @@ impl Plugin for OxidizedNavigationDebugDrawPlugin {
         app.init_resource::<DrawNavMesh>();
         app.register_type::<DrawNavMesh>();
 
-        app.add_systems(Update, (
-            draw_nav_mesh_system.run_if(should_draw_nav_mesh),
-            draw_path_system.run_if(any_with_component::<DrawPath>())
-        ));
+        app.add_systems(
+            Update,
+            (
+                draw_nav_mesh_system.run_if(should_draw_nav_mesh),
+                draw_path_system.run_if(any_with_component::<DrawPath>()),
+            ),
+        );
     }
 }
 
@@ -25,10 +35,7 @@ fn should_draw_nav_mesh(draw_nav_mesh: Res<DrawNavMesh>) -> bool {
     draw_nav_mesh.0
 }
 
-fn draw_nav_mesh_system(
-    nav_mesh: Res<NavMesh>,
-    mut gizmos: Gizmos,
-) {
+fn draw_nav_mesh_system(nav_mesh: Res<NavMesh>, mut gizmos: Gizmos) {
     if let Ok(nav_mesh) = nav_mesh.get().read() {
         for (tile_coord, tile) in nav_mesh.get_tiles().iter() {
             let tile_color = Color::Rgba {
@@ -56,10 +63,10 @@ fn draw_nav_mesh_system(
 }
 
 #[derive(Component)]
-/// Path drawing helper component. Each instance of this component will draw a path for until ``timer`` passed before being despawned. 
+/// Path drawing helper component. Each instance of this component will draw a path for until ``timer`` passed before being despawned.
 pub struct DrawPath {
     /// Timer for how long to display path before it is despawned.
-    /// 
+    ///
     /// If ``None`` the DrawPath entity will not be automatically despawned
     pub timer: Option<Timer>,
     /// Path to display.
@@ -76,7 +83,11 @@ fn draw_path_system(
     mut gizmos: Gizmos,
 ) {
     path_query.iter_mut().for_each(|(entity, mut draw_path)| {
-        if draw_path.timer.as_mut().is_some_and(|timer| timer.tick(time.delta()).just_finished() ) {
+        if draw_path
+            .timer
+            .as_mut()
+            .is_some_and(|timer| timer.tick(time.delta()).just_finished())
+        {
             commands.entity(entity).despawn();
         } else {
             gizmos.linestrip(draw_path.pulled_path.clone(), draw_path.color);

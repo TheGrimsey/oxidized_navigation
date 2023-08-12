@@ -1,7 +1,7 @@
 use std::time::Duration;
 
-use bevy::{prelude::*, scene::ScenePlugin};
-use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
+use bevy::prelude::*;
+use bevy_xpbd_3d::prelude::{Collider, PhysicsPlugins};
 use oxidized_navigation::{
     query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
     OxidizedNavigationPlugin,
@@ -44,23 +44,6 @@ fn setup_world_system(mut commands: Commands) {
     ));
 }
 
-fn setup_heightfield_system(mut commands: Commands) {
-    let heightfield_heights = (0..(50 * 50))
-        .map(|value| {
-            let position = value / 50;
-
-            (position as f32 / 10.0).sin() / 10.0
-        })
-        .collect();
-
-    // Heightfield.
-    commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
-        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
-        NavMeshAffector,
-    ));
-}
-
 fn setup_app(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
@@ -81,13 +64,8 @@ fn setup_app(app: &mut App) {
             max_edge_length: 80,
             max_tile_generation_tasks: Some(9), // Github Actions are limited to 7 GB.
         }),
-        RapierPhysicsPlugin::<NoUserData>::default(),
-        // Required by Rapier
-        AssetPlugin::default(),
-        ScenePlugin,
+        PhysicsPlugins::default(),
     ));
-    app.add_asset::<Mesh>();
-    // Required by Rapier.
 }
 
 fn wait_for_generation_to_finish(app: &mut App) {
@@ -111,31 +89,6 @@ fn test_simple_navigation() {
     setup_app(&mut app);
 
     app.add_systems(Startup, setup_world_system);
-
-    wait_for_generation_to_finish(&mut app);
-
-    let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
-    let nav_mesh = app.world.resource::<NavMesh>().get();
-    let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
-
-    let start_pos = Vec3::new(5.0, 1.0, 5.0);
-    let end_pos = Vec3::new(-15.0, 1.0, -15.0);
-
-    // Run pathfinding to get a polygon path.
-    let path = find_path(&nav_mesh, nav_mesh_settings, start_pos, end_pos, None, None);
-
-    if let Err(error) = path {
-        panic!("Pathfinding failed: {error:?}");
-    }
-}
-
-#[test]
-fn test_heightfield_navigation() {
-    let mut app = App::new();
-
-    setup_app(&mut app);
-
-    app.add_systems(Startup, setup_heightfield_system);
 
     wait_for_generation_to_finish(&mut app);
 

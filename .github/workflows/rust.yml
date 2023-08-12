@@ -18,4 +18,4 @@ jobs:
     - name: Install alsalib headers
       run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
     - name: Run tests for repository.
-      run: cargo test
+      run: cargo test --all-features

@@ -1,27 +1,46 @@
 use std::time::Duration;
 
-use bevy::{prelude::*, scene::ScenePlugin};
-use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
+use bevy::prelude::*;
 use oxidized_navigation::{
     query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
-    OxidizedNavigationPlugin,
+    OxidizedNavigationPlugin, colliders::OxidizedCollider,
 };
+use parry3d::shape::SharedShape;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
+
+#[derive(Component)]
+struct MyParryCollider {
+    collider: SharedShape,
+}
+
+impl OxidizedCollider for MyParryCollider {
+    fn oxidized_into_typed_shape(&self) -> parry3d::shape::TypedShape {
+        self.collider.as_typed_shape()
+    }
+
+    fn oxidized_compute_local_aabb(&self) -> parry3d::bounding_volume::Aabb {
+        self.collider.compute_local_aabb()
+    }
+}
 
 fn setup_world_system(mut commands: Commands) {
     // Plane
     commands.spawn((
         TransformBundle::IDENTITY,
-        Collider::cuboid(25.0, 0.1, 25.0),
+        MyParryCollider {
+            collider: SharedShape::cuboid(25.0, 0.1, 25.0),
+        },
         NavMeshAffector,
     ));
 
     // Cube
     commands.spawn((
         TransformBundle::from_transform(Transform::from_xyz(-5.0, 0.8, -5.0)),
-        Collider::cuboid(1.25, 1.25, 1.25),
+        MyParryCollider {
+            collider: SharedShape::cuboid(1.25, 1.25, 1.25),
+        },
         NavMeshAffector,
     ));
 
@@ -30,7 +49,9 @@ fn setup_world_system(mut commands: Commands) {
         TransformBundle::from_transform(
             Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
         ),
-        Collider::cuboid(1.25, 1.25, 1.25),
+        MyParryCollider {
+            collider: SharedShape::cuboid(1.25, 1.25, 1.25),
+        },
         NavMeshAffector,
     ));
 
@@ -39,24 +60,9 @@ fn setup_world_system(mut commands: Commands) {
         TransformBundle::from_transform(
             Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
         ),
-        Collider::cuboid(0.05, 0.05, 0.05),
-        NavMeshAffector,
-    ));
-}
-
-fn setup_heightfield_system(mut commands: Commands) {
-    let heightfield_heights = (0..(50 * 50))
-        .map(|value| {
-            let position = value / 50;
-
-            (position as f32 / 10.0).sin() / 10.0
-        })
-        .collect();
-
-    // Heightfield.
-    commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
-        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
+        MyParryCollider {
+            collider: SharedShape::cuboid(0.05, 0.05, 0.05),
+        },
         NavMeshAffector,
     ));
 }
@@ -65,7 +71,7 @@ fn setup_app(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
         TransformPlugin,
-        OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
+        OxidizedNavigationPlugin::<MyParryCollider>::new(NavMeshSettings {
             cell_width: 0.25,
             cell_height: 0.1,
             tile_width: 100,
@@ -81,13 +87,7 @@ fn setup_app(app: &mut App) {
             max_edge_length: 80,
             max_tile_generation_tasks: Some(9), // Github Actions are limited to 7 GB.
         }),
-        RapierPhysicsPlugin::<NoUserData>::default(),
-        // Required by Rapier
-        AssetPlugin::default(),
-        ScenePlugin,
     ));
-    app.add_asset::<Mesh>();
-    // Required by Rapier.
 }
 
 fn wait_for_generation_to_finish(app: &mut App) {
@@ -111,31 +111,6 @@ fn test_simple_navigation() {
     setup_app(&mut app);
 
     app.add_systems(Startup, setup_world_system);
-
-    wait_for_generation_to_finish(&mut app);
-
-    let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
-    let nav_mesh = app.world.resource::<NavMesh>().get();
-    let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
-
-    let start_pos = Vec3::new(5.0, 1.0, 5.0);
-    let end_pos = Vec3::new(-15.0, 1.0, -15.0);
-
-    // Run pathfinding to get a polygon path.
-    let path = find_path(&nav_mesh, nav_mesh_settings, start_pos, end_pos, None, None);
-
-    if let Err(error) = path {
-        panic!("Pathfinding failed: {error:?}");
-    }
-}
-
-#[test]
-fn test_heightfield_navigation() {
-    let mut app = App::new();
-
-    setup_app(&mut app);
-
-    app.add_systems(Startup, setup_heightfield_system);
 
     wait_for_generation_to_finish(&mut app);
 

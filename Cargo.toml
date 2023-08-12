@@ -20,16 +20,16 @@ xpbd = ["bevy_xpbd_3d"]
 debug_draw = ["bevy/bevy_gizmos"]
 
 [[example]]
-name = "blocking_async_rapier"
+name = "rapier3d"
+required-features = ["debug_draw", "rapier"]
+
+[[example]]
+name = "rapier3d_heightfield"
 required-features = ["debug_draw", "rapier"]
 
 [[example]]
 name = "xpbd"
 required-features = ["debug_draw", "xpbd"]
-
-[[example]]
-name = "heightfield"
-required-features = ["debug_draw", "rapier"]
 
 [[example]]
 name = "parry3d"
@@ -39,14 +39,21 @@ required-features = ["debug_draw"]
 name = "rapier3d"
 required-features = ["rapier"]
 
+[[test]]
+name = "xpbd"
+required-features = ["xpbd"]
+
+[[test]]
+name = "parry3d"
+
 [dependencies]
 bevy = { version = "0.11", default-features = false }
 bevy_rapier3d = { version = "0.22", optional = true }
 bevy_xpbd_3d = { version = "0.2", optional = true }
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
 nalgebra = { version = "0.32", features = ["convert-glam024"] }
-parry3d = "0.13.5"
-smallvec = { version = "1.10", features = ["union"] }
+parry3d = "0.13"
+smallvec = { version = "1.11", features = ["union"] }
 
 [dev-dependencies]
 bevy = { version = "0.11", default-features = false, features = [
@@ -59,5 +66,4 @@ bevy = { version = "0.11", default-features = false, features = [
     "tonemapping_luts",
     "zstd",
 ] }
-futures-lite = "1.12.0"
-# bevy_editor_pls = "0.4.0"
+futures-lite = "1.13"

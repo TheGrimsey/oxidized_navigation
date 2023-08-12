@@ -56,6 +56,21 @@ fn setup(
 ) {
     print_controls();
 
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(10.0, 10.0, 15.0)
+            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        ..default()
+    });
+
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, -0.5, 0.0)),
+        ..default()
+    });
+
     // Plane
     commands.spawn((
         PbrBundle {
@@ -83,18 +98,6 @@ fn setup(
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
-    // Tall Cube
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 37.5 })),
-            material: materials.add(Color::rgb(0.1, 0.75, 0.5).into()),
-            transform: Transform::from_xyz(-0.179, 18.419, -27.744),
-            ..default()
-        },
-        Collider::cuboid(37.5, 37.5, 37.5),
-        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
-    ));
-
     // Thin wall
     commands.spawn((
         PbrBundle {
@@ -107,19 +110,6 @@ fn setup(
         Collider::cuboid(5.0, 1.5, 0.1),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
-
-    // light
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
-
-    // Camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(10.0, 10.0, 15.0)
-            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
-        ..default()
-    });
 }
 
 fn spawn_or_despawn_affector_system(

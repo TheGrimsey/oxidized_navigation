@@ -1,6 +1,31 @@
+## 0.7
+
+### ``OxidizedNavigationPlugin`` is now generic over OxidizedColliders.
+
+You will need to specify what collider type to use. This is implemented for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) colliders (behind ``rapier`` feature) & [Bevy Xpbd_3D](https://crates.io/crates/bevy_xpbd_3d) (behind ``xpbd`` feature).
+
+```rust
+// 0.6
+app.add_plugins(OxidizedNavigationPlugin { settings });
+// 0.7 (Bevy Rapier3D)
+use bevy_rapier3d::prelude::Collider;
+
+app.add_plugins(OxidizedNavigationPlugin::<Collider>::new(settings));
+
+// 0.7 (Bevy Xpbd)
+use bevy_xpbd_3d::prelude::Collider;
+
+app.add_plugins(OxidizedNavigationPlugin::<Collider>::new(settings));
+```
+
+### Using Rapier3d colliders for Nav-Mesh generation is now behind feature ``rapier``.
+
+
+
+
 ## 0.5
 
-## ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``
+### ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``
 
 You no longer have to remember to separately insert the ``NavMeshSettings`` resource.
 
@@ -20,7 +45,7 @@ app.add_plugin(OxidizedNavigationPlugin {
 ```
 
 
-## ``find_path`` now performs string pulling as well as path finding.
+### ``find_path`` now performs string pulling as well as path finding.
 
 ``find_polygon_path`` acts as ``find_path`` did previously if you only want the polygon path.
 
@@ -63,11 +88,11 @@ match find_path(
 
 ## 0.4
 
-## ``OxidizedNavigation`` system set is now an enum.
+### ``OxidizedNavigation`` system set is now an enum.
 
 To continue with previous behaviour you should configure the ``OxidizedNavigation::Main`` set. The ``RemovedComponent`` set should **not** be throttled as it reacts to removing navmesh affectors. Throttling it may cause it to miss affectors being removed.
 
-## ``NavMeshAffector`` component is now an empty type.
+### ``NavMeshAffector`` component is now an empty type.
 
 Remove ``::default()`` from when inserting the component.
 

@@ -65,7 +65,6 @@ In this case you may be able to [override which version Oxidized Navigation depe
 - [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks)
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of creating data in the right format from the start.
 - [ ] Benchmarks for tile generation & pathfinding.
-- [ ] Adjust memory representation for cache usage. (Some data is only used when linking tiles)
 
 ## Debug draw.
 

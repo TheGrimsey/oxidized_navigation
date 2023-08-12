@@ -1,6 +1,9 @@
+## 0.7.0
+- Added support for using XPBD & wrapped Parry3d components for Nav-Mesh generation (Courtesy of @Elabajaba)
+
 ## 0.6.0 (2023-07-11)
-- Update to Bevy 0.11. (Courtesy of @Elabaja)
-- Integrated nav-mesh debug draw in ``OxidizedNavigationDebugDrawPlugin`` (Updated debug drawing also courtesy of @Elabaja)
+- Update to Bevy 0.11. (Courtesy of @Elabajaba)
+- Integrated nav-mesh debug draw in ``OxidizedNavigationDebugDrawPlugin`` (Updated debug drawing also courtesy of @Elabajaba)
 
 ## 0.5.2 (2023-07-08)
 

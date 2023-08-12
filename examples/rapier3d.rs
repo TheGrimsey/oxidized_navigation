@@ -53,7 +53,7 @@ fn main() {
             ..Default::default()
         })
         .insert_resource(AsyncPathfindingTasks::default())
-        .add_systems(Startup, (setup_world_system, info_system))
+        .add_systems(Startup, setup_world_system)
         .add_systems(
             Update,
             (
@@ -230,6 +230,23 @@ fn setup_world_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
+    print_controls();
+    
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(10.0, 10.0, 15.0)
+            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        ..default()
+    });
+
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            shadows_enabled: true,
+            ..default()
+        },
+        transform: Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, -0.5, 0.0)),
+        ..default()
+    });
+
     // Plane
     commands.spawn((
         PbrBundle {
@@ -257,19 +274,6 @@ fn setup_world_system(
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
-    // Tall Cube
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
-            material: materials.add(Color::rgb(0.1, 0.75, 0.5).into()),
-            transform: Transform::from_xyz(-0.179, 18.419, -27.744)
-                .with_scale(Vec3::new(15.0, 15.0, 15.0)),
-            ..default()
-        },
-        Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
-    ));
-
     // Thin wall
     commands.spawn((
         PbrBundle {
@@ -281,19 +285,6 @@ fn setup_world_system(
         Collider::cuboid(0.05, 0.05, 0.05),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
-
-    // light
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
-
-    // Camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(10.0, 10.0, 15.0)
-            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
-        ..default()
-    });
 }
 
 fn spawn_or_despawn_affector_system(
@@ -328,7 +319,7 @@ fn spawn_or_despawn_affector_system(
     }
 }
 
-fn info_system() {
+fn print_controls() {
     info!("=========================================");
     info!("| Press A to run ASYNC path finding.    |");
     info!("| Press B to run BLOCKING path finding. |");

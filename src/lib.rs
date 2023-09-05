@@ -155,7 +155,7 @@ pub struct NavMeshAffector;
 ///
 /// Any part of the nav-mesh generated from this entity will have this area type. Overlapping areas will prefer the higher area type.
 #[derive(Component)]
-pub struct NavMeshAreaType(Option<u16>);
+pub struct NavMeshAreaType(pub Option<u16>);
 
 /*
 *   Neighbours:

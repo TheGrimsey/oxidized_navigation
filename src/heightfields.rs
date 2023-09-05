@@ -3,7 +3,7 @@ use std::{cmp::Ordering, ops::Div, sync::Arc};
 use bevy::prelude::{IVec3, Transform, UVec2, Vec3};
 use parry3d::shape::HeightField;
 
-use crate::conversion::Triangles;
+use crate::{conversion::Triangles, Area};
 
 use super::{get_neighbour_index, NavMeshSettings};
 
@@ -12,7 +12,7 @@ struct HeightSpan {
     min: u16,
     max: u16,
     traversable: bool,
-    area: Option<u16>,
+    area: Option<Area>,
 }
 
 #[derive(Default, Clone)]
@@ -38,14 +38,14 @@ pub(super) struct OpenSpan {
     pub(super) neighbours: [Option<u16>; 4],
     pub(super) tile_index: usize, // The index of this span in the whole tile.
     pub(super) region: u16,       // Region if non-zero.
-    pub(super) area: Option<u16>,
+    pub(super) area: Option<Area>,
 }
 
 #[derive(Default, Debug)]
 pub struct OpenTile {
     pub(super) cells: Vec<OpenCell>, // len = tiles_along_width^2. Laid out X to Y
     pub(super) distances: Vec<u16>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
-    pub(super) areas: Vec<Option<u16>>,
+    pub(super) areas: Vec<Option<Area>>,
     pub(super) max_distance: u16,
     pub(super) span_count: usize, // Total spans in all cells.
     pub(super) max_regions: u16,
@@ -54,13 +54,13 @@ pub struct OpenTile {
 pub(super) struct TriangleCollection {
     pub(super) transform: Transform,
     pub(super) triangles: Triangles,
-    pub(super) area: Option<u16>,
+    pub(super) area: Option<Area>,
 }
 
 pub(super) struct HeightFieldCollection {
     pub(super) transform: Transform,
     pub(super) heightfield: Arc<HeightField>,
-    pub(super) area: Option<u16>,
+    pub(super) area: Option<Area>,
 }
 
 pub(super) fn build_heightfield_tile(
@@ -169,7 +169,7 @@ fn process_triangle(
     tile_max_bound: IVec3,
     tile_side: usize,
     voxel_tile: &mut VoxelizedTile,
-    area: Option<u16>,
+    area: Option<Area>,
 ) {
     let min_bound = a.min(b).min(c).div(nav_mesh_settings.cell_width).as_ivec3();
     let max_bound = a.max(b).max(c).div(nav_mesh_settings.cell_width).as_ivec3();

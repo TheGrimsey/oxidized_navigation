@@ -155,7 +155,10 @@ pub struct NavMeshAffector;
 ///
 /// Any part of the nav-mesh generated from this entity will have this area type. Overlapping areas will prefer the higher area type.
 #[derive(Component)]
-pub struct NavMeshAreaType(pub Option<u16>);
+pub struct NavMeshAreaType(pub Option<Area>);
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Area(pub u16);
 
 /*
 *   Neighbours:
@@ -481,7 +484,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         while let Some((entity, collider, global_transform, nav_mesh_affector)) =
             collider_iter.fetch_next()
         {
-            let area = nav_mesh_affector.map_or(Some(0), |area_type| area_type.0);
+            let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
             let type_to_convert = match collider.oxidized_into_typed_shape() {
                 TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)),

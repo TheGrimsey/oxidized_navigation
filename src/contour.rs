@@ -4,7 +4,7 @@ use bevy::prelude::{warn, IVec2, UVec2, UVec4};
 
 use crate::{
     get_neighbour_index,
-    heightfields::{OpenSpan, OpenTile},
+    heightfields::{OpenSpan, OpenTile}, Area,
 };
 
 use super::{in_cone, intersect, NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION};
@@ -14,7 +14,7 @@ pub struct Contour {
     pub vertices: Vec<UVec4>,
     pub region: u16,
     /// Unlike [OpenSpan] this can't be ``None`` as ``None`` spans are ignored when generating contours.  
-    pub area: u16,
+    pub area: Area,
 }
 
 #[derive(Default)]

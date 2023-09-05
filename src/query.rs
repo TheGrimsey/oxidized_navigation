@@ -192,7 +192,7 @@ pub fn find_polygon_path(
                         [best_polygon as usize]
                         .area;
 
-                    *multipliers.get(area as usize).unwrap_or(&1.0)
+                    *multipliers.get(area.0 as usize).unwrap_or(&1.0)
                 });
 
                 let (cost, heuristic) = if end_tile == link_tile && end_poly == link_polygon {

@@ -1,4 +1,4 @@
-use crate::heightfields::{OpenSpan, OpenTile};
+use crate::{heightfields::{OpenSpan, OpenTile}, Area};
 
 use super::{get_neighbour_index, NavMeshSettings};
 
@@ -312,7 +312,7 @@ struct Region {
     overlap: bool,
     floors: Vec<u16>,
     connections: Vec<u16>,
-    area: Option<u16>,
+    area: Option<Area>,
 }
 
 fn merge_regions(

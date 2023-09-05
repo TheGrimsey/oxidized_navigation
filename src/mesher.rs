@@ -1,6 +1,6 @@
 use bevy::prelude::{info, UVec2, UVec3, UVec4};
 
-use crate::contour::ContourSet;
+use crate::{contour::ContourSet, Area};
 
 use super::{intersect, intersect_prop, left, left_on, NavMeshSettings};
 
@@ -9,7 +9,7 @@ pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
     pub polygons: Vec<[u32; VERTICES_IN_TRIANGLE]>, //
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
-    pub areas: Vec<u16>,
+    pub areas: Vec<Area>,
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096

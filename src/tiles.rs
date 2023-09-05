@@ -7,7 +7,7 @@ use smallvec::SmallVec;
 
 use crate::{
     mesher::{EdgeConnection, EdgeConnectionDirection, VERTICES_IN_TRIANGLE},
-    NavMeshSettings,
+    NavMeshSettings, Area,
 };
 
 use super::mesher::PolyMesh;
@@ -40,7 +40,7 @@ pub enum Link {
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
     pub links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
-    pub area: u16,
+    pub area: Area,
 }
 
 /*

@@ -5,12 +5,12 @@ use parry3d::{
     shape::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
 };
 
-use crate::heightfields::TriangleCollection;
+use crate::{heightfields::TriangleCollection, Area};
 
 pub(super) struct GeometryCollection {
     pub(super) transform: Transform,
     pub(super) geometry_to_convert: GeometryToConvert,
-    pub(super) area: Option<u16>,
+    pub(super) area: Option<Area>,
 }
 
 pub(super) enum ColliderType {

@@ -613,29 +613,67 @@ async fn build_tile(
     heightfields: Vec<HeightFieldCollection>,
     nav_mesh: Arc<RwLock<NavMeshTiles>>,
 ) {
-    let triangle_collection = convert_geometry_collections(geometry_collections);
+    #[cfg(feature = "trace")]
+    let _span = info_span!("Build Tile").entered();
 
-    let voxelized_tile = build_heightfield_tile(
-        tile_coord,
-        triangle_collection,
-        heightfields,
-        &nav_mesh_settings,
-    );
+    let triangle_collection = {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Convert Geometry Collections").entered();
+        convert_geometry_collections(geometry_collections)
+    };
 
-    let mut open_tile = build_open_heightfield_tile(voxelized_tile, &nav_mesh_settings);
+    let voxelized_tile = {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Build Heightfield Tile").entered();
+        build_heightfield_tile(
+            tile_coord,
+            triangle_collection,
+            heightfields,
+            &nav_mesh_settings,
+        )
+    };
+
+    let mut open_tile = {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Build Open Heightfield Tile").entered();
+        build_open_heightfield_tile(voxelized_tile, &nav_mesh_settings)
+    };
 
     // Remove areas that are too close to a wall.
-    erode_walkable_area(&mut open_tile, &nav_mesh_settings);
+    {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Erode walkable area").entered();
+        erode_walkable_area(&mut open_tile, &nav_mesh_settings);
+    }
 
-    calculate_distance_field(&mut open_tile, &nav_mesh_settings);
-    build_regions(&mut open_tile, &nav_mesh_settings);
+    {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Calculate distance field").entered();
+        calculate_distance_field(&mut open_tile, &nav_mesh_settings);
+    }
+    {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Build regions").entered();
+        build_regions(&mut open_tile, &nav_mesh_settings);
+    }
 
-    let contour_set = build_contours(open_tile, &nav_mesh_settings);
+    let contour_set = {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Build contours").entered();
+        build_contours(open_tile, &nav_mesh_settings)
+    };
 
-    let poly_mesh = build_poly_mesh(contour_set, &nav_mesh_settings);
+    let poly_mesh = {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Build poly mesh").entered();
+        build_poly_mesh(contour_set, &nav_mesh_settings)
+    };
+    let nav_mesh_tile = {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Create nav-mesh tile from poly mesh").entered();
 
-    let nav_mesh_tile =
-        create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, &nav_mesh_settings);
+        create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, &nav_mesh_settings)
+    };
 
     let Ok(mut nav_mesh) = nav_mesh.write() else {
         error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
@@ -654,12 +692,12 @@ async fn build_tile(
 *   Don't know where else to put it.
 */
 
-fn get_neighbour_index(nav_mesh_settings: &NavMeshSettings, index: usize, dir: usize) -> usize {
+fn get_neighbour_index(tile_size: usize, index: usize, dir: usize) -> usize {
     match dir {
         0 => index - 1,
-        1 => index + nav_mesh_settings.get_tile_side_with_border(),
+        1 => index + tile_size,
         2 => index + 1,
-        3 => index - nav_mesh_settings.get_tile_side_with_border(),
+        3 => index - tile_size,
         _ => panic!("Not a valid direction"),
     }
 }

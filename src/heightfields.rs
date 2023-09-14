@@ -1,7 +1,8 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
-use bevy::prelude::{IVec3, Transform, UVec2, Vec3};
+use bevy::{prelude::*, math::Vec3A};
 use parry3d::shape::HeightField;
+use smallvec::SmallVec;
 
 use crate::{conversion::Triangles, Area};
 
@@ -17,7 +18,7 @@ struct HeightSpan {
 
 #[derive(Default, Clone)]
 struct VoxelCell {
-    spans: Vec<HeightSpan>, // Bottom to top.
+    spans: SmallVec<[HeightSpan; 2]>, // Bottom to top.
 }
 
 #[derive(Default)]
@@ -27,7 +28,7 @@ pub struct VoxelizedTile {
 
 #[derive(Default, Clone, Debug)]
 pub(super) struct OpenCell {
-    pub(super) spans: Vec<OpenSpan>,
+    pub(super) spans: SmallVec<[OpenSpan; 1]>,
 }
 
 // Like a HeightSpan but representing open walkable areas (empty space with floor & height >= walkable_height
@@ -95,13 +96,13 @@ pub(super) fn build_heightfield_tile(
                     vertices.map(|vertex| transform.transform_point(vertex) - tile_origin);
 
                 process_triangle(
-                    translated_vertices[0],
-                    translated_vertices[1],
-                    translated_vertices[2],
+                    Vec3A::from(translated_vertices[0]),
+                    Vec3A::from(translated_vertices[1]),
+                    Vec3A::from(translated_vertices[2]),
                     nav_mesh_settings,
                     tile_max_bound,
                     tile_side,
-                    &mut voxel_tile,
+                    &mut voxel_tile.cells,
                     collection.area,
                 );
             }
@@ -114,9 +115,9 @@ pub(super) fn build_heightfield_tile(
                 ); // Transform vertices.
 
                 for triangle in triangles.iter() {
-                    let a = translated_vertices[triangle[0] as usize];
-                    let b = translated_vertices[triangle[1] as usize];
-                    let c = translated_vertices[triangle[2] as usize];
+                    let a = Vec3A::from(translated_vertices[triangle[0] as usize]);
+                    let b = Vec3A::from(translated_vertices[triangle[1] as usize]);
+                    let c = Vec3A::from(translated_vertices[triangle[2] as usize]);
 
                     process_triangle(
                         a,
@@ -125,7 +126,7 @@ pub(super) fn build_heightfield_tile(
                         nav_mesh_settings,
                         tile_max_bound,
                         tile_side,
-                        &mut voxel_tile,
+                        &mut voxel_tile.cells,
                         collection.area,
                     );
                 }
@@ -138,12 +139,12 @@ pub(super) fn build_heightfield_tile(
         let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         for triangle in collection.heightfield.triangles() {
-            let a = transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z))
-                - tile_origin;
-            let b = transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z))
-                - tile_origin;
-            let c = transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z))
-                - tile_origin;
+            let a = Vec3A::from(transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z))
+                - tile_origin);
+            let b = Vec3A::from(transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z))
+                - tile_origin);
+            let c = Vec3A::from(transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z))
+                - tile_origin);
 
             process_triangle(
                 a,
@@ -152,7 +153,7 @@ pub(super) fn build_heightfield_tile(
                 nav_mesh_settings,
                 tile_max_bound,
                 tile_side,
-                &mut voxel_tile,
+                &mut voxel_tile.cells,
                 collection.area,
             );
         }
@@ -162,13 +163,13 @@ pub(super) fn build_heightfield_tile(
 }
 
 fn process_triangle(
-    a: Vec3,
-    b: Vec3,
-    c: Vec3,
+    a: Vec3A,
+    b: Vec3A,
+    c: Vec3A,
     nav_mesh_settings: &NavMeshSettings,
     tile_max_bound: IVec3,
     tile_side: usize,
-    voxel_tile: &mut VoxelizedTile,
+    voxel_cells: &mut [VoxelCell],
     area: Option<Area>,
 ) {
     let min_bound = a.min(b).min(c).div(nav_mesh_settings.cell_width).as_ivec3();
@@ -185,8 +186,8 @@ fn process_triangle(
 
     let clamped_bound_min = min_bound.max(IVec3::ZERO);
     let clamped_bound_max = max_bound.min(tile_max_bound);
-    let traversable = is_triangle_traversable(&a, &b, &c, nav_mesh_settings);
-    let vertices = [a, b, c, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO, Vec3::ZERO];
+    let traversable = is_triangle_traversable(a, b, c, nav_mesh_settings);
+    let vertices = [a, b, c];
 
     // For cache reasons we go.
     // --> X
@@ -201,14 +202,8 @@ fn process_triangle(
 
         // Clip polygon to the row.
         // TODO: This is awful & too complicated.
-        let (_, _, row_min_clip_vert_count, row_min_clip_verts) =
-            divide_polygon(&vertices, 3, row_clip_min, 2);
-        let (row_vert_count, row_verts, _, _) = divide_polygon(
-            &row_min_clip_verts,
-            row_min_clip_vert_count,
-            row_clip_max,
-            2,
-        );
+        let (row_min_clip_vert_count, row_min_clip_verts) = divide_polygon(&vertices, row_clip_min, 2, false);
+        let (row_vert_count, row_verts) = divide_polygon(&row_min_clip_verts[..row_min_clip_vert_count],row_clip_max, 2, true);
         if row_vert_count < 3 {
             continue;
         }
@@ -229,14 +224,8 @@ fn process_triangle(
             let column_clip_max = column_clip_min + nav_mesh_settings.cell_width;
 
             // Clip polygon to column.
-            let (_, _, column_min_clip_vert_count, column_min_clip_verts) =
-                divide_polygon(&row_verts, row_vert_count, column_clip_min, 0);
-            let (column_vert_count, column_verts, _, _) = divide_polygon(
-                &column_min_clip_verts,
-                column_min_clip_vert_count,
-                column_clip_max,
-                0,
-            );
+            let (column_min_clip_vert_count, column_min_clip_verts) = divide_polygon(&row_verts[..row_vert_count], column_clip_min, 0, false);
+            let (column_vert_count, column_verts) = divide_polygon(&column_min_clip_verts[..column_min_clip_vert_count],column_clip_max, 0, true);
             if column_vert_count < 3 {
                 continue;
             }
@@ -257,7 +246,7 @@ fn process_triangle(
             let max_height = (square_max_height / nav_mesh_settings.cell_height) as u16;
 
             let index = x as usize + z as usize * tile_side;
-            let cell = &mut voxel_tile.cells[index];
+            let cell = &mut voxel_cells[index];
 
             let mut new_span = HeightSpan {
                 min: min_height,
@@ -312,15 +301,15 @@ fn process_triangle(
 }
 
 fn is_triangle_traversable(
-    a: &Vec3,
-    b: &Vec3,
-    c: &Vec3,
+    a: Vec3A,
+    b: Vec3A,
+    c: Vec3A,
     nav_mesh_settings: &NavMeshSettings,
 ) -> bool {
-    let ab = *b - *a;
-    let ac = *c - *a;
+    let ab = b - a;
+    let ac = c - a;
     let normal = ab.cross(ac).normalize();
-    let slope = normal.dot(Vec3::Y).acos();
+    let slope = normal.dot(Vec3A::Y).acos();
 
     slope < nav_mesh_settings.max_traversable_slope_radians
 }
@@ -331,61 +320,66 @@ fn is_triangle_traversable(
 *   the right polygon's vertex count, and the right polygon's vertices.
 */
 fn divide_polygon(
-    vertices: &[Vec3; 7], // TODO: Is it even possible to have more than 4 vertices as a result of a single triangle?
-    vertex_count_in: usize,
+    vertices: &[Vec3A],
     clip_line: f32,
     axis: usize,
-) -> (usize, [Vec3; 7], usize, [Vec3; 7]) {
-    // TODO: We always use one of these options. Does it make sense to even return the other?
-    let mut polygon_a = [Vec3::ZERO; 7];
-    let mut polygon_b = [Vec3::ZERO; 7];
-
-    let mut delta_from_line = [0.0; 12];
+    keep_left: bool
+) -> (usize, [Vec3A; 7]) {
+    let mut delta_from_line = [0.0; 7];
     // This loop determines which side of the line the vertex is on.
-    for i in 0..vertex_count_in {
-        delta_from_line[i] = clip_line - vertices[i][axis];
+    for (i, vertex) in vertices.iter().enumerate() {
+        delta_from_line[i] = clip_line - vertex[axis];
     }
 
-    let mut verts_a = 0;
-    let mut verts_b = 0;
+    // TODO: We always use one of these options. Does it make sense to even return the other?
+    let mut polygon_left = [Vec3A::ZERO; 7];
+    let mut polygon_right = [Vec3A::ZERO; 7];
 
-    for i in 0..vertex_count_in {
-        let j = (vertex_count_in - 1 + i) % vertex_count_in; // j is i-1 wrapped.
+    let mut verts_left = 0;
+    let mut verts_right = 0;
 
-        let in_a = delta_from_line[j] >= 0.0;
+    for i in 0..vertices.len() {
+        let previous = (vertices.len() - 1 + i) % vertices.len(); // j is i-1 wrapped.
+
+        let in_a = delta_from_line[previous] >= 0.0;
         let in_b = delta_from_line[i] >= 0.0;
 
         // Check if both vertices are on the same side of the line.
         if in_a != in_b {
             // We slide the vertex along to the edge.
-            let slide = delta_from_line[j] / (delta_from_line[j] - delta_from_line[i]);
+            let slide = delta_from_line[previous] / (delta_from_line[previous] - delta_from_line[i]);
 
-            polygon_a[verts_a] = vertices[j] + (vertices[i] - vertices[j]) * slide;
-            polygon_b[verts_b] = polygon_a[verts_a];
-            verts_a += 1;
-            verts_b += 1;
+            polygon_left[verts_left] = vertices[previous] + (vertices[i] - vertices[previous]) * slide;
+            polygon_right[verts_right] = polygon_left[verts_left];
+            verts_left += 1;
+            verts_right += 1;
 
             if delta_from_line[i] > 0.0 {
-                polygon_a[verts_a] = vertices[i];
-                verts_a += 1;
+                polygon_left[verts_left] = vertices[i];
+                verts_left += 1;
             } else if delta_from_line[i] < 0.0 {
-                polygon_b[verts_b] = vertices[i];
-                verts_b += 1;
+                polygon_right[verts_right] = vertices[i];
+                verts_right += 1;
             }
         } else {
             if delta_from_line[i] >= 0.0 {
-                polygon_a[verts_a] = vertices[i];
-                verts_a += 1;
+                polygon_left[verts_left] = vertices[i];
+                verts_left += 1;
 
                 if delta_from_line[i] != 0.0 {
                     continue;
                 }
             }
-            polygon_b[verts_b] = vertices[i];
-            verts_b += 1;
+            polygon_right[verts_right] = vertices[i];
+            verts_right += 1;
         }
     }
-    (verts_a, polygon_a, verts_b, polygon_b)
+
+    if keep_left {
+        (verts_left, polygon_left)
+    } else {
+        (verts_right, polygon_right)
+    }
 }
 
 pub fn build_open_heightfield_tile(
@@ -452,17 +446,18 @@ pub fn build_open_heightfield_tile(
             tile_index += 1;
         }
     }
-
-    link_neighbours(&mut open_tile, nav_mesh_settings);
+    
+    {
+        #[cfg(feature = "trace")]
+        let _span = info_span!("Link neighbours").entered();
+        link_neighbours(&mut open_tile, nav_mesh_settings);
+    }
 
     open_tile
 }
 
 fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
-    let mut x_positive = Vec::with_capacity(3);
-    let mut x_negative = Vec::with_capacity(3);
-    let mut z_positive = Vec::with_capacity(3);
-    let mut z_negative = Vec::with_capacity(3);
+    let mut neighbour_spans = Vec::with_capacity(3);
 
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
     for i in 0..open_tile.cells.len() {
@@ -473,115 +468,41 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
         let row = i / tile_side;
         let column = i % tile_side;
 
-        let x_positive_contained = column < (tile_side - 1);
-        let x_negative_contained = column > 0;
-        let z_positive_contained = row < (tile_side - 1);
-        let z_negative_contained = row > 0;
+        let is_neighbour_contained = [
+            column > 0,
+            row < (tile_side - 1),
+            column < (tile_side - 1),
+            row > 0
+        ];
+        let neighbour_index = [
+            i - 1,
+            i + tile_side,
+            i + 1,
+            i - tile_side
+        ];
 
-        x_positive.clear();
-        x_negative.clear();
-        z_positive.clear();
-        z_negative.clear();
-
-        if x_positive_contained {
-            x_positive.extend(
-                open_tile.cells[i + 1]
+        // For each direct neighbour.
+        for neighbour in (0..4usize).filter(|i| is_neighbour_contained[*i]) {
+            neighbour_spans.extend(
+                open_tile.cells[neighbour_index[neighbour]]
                     .spans
                     .iter()
                     .map(|span| (span.min, span.max)),
             );
-        }
-        if x_negative_contained {
-            x_negative.extend(
-                open_tile.cells[i - 1]
-                    .spans
-                    .iter()
-                    .map(|span| (span.min, span.max)),
-            );
-        }
-        if z_positive_contained {
-            z_positive.extend(
-                open_tile.cells[i + tile_side]
-                    .spans
-                    .iter()
-                    .map(|span| (span.min, span.max)),
-            );
-        }
-        if z_negative_contained {
-            z_negative.extend(
-                open_tile.cells[i - tile_side]
-                    .spans
-                    .iter()
-                    .map(|span| (span.min, span.max)),
-            );
-        }
 
-        for span in open_tile.cells[i].spans.iter_mut() {
-            for (i, (min, max)) in x_negative.iter().enumerate() {
-                if max.is_some() && span.max.is_some() {
-                    let max = max.unwrap();
-                    let span_max = span.max.unwrap();
-
-                    let gap = span_max.min(max).abs_diff(span.min.max(*min));
-                    if gap < nav_mesh_settings.walkable_height {
-                        continue;
+            for span in open_tile.cells[i].spans.iter_mut() {
+                for (i, (min, max)) in neighbour_spans.drain(..).enumerate() {
+                    if let Some((max, span_max)) = max.zip(span.max) {
+                        let gap = span_max.min(max).abs_diff(span.min.max(min));
+                        if gap < nav_mesh_settings.walkable_height {
+                            continue;
+                        }
                     }
-                }
-
-                if min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                    span.neighbours[0] = Some(i as u16);
-                    break;
-                }
-            }
-
-            for (i, (min, max)) in z_positive.iter().enumerate() {
-                if max.is_some() && span.max.is_some() {
-                    let max = max.unwrap();
-                    let span_max = span.max.unwrap();
-
-                    let gap = span_max.min(max).abs_diff(span.min.max(*min));
-                    if gap < nav_mesh_settings.walkable_height {
-                        continue;
+    
+                    if min.abs_diff(span.min) < nav_mesh_settings.step_height {
+                        span.neighbours[neighbour] = Some(i as u16);
+                        break;
                     }
-                }
-
-                if min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                    span.neighbours[1] = Some(i as u16);
-                    break;
-                }
-            }
-
-            for (i, (min, max)) in x_positive.iter().enumerate() {
-                if max.is_some() && span.max.is_some() {
-                    let max = max.unwrap();
-                    let span_max = span.max.unwrap();
-
-                    let gap = span_max.min(max).abs_diff(span.min.max(*min));
-                    if gap < nav_mesh_settings.walkable_height {
-                        continue;
-                    }
-                }
-
-                if min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                    span.neighbours[2] = Some(i as u16);
-                    break;
-                }
-            }
-
-            for (i, (min, max)) in z_negative.iter().enumerate() {
-                if max.is_some() && span.max.is_some() {
-                    let max = max.unwrap();
-                    let span_max = span.max.unwrap();
-
-                    let gap = span_max.min(max).abs_diff(span.min.max(*min));
-                    if gap < nav_mesh_settings.walkable_height {
-                        continue;
-                    }
-                }
-
-                if min.abs_diff(span.min) < nav_mesh_settings.step_height {
-                    span.neighbours[3] = Some(i as u16);
-                    break;
                 }
             }
         }
@@ -589,6 +510,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
 }
 
 pub fn erode_walkable_area(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
     // Mark boundary cells.
     for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {
@@ -601,7 +523,7 @@ pub fn erode_walkable_area(open_tile: &mut OpenTile, nav_mesh_settings: &NavMesh
 
             let all_neighbours = span.neighbours.iter().enumerate().all(|(dir, neighbour)| {
                 if let Some(neighbour) = neighbour {
-                    let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                    let neighbour_index = get_neighbour_index(tile_side, i, dir);
                     let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
 
                     open_tile.areas[neighbour.tile_index].is_some() // Any neighbour not marked as unwalkable.
@@ -626,6 +548,7 @@ pub fn erode_walkable_area(open_tile: &mut OpenTile, nav_mesh_settings: &NavMesh
 }
 
 pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings) {
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
     // Mark boundary cells.
     for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {
@@ -633,7 +556,7 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
 
             let all_neighbours = span.neighbours.iter().enumerate().all(|(dir, neighbour)| {
                 if let Some(neighbour) = neighbour {
-                    let neighbour_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                    let neighbour_index = get_neighbour_index(tile_side, i, dir);
                     let neighbour = &open_tile.cells[neighbour_index].spans[*neighbour as usize];
 
                     open_tile.areas[neighbour.tile_index] == area // Only neighbours of same area.
@@ -670,7 +593,7 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
                     continue;
                 };
 
-                let other_cell_index = get_neighbour_index(nav_mesh_settings, i, dir);
+                let other_cell_index = get_neighbour_index(tile_side, i, dir);
                 let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
 
                 d += open_tile.distances[other_span.tile_index];
@@ -682,7 +605,7 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
                 };
 
                 let other_cell_index =
-                    get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir);
+                    get_neighbour_index(tile_side, other_cell_index, next_dir);
 
                 let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
 

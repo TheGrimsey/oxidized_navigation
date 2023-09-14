@@ -18,6 +18,7 @@ default = []
 rapier = ["bevy_rapier3d"]
 xpbd = ["bevy_xpbd_3d"]
 debug_draw = ["bevy/bevy_gizmos"]
+trace = []
 
 [[example]]
 name = "rapier3d"

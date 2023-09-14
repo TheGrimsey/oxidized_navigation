@@ -41,6 +41,7 @@ pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) 
     let mut contour_set = ContourSet {
         contours: Vec::with_capacity(max_contours.into()),
     };
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
 
     // Mark boundaries.
     let mut boundry_flags = vec![0u8; open_tile.span_count];
@@ -52,7 +53,7 @@ pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) 
                 let mut other_region = 0;
                 if let Some(span_index) = span.neighbours[dir] {
                     let other_span = &open_tile.cells
-                        [get_neighbour_index(nav_mesh_settings, cell_index, dir)]
+                        [get_neighbour_index(tile_side, cell_index, dir)]
                     .spans[span_index as usize];
                     other_region = other_span.region;
                 }
@@ -390,6 +391,7 @@ fn walk_contour(
     let start_direction = dir;
     let start_cell = cell_index;
     let start_span = span_index;
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
 
     loop {
         let row = cell_index / nav_mesh_settings.get_tile_side_with_border();
@@ -403,7 +405,7 @@ fn walk_contour(
             let mut bordering_region = 0u32;
             if let Some(span_index) = span.neighbours[dir as usize] {
                 let other_span = &tile.cells
-                    [get_neighbour_index(nav_mesh_settings, cell_index, dir.into())]
+                    [get_neighbour_index(tile_side, cell_index, dir.into())]
                 .spans[span_index as usize];
                 bordering_region = other_span.region.into();
             }
@@ -431,7 +433,7 @@ fn walk_contour(
                 panic!("Incorrectly flagged boundry! This should not happen.");
             }
 
-            cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
+            cell_index = get_neighbour_index(tile_side, cell_index, dir.into());
             dir = (dir + 3) & 0x3; // Rotate COUNTER clock-wise.
         }
 
@@ -448,6 +450,7 @@ fn get_corner_height(
     nav_mesh_settings: &NavMeshSettings,
     dir: u8,
 ) -> u16 {
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
     let next_dir = (dir + 1) & 0x3;
     let mut regions = [0; 4];
 
@@ -456,7 +459,7 @@ fn get_corner_height(
     regions[0] = span.region;
 
     if let Some(span_index) = span.neighbours[dir as usize] {
-        let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, dir.into());
+        let other_cell_index = get_neighbour_index(tile_side, cell_index, dir.into());
         let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
         height = height.max(other_span.min);
@@ -464,7 +467,7 @@ fn get_corner_height(
 
         if let Some(span_index) = other_span.neighbours[next_dir as usize] {
             let other_cell_index =
-                get_neighbour_index(nav_mesh_settings, other_cell_index, next_dir.into());
+                get_neighbour_index(tile_side, other_cell_index, next_dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);
@@ -473,7 +476,7 @@ fn get_corner_height(
     }
 
     if let Some(span_index) = span.neighbours[next_dir as usize] {
-        let other_cell_index = get_neighbour_index(nav_mesh_settings, cell_index, next_dir.into());
+        let other_cell_index = get_neighbour_index(tile_side, cell_index, next_dir.into());
         let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
         height = height.max(other_span.min);
@@ -481,7 +484,7 @@ fn get_corner_height(
 
         if let Some(span_index) = other_span.neighbours[dir as usize] {
             let other_cell_index =
-                get_neighbour_index(nav_mesh_settings, other_cell_index, dir.into());
+                get_neighbour_index(tile_side, other_cell_index, dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);

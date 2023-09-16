@@ -468,23 +468,17 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
         let row = i / tile_side;
         let column = i % tile_side;
 
-        let is_neighbour_contained = [
-            column > 0,
-            row < (tile_side - 1),
-            column < (tile_side - 1),
-            row > 0
-        ];
         let neighbour_index = [
-            i - 1,
-            i + tile_side,
-            i + 1,
-            i - tile_side
+            if column > 0 { Some(i - 1) } else { None },
+            if row < (tile_side - 1) { Some(i + tile_side) } else { None },
+            if column < (tile_side - 1) { Some(i + 1)} else { None },
+            if row > 0 { Some(i - tile_side) } else { None }
         ];
 
         // For each direct neighbour.
-        for neighbour in (0..4usize).filter(|i| is_neighbour_contained[*i]) {
+        for (neighbour, neighbour_index) in neighbour_index.into_iter().enumerate().filter_map(|(i, index)| Some(i).zip(index)) {
             neighbour_spans.extend(
-                open_tile.cells[neighbour_index[neighbour]]
+                open_tile.cells[neighbour_index]
                     .spans
                     .iter()
                     .map(|span| (span.min, span.max)),

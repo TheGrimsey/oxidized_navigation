@@ -1,5 +1,3 @@
-use bevy::prelude::info;
-
 use crate::{heightfields::{OpenSpan, OpenTile}, Area};
 
 use super::{get_neighbour_index, NavMeshSettings};

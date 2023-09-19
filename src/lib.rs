@@ -49,11 +49,11 @@ use parry3d::na::Vector3;
 use parry3d::shape::{HeightField, TypedShape};
 use regions::build_regions;
 use smallvec::SmallVec;
-use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles};
+use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTiles, NavMeshTile};
 
 pub mod colliders;
 mod contour;
-mod conversion;
+pub mod conversion;
 #[cfg(feature = "debug_draw")]
 pub mod debug_draw;
 mod heightfields;
@@ -614,8 +614,23 @@ async fn build_tile(
     nav_mesh: Arc<RwLock<NavMeshTiles>>,
 ) {
     #[cfg(feature = "trace")]
-    let _span = info_span!("Build Tile").entered();
+    let _span = info_span!("Async build Tile").entered();
 
+    let nav_mesh_tile = build_tile_sync(geometry_collections, tile_coord, heightfields, &nav_mesh_settings);
+
+    let Ok(mut nav_mesh) = nav_mesh.write() else {
+        error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
+        return;
+    };
+
+    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
+        nav_mesh.tile_generations.insert(tile_coord, generation);
+
+        nav_mesh.add_tile(tile_coord, nav_mesh_tile, &nav_mesh_settings);
+    }
+}
+
+pub fn build_tile_sync(geometry_collections: Vec<GeometryCollection>, tile_coord: UVec2, heightfields: Vec<HeightFieldCollection>, nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
     let triangle_collection = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Convert Geometry Collections").entered();
@@ -629,61 +644,51 @@ async fn build_tile(
             tile_coord,
             triangle_collection,
             heightfields,
-            &nav_mesh_settings,
+            nav_mesh_settings,
         )
     };
 
     let mut open_tile = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build Open Heightfield Tile").entered();
-        build_open_heightfield_tile(voxelized_tile, &nav_mesh_settings)
+        build_open_heightfield_tile(voxelized_tile, nav_mesh_settings)
     };
 
     // Remove areas that are too close to a wall.
     {
         #[cfg(feature = "trace")]
         let _span = info_span!("Erode walkable area").entered();
-        erode_walkable_area(&mut open_tile, &nav_mesh_settings);
+        erode_walkable_area(&mut open_tile, nav_mesh_settings);
     }
 
     {
         #[cfg(feature = "trace")]
         let _span = info_span!("Calculate distance field").entered();
-        calculate_distance_field(&mut open_tile, &nav_mesh_settings);
+        calculate_distance_field(&mut open_tile, nav_mesh_settings);
     }
     {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build regions").entered();
-        build_regions(&mut open_tile, &nav_mesh_settings);
+        build_regions(&mut open_tile, nav_mesh_settings);
     }
 
     let contour_set = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build contours").entered();
-        build_contours(open_tile, &nav_mesh_settings)
+        build_contours(open_tile, nav_mesh_settings)
     };
 
     let poly_mesh = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build poly mesh").entered();
-        build_poly_mesh(contour_set, &nav_mesh_settings)
+        build_poly_mesh(contour_set, nav_mesh_settings)
     };
-    let nav_mesh_tile = {
+    
+    {
         #[cfg(feature = "trace")]
         let _span = info_span!("Create nav-mesh tile from poly mesh").entered();
 
-        create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, &nav_mesh_settings)
-    };
-
-    let Ok(mut nav_mesh) = nav_mesh.write() else {
-        error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
-        return;
-    };
-
-    if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
-        nav_mesh.tile_generations.insert(tile_coord, generation);
-
-        nav_mesh.add_tile(tile_coord, nav_mesh_tile, &nav_mesh_settings);
+        create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, nav_mesh_settings)
     }
 }
 

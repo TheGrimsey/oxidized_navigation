@@ -7,13 +7,13 @@ use parry3d::{
 
 use crate::{heightfields::TriangleCollection, Area};
 
-pub(super) struct GeometryCollection {
-    pub(super) transform: Transform,
-    pub(super) geometry_to_convert: GeometryToConvert,
-    pub(super) area: Option<Area>,
+pub struct GeometryCollection {
+    pub transform: Transform,
+    pub geometry_to_convert: GeometryToConvert,
+    pub area: Option<Area>,
 }
 
-pub(super) enum ColliderType {
+pub enum ColliderType {
     Cuboid(Cuboid),
     Ball(Ball),
     Capsule(Capsule),
@@ -22,7 +22,7 @@ pub(super) enum ColliderType {
     Triangle(Triangle),
 }
 
-pub(super) enum GeometryToConvert {
+pub enum GeometryToConvert {
     Collider(ColliderType),
     ParryTriMesh(Vec<Point3<Real>>, Vec<[u32; 3]>),
 }

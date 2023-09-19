@@ -58,10 +58,10 @@ pub(super) struct TriangleCollection {
     pub(super) area: Option<Area>,
 }
 
-pub(super) struct HeightFieldCollection {
-    pub(super) transform: Transform,
-    pub(super) heightfield: Arc<HeightField>,
-    pub(super) area: Option<Area>,
+pub struct HeightFieldCollection {
+    pub transform: Transform,
+    pub heightfield: Arc<HeightField>,
+    pub area: Option<Area>,
 }
 
 pub(super) fn build_heightfield_tile(

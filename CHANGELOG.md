@@ -1,5 +1,7 @@
 ## 0.7.0
 - Added support for using XPBD & wrapped Parry3d components for Nav-Mesh generation (Courtesy of @Elabajaba)
+- Add benchmarks.
+- Optimizations in tile building.
 
 ## 0.6.0 (2023-07-11)
 - Update to Bevy 0.11. (Courtesy of @Elabajaba)

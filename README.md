@@ -41,11 +41,19 @@ Currently only `parry3d` colliders are supported, or crates using `parry3d` coll
 
 You need to manually apply your transform's scale to the Xpbd/Parry3d collider's shape.
 
+> My physics crate updated and now my nav-meshes won't generate.
+
+This is due to how dependencies are handled, Oxidized Navigation will only interact with the versions specified in [Supported Versions](#supported-versions). If you want to use other versions you can [make cargo use a different version](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section).
+
+> How do I draw the Nav-mesh for debugging?
+
+Debug draw is available behind the ``debug_draw`` feature and using the ``OxidizedNavigationDebugDrawPlugin`` see usage in examples.
+
 ## Supported versions
 
 | Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Parry3d Version |
 | ------------- | ------------ | ---------------------- | -------------------- | --------------- |
-| unreleased    | 0.11         | 0.22                   | 0.2                  | 0.13            |
+| 0.7.0         | 0.11         | 0.22                   | 0.2                  | 0.13            |
 | 0.6.0         | 0.11         | 0.22                   | unsupported          | unsupported     |
 | 0.5.X         | 0.10.X       | 0.21                   | unsupported          | unsupported     |
 | 0.4.0         | 0.10.X       | 0.21                   | unsupported          | unsupported     |
@@ -62,10 +70,6 @@ In this case you may be able to [override which version Oxidized Navigation depe
 - [ ] Rebuild all tiles when ``NavMeshSettings`` are changed.
 
 - [ ] Nav-mesh "layers" using different ``NavMeshSettings``.
-- [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks)
+- [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks & prioritize them)
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of creating data in the right format from the start.
-- [ ] Benchmarks for tile generation & pathfinding.
 
-## Debug draw.
-
-Debug draw is available behind the ``debug_draw`` feature and using the ``OxidizedNavigationDebugDrawPlugin`` see usage in examples.

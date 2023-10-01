@@ -18,6 +18,7 @@ default = []
 rapier = ["bevy_rapier3d"]
 xpbd = ["bevy_xpbd_3d"]
 debug_draw = ["bevy/bevy_gizmos"]
+trace = []
 
 [[example]]
 name = "rapier3d"
@@ -48,11 +49,14 @@ name = "parry3d"
 
 [dependencies]
 bevy = { version = "0.11", default-features = false }
-bevy_rapier3d = { version = "0.22", optional = true }
-bevy_xpbd_3d = { version = "0.2", optional = true }
+
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
 nalgebra = { version = "0.32", features = ["convert-glam024"] }
 parry3d = "0.13"
+
+bevy_rapier3d = { version = "0.22", optional = true }
+bevy_xpbd_3d = { version = "0.2", optional = true }
+
 smallvec = { version = "1.11", features = ["union"] }
 
 [dev-dependencies]
@@ -76,3 +80,7 @@ harness = false
 [[bench]]
 name = "simple_navigation"
 harness = false
+
+[package.metadata.docs.rs]
+# Compile docs.rs docs with debug_draw so docs for it appear.
+features = [ "debug_draw" ]

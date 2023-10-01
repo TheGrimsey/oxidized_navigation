@@ -18,11 +18,6 @@ use bevy_xpbd_3d::prelude::Collider;
 app.add_plugins(OxidizedNavigationPlugin::<Collider>::new(settings));
 ```
 
-### Using Rapier3d colliders for Nav-Mesh generation is now behind feature ``rapier``.
-
-
-
-
 ## 0.5
 
 ### ``OxidizedNavigationPlugin`` now takes a settings parameter containing ``NavMeshSettings``

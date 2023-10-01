@@ -73,8 +73,8 @@ impl NavMeshTile {
 /// Call [crate::query::find_path] to run pathfinding algorithm.
 #[derive(Default)]
 pub struct NavMeshTiles {
-    pub(super) tiles: HashMap<UVec2, NavMeshTile>,
-    pub(super) tile_generations: HashMap<UVec2, u64>,
+    pub tiles: HashMap<UVec2, NavMeshTile>,
+    pub tile_generations: HashMap<UVec2, u64>,
 }
 
 impl NavMeshTiles {

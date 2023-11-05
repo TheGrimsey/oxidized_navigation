@@ -86,7 +86,6 @@ fn setup_app(app: &mut App) {
         AssetPlugin::default(),
         ScenePlugin,
     ));
-    app.add_asset::<Mesh>();
     // Required by Rapier.
 }
 

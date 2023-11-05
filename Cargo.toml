@@ -1,7 +1,7 @@
 [package]
 name = "oxidized_navigation"
 description = "A Nav-Mesh generation plugin for Bevy Engine."
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 
 authors = ["TheGrimsey"]
@@ -48,19 +48,19 @@ required-features = ["xpbd"]
 name = "parry3d"
 
 [dependencies]
-bevy = { version = "0.11", default-features = false }
+bevy = { version = "0.12", default-features = false, features = ["multi-threaded"] }
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
 nalgebra = { version = "0.32", features = ["convert-glam024"] }
 parry3d = "0.13"
 
-bevy_rapier3d = { version = "0.22", optional = true }
-bevy_xpbd_3d = { version = "0.2", optional = true }
+bevy_rapier3d = { version = "0.22", optional = true, default-features = false, features = ["dim3"] }
+bevy_xpbd_3d = { version = "0.3", optional = true, default-features = false, features = ["3d", "f32"]  }
 
 smallvec = { version = "1.11", features = ["union"] }
 
 [dev-dependencies]
-bevy = { version = "0.11", default-features = false, features = [
+bevy = { version = "0.12", default-features = false, features = [
     "bevy_asset",
     "bevy_pbr",
     "bevy_render",

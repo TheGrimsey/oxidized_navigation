@@ -1,5 +1,6 @@
-## 0.8.0
+## 0.8.0 (2023-11-09)
 - Update to Bevy 0.12
+- XPBD colliders no longer need to be manually scaled.
 
 ## 0.7.0
 - Added support for using XPBD & wrapped Parry3d components for Nav-Mesh generation (Courtesy of @Elabajaba)

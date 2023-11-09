@@ -82,7 +82,7 @@ fn setup(
             transform: Transform::IDENTITY,
             ..default()
         },
-        Collider::cuboid(50.0, 0.2, 50.0),
+        Collider::cuboid(25.0, 0.1, 25.0),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
@@ -94,7 +94,7 @@ fn setup(
             transform: Transform::from_xyz(-5.0, 0.8, -5.0),
             ..default()
         },
-        Collider::cuboid(2.5, 2.5, 2.5),
+        Collider::cuboid(1.25, 1.25, 1.25),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
@@ -106,8 +106,7 @@ fn setup(
             transform: Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
             ..default()
         },
-        // At the time of writing, xpbd (v0.2) colliders don't support scaling, so you have to create the collider with the post-scaled size.
-        Collider::cuboid(5.0, 1.5, 0.1),
+        Collider::cuboid(0.05, 0.05, 0.05),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 }

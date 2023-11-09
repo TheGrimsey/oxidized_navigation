@@ -1,4 +1,4 @@
-use bevy::prelude::{UVec2, UVec3, UVec4, info};
+use bevy::{prelude::{UVec2, UVec3, UVec4}, log::info};
 
 use crate::{contour::ContourSet, Area};
 

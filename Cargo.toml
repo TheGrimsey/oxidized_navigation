@@ -54,7 +54,7 @@ bevy = { version = "0.12", default-features = false, features = ["multi-threaded
 nalgebra = { version = "0.32", features = ["convert-glam024"] }
 parry3d = "0.13"
 
-bevy_rapier3d = { version = "0.22", optional = true, default-features = false, features = ["dim3"] }
+bevy_rapier3d = { version = "0.23", optional = true, default-features = false, features = ["dim3"] }
 bevy_xpbd_3d = { version = "0.3", optional = true, default-features = false, features = ["3d", "f32"]  }
 
 smallvec = { version = "1.11", features = ["union"] }

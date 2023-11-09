@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::{prelude::*, scene::ScenePlugin};
+use bevy::prelude::*;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
     query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
@@ -82,11 +82,7 @@ fn setup_app(app: &mut App) {
             max_tile_generation_tasks: Some(9), // Github Actions are limited to 7 GB.
         }),
         RapierPhysicsPlugin::<NoUserData>::default(),
-        // Required by Rapier
-        AssetPlugin::default(),
-        ScenePlugin,
     ));
-    app.add_asset::<Mesh>();
     // Required by Rapier.
 }
 

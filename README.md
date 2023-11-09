@@ -53,6 +53,7 @@ Debug draw is available behind the ``debug_draw`` feature and using the ``Oxidiz
 
 | Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Parry3d Version |
 | ------------- | ------------ | ---------------------- | -------------------- | --------------- |
+| unreleased    | 0.12         | 0.23                   | 0.3                  | 0.13            |
 | 0.7.0         | 0.11         | 0.22                   | 0.2                  | 0.13            |
 | 0.6.0         | 0.11         | 0.22                   | unsupported          | unsupported     |
 | 0.5.X         | 0.10.X       | 0.21                   | unsupported          | unsupported     |
@@ -72,4 +73,3 @@ In this case you may be able to [override which version Oxidized Navigation depe
 - [ ] Nav-mesh "layers" using different ``NavMeshSettings``.
 - [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks & prioritize them)
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of creating data in the right format from the start.
-

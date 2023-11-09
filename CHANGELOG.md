@@ -1,3 +1,6 @@
+## 0.8.0
+- Update to Bevy 0.12
+
 ## 0.7.0
 - Added support for using XPBD & wrapped Parry3d components for Nav-Mesh generation (Courtesy of @Elabajaba)
 - Add benchmarks.

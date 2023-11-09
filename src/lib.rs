@@ -427,7 +427,7 @@ fn handle_removed_affectors_system(
     mut dirty_tiles: ResMut<DirtyTiles>,
 ) {
     for relations in removed_affectors
-        .iter()
+        .read()
         .filter_map(|removed| affector_relations.0.remove(&removed))
     {
         for tile in relations {

@@ -15,9 +15,9 @@ categories = ["game-development"]
 
 [features]
 default = []
-rapier = ["bevy_rapier3d"]
+rapier = ["bevy_rapier3d", "bevy/bevy_render"]
 xpbd = ["bevy_xpbd_3d"]
-debug_draw = ["bevy/bevy_gizmos"]
+debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 trace = []
 
 [[example]]

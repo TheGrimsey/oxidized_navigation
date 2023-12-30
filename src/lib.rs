@@ -145,6 +145,10 @@ where
                 .chain()
                 .in_set(OxidizedNavigation::Main),
         );
+
+        app
+            .register_type::<NavMeshAffector>()
+            .register_type::<NavMeshAreaType>();
     }
 }
 
@@ -166,16 +170,18 @@ impl ActiveGenerationTasks {
 }
 
 /// Component for entities that should affect the nav-mesh.
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct NavMeshAffector;
 
 /// Optional component to define the area type of an entity. Setting this to ``None`` means that the entity isn't walkable.
 ///
 /// Any part of the nav-mesh generated from this entity will have this area type. Overlapping areas will prefer the higher area type.
-#[derive(Component)]
+#[derive(Component, Reflect, Default)]
+#[reflect(Component)]
 pub struct NavMeshAreaType(pub Option<Area>);
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Reflect)]
 pub struct Area(pub u16);
 
 /*

@@ -30,6 +30,10 @@ name = "rapier3d_heightfield"
 required-features = ["debug_draw", "rapier"]
 
 [[example]]
+name = "rapier3d_multi_floor"
+required-features = ["debug_draw", "rapier"]
+
+[[example]]
 name = "xpbd"
 required-features = ["debug_draw", "xpbd"]
 
@@ -40,6 +44,7 @@ required-features = ["debug_draw"]
 [[test]]
 name = "rapier3d"
 required-features = ["rapier"]
+
 
 [[test]]
 name = "xpbd"

@@ -39,7 +39,7 @@ pub(super) struct OpenSpan {
     pub(super) neighbours: [Option<u16>; 4],
     pub(super) tile_index: usize, // The index of this span in the whole tile.
     pub(super) region: u16,       // Region if non-zero.
-    pub(super) area: Option<Area>,
+    area: Option<Area>,           // TODO: Ideally we don't want store this here. It's only here to be copied over to [OpenTile::areas] & bumps up the OpenSpan size from 32b to 40b.
 }
 
 #[derive(Default, Debug)]
@@ -477,6 +477,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
 
         // For each direct neighbour.
         for (neighbour, neighbour_index) in neighbour_index.into_iter().enumerate().filter_map(|(i, index)| Some(i).zip(index)) {
+            neighbour_spans.clear();
             neighbour_spans.extend(
                 open_tile.cells[neighbour_index]
                     .spans
@@ -485,9 +486,9 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
             );
 
             for span in open_tile.cells[i].spans.iter_mut() {
-                for (i, (min, max)) in neighbour_spans.drain(..).enumerate() {
+                for (i, (min, max)) in neighbour_spans.iter().enumerate() {
                     if let Some((max, span_max)) = max.zip(span.max) {
-                        let gap = span_max.min(max).abs_diff(span.min.max(min));
+                        let gap = span_max.min(max).abs_diff(span.min.max(*min));
                         if gap < nav_mesh_settings.walkable_height {
                             continue;
                         }

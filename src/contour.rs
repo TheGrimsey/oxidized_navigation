@@ -76,9 +76,12 @@ pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) 
                 boundry_flags[span.tile_index] = 0;
                 continue;
             }
-            if span.region == 0 || span.area.is_none() {
+            if span.region == 0 {
                 continue;
             }
+            let Some(area) = open_tile.areas[span.tile_index] else {
+                continue;
+            };
 
             vertices.clear();
             simplified_vertices.clear();
@@ -108,7 +111,7 @@ pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) 
                 let new_contour = Contour {
                     vertices: simplified_vertices.clone(),
                     region: span.region,
-                    area: span.area.unwrap(), // Already checked above.
+                    area,
                 };
 
                 contour_set.contours.push(new_contour);

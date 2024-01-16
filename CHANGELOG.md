@@ -1,3 +1,8 @@
+## 0.8.1 (2024-01-16)
+- Fix only the lowest points of the nav-mesh being generated.
+- Fix using the wrong area in contour generation.
+- Fix broken docs build.
+
 ## 0.8.0 (2023-11-09)
 - Update to Bevy 0.12
 - XPBD colliders no longer need to be manually scaled.

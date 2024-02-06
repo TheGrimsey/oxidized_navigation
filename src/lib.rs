@@ -519,8 +519,9 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
                     GeometryToConvert::Collider(ColliderType::Capsule(*capsule))
                 }
                 TypedShape::TriMesh(trimesh) => GeometryToConvert::ParryTriMesh(
-                    trimesh.vertices().to_vec(),
-                    trimesh.indices().to_vec(),
+                    // Can't turn these into boxed slices instantly because they are references.. So we need a copy.
+                    trimesh.vertices().to_vec().into_boxed_slice(),
+                    trimesh.indices().to_vec().into_boxed_slice(),
                 ),
                 TypedShape::HeightField(heightfield) => {
                     // Deduplicate heightfields.
@@ -545,7 +546,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
                 TypedShape::ConvexPolyhedron(polyhedron) => {
                     let tri = polyhedron.to_trimesh();
 
-                    GeometryToConvert::ParryTriMesh(tri.0, tri.1)
+                    GeometryToConvert::ParryTriMesh(tri.0.into_boxed_slice(), tri.1.into_boxed_slice())
                 }
                 TypedShape::Cylinder(cylinder) => {
                     GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder))
@@ -565,7 +566,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
                 TypedShape::RoundConvexPolyhedron(round_polyhedron) => {
                     let tri = round_polyhedron.inner_shape.to_trimesh();
 
-                    GeometryToConvert::ParryTriMesh(tri.0, tri.1)
+                    GeometryToConvert::ParryTriMesh(tri.0.into_boxed_slice(), tri.1.into_boxed_slice())
                 }
                 TypedShape::Triangle(triangle) => {
                     GeometryToConvert::Collider(ColliderType::Triangle(*triangle))
@@ -601,7 +602,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
             tile_coord,
             nav_mesh_settings.clone(),
             geometry_collections,
-            heightfield_collections,
+            heightfield_collections.into_boxed_slice(),
             nav_mesh,
         ));
 
@@ -634,7 +635,7 @@ async fn build_tile(
     tile_coord: UVec2,
     nav_mesh_settings: NavMeshSettings,
     geometry_collections: Vec<GeometryCollection>,
-    heightfields: Vec<HeightFieldCollection>,
+    heightfields: Box<[HeightFieldCollection]>,
     nav_mesh: Arc<RwLock<NavMeshTiles>>,
 ) {
     #[cfg(feature = "trace")]
@@ -654,7 +655,7 @@ async fn build_tile(
     }
 }
 
-pub fn build_tile_sync(geometry_collections: Vec<GeometryCollection>, tile_coord: UVec2, heightfields: Vec<HeightFieldCollection>, nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
+pub fn build_tile_sync(geometry_collections: Vec<GeometryCollection>, tile_coord: UVec2, heightfields: Box<[HeightFieldCollection]>, nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
     let triangle_collection = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Convert Geometry Collections").entered();
@@ -666,8 +667,8 @@ pub fn build_tile_sync(geometry_collections: Vec<GeometryCollection>, tile_coord
         let _span = info_span!("Build Heightfield Tile").entered();
         build_heightfield_tile(
             tile_coord,
-            triangle_collection,
-            heightfields,
+            &triangle_collection,
+            &heightfields,
             nav_mesh_settings,
         )
     };

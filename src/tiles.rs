@@ -51,9 +51,9 @@ pub struct Polygon {
 #[derive(Debug)]
 pub struct NavMeshTile {
     /// Vertices in world space.
-    pub vertices: Vec<Vec3>,
-    pub polygons: Vec<Polygon>,
-    pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>,
+    pub vertices: Box<[Vec3]>,
+    pub polygons: Box<[Polygon]>,
+    pub edges: Box<[[EdgeConnection; VERTICES_IN_TRIANGLE]]>,
 }
 impl NavMeshTile {
     /// Returns the closest point on ``polygon`` to ``position``.
@@ -657,7 +657,7 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
 
     NavMeshTile {
         vertices,
-        edges: poly_mesh.edges,
+        edges: poly_mesh.edges.into_boxed_slice(),
         polygons,
     }
 }

@@ -6,7 +6,7 @@ use parry3d::shape::Cuboid;
 
 fn generate_single_primitive_geometry() {
     let tile_coord = UVec2::new(0, 0);
-    let heightfields = vec![];
+    let heightfields = Box::default();
     
 
     let geometry_collections = vec![
@@ -38,7 +38,7 @@ fn generate_single_primitive_geometry() {
 
 fn generate_many_primitive_geometry() {
     let tile_coord = UVec2::new(0, 0);
-    let heightfields = vec![];
+    let heightfields = Box::default();
     
 
     let geometry_collections = vec![

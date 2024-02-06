@@ -24,21 +24,21 @@ pub enum ColliderType {
 
 pub enum GeometryToConvert {
     Collider(ColliderType),
-    ParryTriMesh(Vec<Point3<Real>>, Vec<[u32; 3]>),
+    ParryTriMesh(Box<[Point3<Real>]>, Box<[[u32; 3]]>),
 }
 
 pub(super) enum Triangles {
     Triangle([Vec3; 3]),
-    TriMesh(Vec<Vec3>, Vec<[u32; 3]>),
+    TriMesh(Box<[Vec3]>, Box<[[u32; 3]]>),
 }
 
 const SUBDIVISIONS: u32 = 5;
 
 pub(super) fn convert_geometry_collections(
-    mut geometry_collections: Vec<GeometryCollection>,
-) -> Vec<TriangleCollection> {
+    geometry_collections: Vec<GeometryCollection>,
+) -> Box<[TriangleCollection]> {
     geometry_collections
-        .drain(..)
+        .into_iter()
         .map(|geometry_collection| TriangleCollection {
             transform: geometry_collection.transform,
             triangles: convert_geometry(geometry_collection.geometry_to_convert),
@@ -70,11 +70,11 @@ pub(super) fn convert_geometry(geometry_to_convert: GeometryToConvert) -> Triang
                 .map(|point| Vec3::new(point.x, point.y, point.z))
                 .collect();
 
-            Triangles::TriMesh(vertices, triangles)
+            Triangles::TriMesh(vertices, triangles.into_boxed_slice())
         }
-        GeometryToConvert::ParryTriMesh(mut vertices, triangles) => {
+        GeometryToConvert::ParryTriMesh(vertices, triangles) => {
             let vertices = vertices
-                .drain(..)
+                .iter()
                 .map(|point| Vec3::new(point.x, point.y, point.z))
                 .collect();
 

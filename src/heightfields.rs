@@ -23,7 +23,7 @@ struct VoxelCell {
 
 #[derive(Default)]
 pub struct VoxelizedTile {
-    cells: Vec<VoxelCell>, // len = tiles_along_width^2. Laid out X to Y
+    cells: Box<[VoxelCell]>, // len = tiles_along_width^2. Laid out X to Y
 }
 
 #[derive(Default, Clone, Debug)]
@@ -45,8 +45,8 @@ pub(super) struct OpenSpan {
 #[derive(Default, Debug)]
 pub struct OpenTile {
     pub(super) cells: Vec<OpenCell>, // len = tiles_along_width^2. Laid out X to Y
-    pub(super) distances: Vec<u16>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
-    pub(super) areas: Vec<Option<Area>>,
+    pub(super) distances: Box<[u16]>, // Distances used in watershed. One per span. Use tile_index to go from span to distance.
+    pub(super) areas: Box<[Option<Area>]>,
     pub(super) max_distance: u16,
     pub(super) span_count: usize, // Total spans in all cells.
     pub(super) max_regions: u16,
@@ -66,13 +66,13 @@ pub struct HeightFieldCollection {
 
 pub(super) fn build_heightfield_tile(
     tile_coord: UVec2,
-    triangle_collections: Vec<TriangleCollection>,
-    heightfields: Vec<HeightFieldCollection>,
+    triangle_collections: &[TriangleCollection],
+    heightfields: &[HeightFieldCollection],
     nav_mesh_settings: &NavMeshSettings,
 ) -> VoxelizedTile {
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
     let mut voxel_tile = VoxelizedTile {
-        cells: vec![VoxelCell::default(); tile_side.pow(2)],
+        cells: vec![VoxelCell::default(); tile_side.pow(2)].into_boxed_slice(),
     };
 
     let tile_max_bound = IVec3::new((tile_side - 1) as i32, 0, (tile_side - 1) as i32);
@@ -428,8 +428,8 @@ pub fn build_open_heightfield_tile(
     // Create Open Tile.
     let mut open_tile = OpenTile {
         cells,
-        distances: vec![u16::MAX; span_count],
-        areas: vec![None; span_count],
+        distances: vec![u16::MAX; span_count].into_boxed_slice(),
+        areas: vec![None; span_count].into_boxed_slice(),
         max_distance: 0,
         span_count,
         max_regions: 0,
@@ -571,7 +571,7 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
     // Box blur. If you're reading this, why?
     let threshold = 2;
 
-    let mut blurred = vec![0; open_tile.distances.len()];
+    let mut blurred = vec![0; open_tile.distances.len()].into_boxed_slice();
 
     for (i, cell) in open_tile.cells.iter().enumerate() {
         for span in cell.spans.iter() {

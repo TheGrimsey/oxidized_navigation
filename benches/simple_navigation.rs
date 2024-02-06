@@ -6,7 +6,7 @@ use parry3d::shape::Cuboid;
 
 fn generate_single_primitive_geometry(nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
     let tile_coord = UVec2::new(0, 0);
-    let heightfields = vec![];
+    let heightfields = Box::default();
     
 
     let geometry_collections = vec![
@@ -22,7 +22,7 @@ fn generate_single_primitive_geometry(nav_mesh_settings: &NavMeshSettings) -> Na
 
 fn generate_many_primitive_geometry(nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
     let tile_coord = UVec2::new(0, 0);
-    let heightfields = vec![];
+    let heightfields = Box::default();
 
     let geometry_collections = vec![
         GeometryCollection {

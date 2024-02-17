@@ -63,7 +63,7 @@ parry3d = "0.13"
 bevy_rapier3d = { version = "0.24", optional = true, default-features = false, features = ["dim3"] }
 bevy_xpbd_3d = { version = "0.3", optional = true, default-features = false, features = ["3d", "f32"]  }
 
-smallvec = { version = "1.11", features = ["union"] }
+smallvec = { version = "1.13", features = ["union"] }
 
 [dev-dependencies]
 bevy = { version = "0.12", default-features = false, features = [

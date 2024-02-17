@@ -53,6 +53,7 @@ Debug draw is available behind the ``debug_draw`` feature and using the ``Oxidiz
 
 | Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Parry3d Version |
 | ------------- | ------------ | ---------------------- | -------------------- | --------------- |
+| 0.9.0         | 0.12         | 0.24                   | 0.3                  | 0.13            |
 | 0.8.0         | 0.12         | 0.23                   | 0.3                  | 0.13            |
 | 0.7.0         | 0.11         | 0.22                   | 0.2                  | 0.13            |
 | 0.6.0         | 0.11         | 0.22                   | unsupported          | unsupported     |

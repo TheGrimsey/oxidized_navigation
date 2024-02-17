@@ -1,3 +1,7 @@
+## 0.9.0 (2024-02-17)
+- Switch to using boxed slices where applicable resulting in ~1-2% performance improvements in generation & pathfinding.
+- Update to `bevy_rapier3d` 0.24 (@janhohenheim)
+
 ## 0.8.1 (2024-01-16)
 - Fix only the lowest points of the nav-mesh being generated.
 - Fix using the wrong area in contour generation.

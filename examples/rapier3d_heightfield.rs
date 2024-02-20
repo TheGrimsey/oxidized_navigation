@@ -242,7 +242,6 @@ fn setup_world_system(mut commands: Commands) {
             (position as f32 / 10.0).sin() / 10.0
         })
         .collect();
-    info!("heights: {heightfield_heights:?}");
 
     // Heightfield.
     commands.spawn((

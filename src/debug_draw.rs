@@ -20,7 +20,7 @@ impl Plugin for OxidizedNavigationDebugDrawPlugin {
             Update,
             (
                 draw_nav_mesh_system.run_if(should_draw_nav_mesh),
-                draw_path_system.run_if(any_with_component::<DrawPath>()),
+                draw_path_system.run_if(any_with_component::<DrawPath>),
             ),
         );
     }

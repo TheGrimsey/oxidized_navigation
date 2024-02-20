@@ -8,13 +8,11 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task},
-    DefaultPlugins,
+    math::primitives, prelude::*, tasks::{AsyncComputeTaskPool, Task}
 };
 // use bevy_editor_pls::EditorPlugin;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
-use futures_lite::future;
+use bevy::tasks::futures_lite::future;
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
@@ -75,11 +73,11 @@ fn main() {
 //
 fn run_blocking_pathfinding(
     mut commands: Commands,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
 ) {
-    if !keys.just_pressed(KeyCode::B) {
+    if !keys.just_pressed(KeyCode::KeyB) {
         return;
     }
 
@@ -135,12 +133,12 @@ struct AsyncPathfindingTasks {
 
 // Queue up pathfinding tasks.
 fn run_async_pathfinding(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
     mut pathfinding_task: ResMut<AsyncPathfindingTasks>,
 ) {
-    if !keys.just_pressed(KeyCode::A) {
+    if !keys.just_pressed(KeyCode::KeyA) {
         return;
     }
 
@@ -219,8 +217,8 @@ async fn async_path_find(
 //  Toggle drawing Nav-mesh.
 //  Press M to toggle drawing the navmesh.
 //
-fn toggle_nav_mesh_system(keys: Res<Input<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
-    if keys.just_pressed(KeyCode::M) {
+fn toggle_nav_mesh_system(keys: Res<ButtonInput<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
+    if keys.just_pressed(KeyCode::KeyM) {
         show_navmesh.0 = !show_navmesh.0;
     }
 }
@@ -250,11 +248,8 @@ fn setup_world_system(
     // Plane
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Plane {
-                size: 50.0,
-                subdivisions: 0,
-            })),
-            material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+            mesh: meshes.add(primitives::Rectangle::from_size(Vec2::new(50.0, 50.0))),
+            material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
             transform: Transform::IDENTITY,
             ..default()
         },
@@ -265,8 +260,8 @@ fn setup_world_system(
     // Cube
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
-            material: materials.add(Color::rgb(0.1, 0.1, 0.5).into()),
+            mesh: meshes.add(primitives::Cuboid::new(2.5, 2.5, 2.5)),
+            material: materials.add(Color::rgb(0.1, 0.1, 0.5)),
             transform: Transform::from_xyz(-5.0, 0.8, -5.0),
             ..default()
         },
@@ -277,8 +272,8 @@ fn setup_world_system(
     // Thin wall
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 0.1 })),
-            material: materials.add(Color::rgb(0.1, 0.1, 0.5).into()),
+            mesh: meshes.add(primitives::Cuboid::new(0.1, 0.1, 0.1)),
+            material: materials.add(Color::rgb(0.1, 0.1, 0.5)),
             transform: Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
             ..default()
         },
@@ -288,13 +283,13 @@ fn setup_world_system(
 }
 
 fn spawn_or_despawn_affector_system(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawned_entity: Local<Option<Entity>>,
 ) {
-    if !keys.just_pressed(KeyCode::X) {
+    if !keys.just_pressed(KeyCode::KeyX) {
         return;
     }
 
@@ -305,8 +300,8 @@ fn spawn_or_despawn_affector_system(
         let entity = commands
             .spawn((
                 PbrBundle {
-                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
-                    material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                    mesh: meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5))),
+                    material: materials.add(Color::rgb(1.0, 0.1, 0.5)),
                     transform: Transform::from_xyz(5.0, 0.8, -5.0),
                     ..default()
                 },

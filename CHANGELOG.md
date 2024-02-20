@@ -1,3 +1,6 @@
+## 0.10.0 (Unreleased)
+- Update to Bevy 0.13
+
 ## 0.9.0 (2024-02-17)
 - Switch to using boxed slices where applicable resulting in ~1-2% performance improvements in generation & pathfinding.
 - Update to `bevy_rapier3d` 0.24 (@janhohenheim)

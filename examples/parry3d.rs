@@ -1,6 +1,6 @@
 //! A simple example showing how to use oxidized_navigation with a custom component using parry3d colliders.
 
-use bevy::prelude::*;
+use bevy::{math::primitives, prelude::*};
 use oxidized_navigation::{
     colliders::OxidizedCollider,
     debug_draw::{DrawNavMesh, OxidizedNavigationDebugDrawPlugin},
@@ -76,8 +76,8 @@ fn setup(
 
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(shape::Plane::from_size(20.0).into()),
-            material: materials.add(Color::rgb(0.3, 0.5, 0.3).into()),
+            mesh: meshes.add(primitives::Rectangle::from_size(Vec2::new(20.0, 20.0))),
+            material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
             ..default()
         },
         MyParryCollider {
@@ -87,8 +87,8 @@ fn setup(
     ));
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(shape::Cube { size: 2.0 }.into()),
-            material: materials.add(Color::rgb(0.4, 0.5, 0.9).into()),
+            mesh: meshes.add(primitives::Cuboid::new(2.0, 2.0, 2.0)),
+            material: materials.add(Color::rgb(0.4, 0.5, 0.9)),
             transform: Transform::from_xyz(2.0, 1.0, -3.0),
             ..default()
         },
@@ -100,8 +100,8 @@ fn setup(
 
     commands.spawn((
         PbrBundle {
-            mesh: meshes.add(shape::Cube { size: 0.1 }.into()),
-            material: materials.add(Color::rgb(0.4, 0.8, 0.9).into()),
+            mesh: meshes.add(primitives::Cuboid::new(0.1, 0.1, 0.1)),
+            material: materials.add(Color::rgb(0.4, 0.8, 0.9)),
             transform: Transform::from_xyz(-3.0, 0.6, 3.0).with_scale(Vec3::new(30.0, 12.0, 1.0)),
             ..default()
         },
@@ -116,20 +116,20 @@ fn setup(
 //  Toggle drawing Nav-mesh.
 //  Press M to toggle drawing the navmesh.
 //
-fn toggle_nav_mesh_system(keys: Res<Input<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
-    if keys.just_pressed(KeyCode::M) {
+fn toggle_nav_mesh_system(keys: Res<ButtonInput<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
+    if keys.just_pressed(KeyCode::KeyM) {
         show_navmesh.0 = !show_navmesh.0;
     }
 }
 
 fn spawn_or_despawn_affector_system(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawned_entity: Local<Option<Entity>>,
 ) {
-    if !keys.just_pressed(KeyCode::X) {
+    if !keys.just_pressed(KeyCode::KeyX) {
         return;
     }
 
@@ -140,8 +140,8 @@ fn spawn_or_despawn_affector_system(
         let entity = commands
             .spawn((
                 PbrBundle {
-                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
-                    material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                    mesh: meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5))),
+                    material: materials.add(Color::rgb(1.0, 0.1, 0.5)),
                     transform: Transform::from_xyz(5.0, 0.8, 5.0),
                     ..default()
                 },

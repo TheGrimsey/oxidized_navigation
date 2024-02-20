@@ -357,7 +357,7 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
     let border_expansion =
         f32::from(nav_mesh_settings.walkable_radius * 2) * nav_mesh_settings.cell_width;
 
-    query.for_each_mut(|(e, collider, global_transform)| {
+    query.iter_mut().for_each(|(e, collider, global_transform)| {
         let transform = global_transform.compute_transform();
         let iso = Isometry::new(
             transform.translation.into(),

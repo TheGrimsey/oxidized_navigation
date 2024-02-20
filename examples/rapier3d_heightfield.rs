@@ -8,12 +8,10 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    prelude::*,
-    tasks::{AsyncComputeTaskPool, Task},
-    DefaultPlugins,
+    math::primitives, prelude::*, tasks::{AsyncComputeTaskPool, Task}
 };
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
-use futures_lite::future;
+use bevy::tasks::futures_lite::future;
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
@@ -73,11 +71,11 @@ fn main() {
 //
 fn run_blocking_pathfinding(
     mut commands: Commands,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
 ) {
-    if !keys.just_pressed(KeyCode::B) {
+    if !keys.just_pressed(KeyCode::KeyB) {
         return;
     }
 
@@ -133,12 +131,12 @@ struct AsyncPathfindingTasks {
 
 // Queue up pathfinding tasks.
 fn run_async_pathfinding(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     nav_mesh_settings: Res<NavMeshSettings>,
     nav_mesh: Res<NavMesh>,
     mut pathfinding_task: ResMut<AsyncPathfindingTasks>,
 ) {
-    if !keys.just_pressed(KeyCode::A) {
+    if !keys.just_pressed(KeyCode::KeyA) {
         return;
     }
 
@@ -217,8 +215,8 @@ async fn async_path_find(
 //  Draw Nav-mesh.
 //  Press M to toggle drawing the navmesh.
 //
-fn draw_nav_mesh_system(keys: Res<Input<KeyCode>>, mut draw_nav_mesh: ResMut<DrawNavMesh>) {
-    if keys.just_pressed(KeyCode::M) {
+fn draw_nav_mesh_system(keys: Res<ButtonInput<KeyCode>>, mut draw_nav_mesh: ResMut<DrawNavMesh>) {
+    if keys.just_pressed(KeyCode::KeyM) {
         draw_nav_mesh.0 = !draw_nav_mesh.0;
     }
 }
@@ -255,13 +253,13 @@ fn setup_world_system(mut commands: Commands) {
 }
 
 fn spawn_or_despawn_affector_system(
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut spawned_entity: Local<Option<Entity>>,
 ) {
-    if !keys.just_pressed(KeyCode::X) {
+    if !keys.just_pressed(KeyCode::KeyX) {
         return;
     }
 
@@ -272,8 +270,8 @@ fn spawn_or_despawn_affector_system(
         let entity = commands
             .spawn((
                 PbrBundle {
-                    mesh: meshes.add(Mesh::from(bevy::prelude::shape::Cube { size: 2.5 })),
-                    material: materials.add(Color::rgb(1.0, 0.1, 0.5).into()),
+                    mesh: meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5))),
+                    material: materials.add(Color::rgb(1.0, 0.1, 0.5)),
                     transform: Transform::from_xyz(5.0, 0.8, -5.0),
                     ..default()
                 },

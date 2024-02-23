@@ -57,7 +57,7 @@ name = "parry3d"
 bevy = { version = "0.13", default-features = false, features = ["multi-threaded"] }
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
-nalgebra = { version = "0.32", features = ["convert-glam024"] }
+nalgebra = { version = "0.32", features = ["convert-glam025"] }
 parry3d = "0.13"
 
 bevy_rapier3d = { version = "0.25", optional = true, default-features = false, features = ["dim3"] }

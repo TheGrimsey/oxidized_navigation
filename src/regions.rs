@@ -246,7 +246,7 @@ fn expand_regions_until_end(
     level_stack.clear();
 
     for (c_i, cell) in tile.cells.iter().enumerate() {
-        for (s_i, span) in cell.spans.iter().enumerate() {
+         for (s_i, span) in cell.spans.iter().enumerate() {
             if regions[span.tile_index] == 0 && tile.areas[span.tile_index].is_some() {
                 level_stack.push(LevelStackEntry {
                     cell_index: c_i as u32,

@@ -64,7 +64,7 @@ Debug draw is available behind the ``debug_draw`` feature and using the ``Oxidiz
 | 0.2.0         | 0.9.X        | 0.20                   | unsupported          | unsupported     |
 | 0.1.X         | 0.9.X        | 0.19                   | unsupported          | unsupported     |
 
-**Using an unsupported Rapier, Xpbd, or parry3d version will cause Oxidized Navigation to fail as it tries to get wrongly versioned components.**
+**Using an unsupported Rapier, Xpbd, or parry3d version will cause Oxidized Navigation to fail as it tries to get the wrong version of components.**
 In this case you may be able to [override which version Oxidized Navigation depends on](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html).
 
 ## Non-exhaustive TODO-list:
@@ -75,3 +75,5 @@ In this case you may be able to [override which version Oxidized Navigation depe
 - [ ] Nav-mesh "layers" using different ``NavMeshSettings``.
 - [ ] Pathfinding ticket system (Call to pathfinding returns a ticket that one can check later, controlling async pathfinding like this allows us to limit the amount of parallel tasks & prioritize them)
 - [ ] Remove ``create_nav_mesh_tile_from_poly_mesh`` in favor of creating data in the right format from the start.
+
+- [ ] Add local nav-mesh sub-grids that can be used for moving objects (platforms, ships, etc) without needing to regenerate it's interior every update.

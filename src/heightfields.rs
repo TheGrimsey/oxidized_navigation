@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
-use bevy::{prelude::*, math::Vec3A};
+use bevy::{math::Vec3A, prelude::*};
 use parry3d::shape::HeightField;
 use smallvec::SmallVec;
 
@@ -39,7 +39,7 @@ pub(super) struct OpenSpan {
     pub(super) neighbours: [Option<u16>; 4],
     pub(super) tile_index: usize, // The index of this span in the whole tile.
     pub(super) region: u16,       // Region if non-zero.
-    area: Option<Area>,           // TODO: Ideally we don't want store this here. It's only here to be copied over to [OpenTile::areas] & bumps up the OpenSpan size from 32b to 40b.
+    area: Option<Area>, // TODO: Ideally we don't want store this here. It's only here to be copied over to [OpenTile::areas] & bumps up the OpenSpan size from 32b to 40b.
 }
 
 #[derive(Default, Debug)]
@@ -60,14 +60,14 @@ pub(super) struct TriangleCollection {
 
 pub struct HeightFieldCollection {
     pub transform: Transform,
-    pub heightfield: Arc<HeightField>,
+    pub heightfield: HeightField,
     pub area: Option<Area>,
 }
 
 pub(super) fn build_heightfield_tile(
     tile_coord: UVec2,
     triangle_collections: &[TriangleCollection],
-    heightfields: &[HeightFieldCollection],
+    heightfields: &[Arc<HeightFieldCollection>],
     nav_mesh_settings: &NavMeshSettings,
 ) -> VoxelizedTile {
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
@@ -139,12 +139,18 @@ pub(super) fn build_heightfield_tile(
         let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         for triangle in collection.heightfield.triangles() {
-            let a = Vec3A::from(transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z))
-                - tile_origin);
-            let b = Vec3A::from(transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z))
-                - tile_origin);
-            let c = Vec3A::from(transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z))
-                - tile_origin);
+            let a = Vec3A::from(
+                transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z))
+                    - tile_origin,
+            );
+            let b = Vec3A::from(
+                transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z))
+                    - tile_origin,
+            );
+            let c = Vec3A::from(
+                transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z))
+                    - tile_origin,
+            );
 
             process_triangle(
                 a,
@@ -202,8 +208,14 @@ fn process_triangle(
 
         // Clip polygon to the row.
         // TODO: This is awful & too complicated.
-        let (row_min_clip_vert_count, row_min_clip_verts) = divide_polygon(&vertices, row_clip_min, 2, false);
-        let (row_vert_count, row_verts) = divide_polygon(&row_min_clip_verts[..row_min_clip_vert_count],row_clip_max, 2, true);
+        let (row_min_clip_vert_count, row_min_clip_verts) =
+            divide_polygon(&vertices, row_clip_min, 2, false);
+        let (row_vert_count, row_verts) = divide_polygon(
+            &row_min_clip_verts[..row_min_clip_vert_count],
+            row_clip_max,
+            2,
+            true,
+        );
         if row_vert_count < 3 {
             continue;
         }
@@ -224,8 +236,14 @@ fn process_triangle(
             let column_clip_max = column_clip_min + nav_mesh_settings.cell_width;
 
             // Clip polygon to column.
-            let (column_min_clip_vert_count, column_min_clip_verts) = divide_polygon(&row_verts[..row_vert_count], column_clip_min, 0, false);
-            let (column_vert_count, column_verts) = divide_polygon(&column_min_clip_verts[..column_min_clip_vert_count],column_clip_max, 0, true);
+            let (column_min_clip_vert_count, column_min_clip_verts) =
+                divide_polygon(&row_verts[..row_vert_count], column_clip_min, 0, false);
+            let (column_vert_count, column_verts) = divide_polygon(
+                &column_min_clip_verts[..column_min_clip_vert_count],
+                column_clip_max,
+                0,
+                true,
+            );
             if column_vert_count < 3 {
                 continue;
             }
@@ -323,7 +341,7 @@ fn divide_polygon(
     vertices: &[Vec3A],
     clip_line: f32,
     axis: usize,
-    keep_left: bool
+    keep_left: bool,
 ) -> (usize, [Vec3A; 7]) {
     let mut delta_from_line = [0.0; 7];
     // This loop determines which side of the line the vertex is on.
@@ -331,7 +349,6 @@ fn divide_polygon(
         delta_from_line[i] = clip_line - vertex[axis];
     }
 
-    // TODO: We always use one of these options. Does it make sense to even return the other?
     let mut polygon_left = [Vec3A::ZERO; 7];
     let mut polygon_right = [Vec3A::ZERO; 7];
 
@@ -347,9 +364,11 @@ fn divide_polygon(
         // Check if both vertices are on the same side of the line.
         if in_a != in_b {
             // We slide the vertex along to the edge.
-            let slide = delta_from_line[previous] / (delta_from_line[previous] - delta_from_line[i]);
+            let slide =
+                delta_from_line[previous] / (delta_from_line[previous] - delta_from_line[i]);
 
-            polygon_left[verts_left] = vertices[previous] + (vertices[i] - vertices[previous]) * slide;
+            polygon_left[verts_left] =
+                vertices[previous] + (vertices[i] - vertices[previous]) * slide;
             polygon_right[verts_right] = polygon_left[verts_left];
             verts_left += 1;
             verts_right += 1;
@@ -446,7 +465,7 @@ pub fn build_open_heightfield_tile(
             tile_index += 1;
         }
     }
-    
+
     {
         #[cfg(feature = "trace")]
         let _span = info_span!("Link neighbours").entered();
@@ -470,13 +489,25 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
 
         let neighbour_index = [
             if column > 0 { Some(i - 1) } else { None },
-            if row < (tile_side - 1) { Some(i + tile_side) } else { None },
-            if column < (tile_side - 1) { Some(i + 1)} else { None },
-            if row > 0 { Some(i - tile_side) } else { None }
+            if row < (tile_side - 1) {
+                Some(i + tile_side)
+            } else {
+                None
+            },
+            if column < (tile_side - 1) {
+                Some(i + 1)
+            } else {
+                None
+            },
+            if row > 0 { Some(i - tile_side) } else { None },
         ];
 
         // For each direct neighbour.
-        for (neighbour, neighbour_index) in neighbour_index.into_iter().enumerate().filter_map(|(i, index)| Some(i).zip(index)) {
+        for (neighbour, neighbour_index) in neighbour_index
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, index)| Some(i).zip(index))
+        {
             neighbour_spans.clear();
             neighbour_spans.extend(
                 open_tile.cells[neighbour_index]
@@ -493,7 +524,7 @@ fn link_neighbours(open_tile: &mut OpenTile, nav_mesh_settings: &NavMeshSettings
                             continue;
                         }
                     }
-    
+
                     if min.abs_diff(span.min) < nav_mesh_settings.step_height {
                         span.neighbours[neighbour] = Some(i as u16);
                         break;
@@ -599,8 +630,7 @@ pub fn calculate_distance_field(open_tile: &mut OpenTile, nav_mesh_settings: &Na
                     continue;
                 };
 
-                let other_cell_index =
-                    get_neighbour_index(tile_side, other_cell_index, next_dir);
+                let other_cell_index = get_neighbour_index(tile_side, other_cell_index, next_dir);
 
                 let other_span = &open_tile.cells[other_cell_index].spans[index as usize];
 

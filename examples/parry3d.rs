@@ -12,22 +12,9 @@ fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            OxidizedNavigationPlugin::<MyParryCollider>::new(NavMeshSettings {
-                cell_width: 0.25,
-                cell_height: 0.1,
-                tile_width: 100,
-                world_half_extents: 10.0,
-                world_bottom_bound: -1.0,
-                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-                walkable_height: 20,
-                walkable_radius: 1,
-                step_height: 3,
-                min_region_area: 100,
-                merge_region_area: 500,
-                max_contour_simplification_error: 1.1,
-                max_edge_length: 80,
-                max_tile_generation_tasks: Some(9),
-            }),
+            OxidizedNavigationPlugin::<MyParryCollider>::new(
+                NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 10.0, -1.0),
+            ),
             OxidizedNavigationDebugDrawPlugin,
         ))
         .add_systems(Startup, setup)

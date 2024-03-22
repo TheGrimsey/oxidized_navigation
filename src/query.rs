@@ -58,11 +58,15 @@ pub fn find_polygon_path(
 ) -> Result<Vec<(UVec2, u16)>, FindPolygonPathError> {
     let search_radius = position_search_radius.unwrap_or(5.0);
 
-    let Some((start_tile, start_poly, start_pos)) = nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, start_pos, search_radius) else {
+    let Some((start_tile, start_poly, start_pos)) =
+        nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, start_pos, search_radius)
+    else {
         return Err(FindPolygonPathError::NoValidStartPolygon);
     };
 
-    let Some((end_tile, end_poly, end_pos)) = nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, end_pos, search_radius) else {
+    let Some((end_tile, end_poly, end_pos)) =
+        nav_mesh.find_closest_polygon_in_box(nav_mesh_settings, end_pos, search_radius)
+    else {
         return Err(FindPolygonPathError::NoValidEndPolygon);
     };
 
@@ -340,12 +344,26 @@ pub fn perform_string_pulling_on_path(
                     return Err(StringPullingError::MissingNodeTile);
                 };
                 let is_internal = current.0 == next.0;
-                let Some(link) = node_tile.polygons[current.1 as usize].links.iter().find(|link| { // This is a mess :)))
-                    match link {
-                        Link::Internal { neighbour_polygon, .. } => is_internal && next.1 == *neighbour_polygon,
-                        Link::External { neighbour_polygon, direction, .. } => direction.offset(current.0) == next.0 && next.1 == *neighbour_polygon,
-                    }
-                }) else {
+                let Some(link) = node_tile.polygons[current.1 as usize]
+                    .links
+                    .iter()
+                    .find(|link| {
+                        // This is a mess :)))
+                        match link {
+                            Link::Internal {
+                                neighbour_polygon, ..
+                            } => is_internal && next.1 == *neighbour_polygon,
+                            Link::External {
+                                neighbour_polygon,
+                                direction,
+                                ..
+                            } => {
+                                direction.offset(current.0) == next.0
+                                    && next.1 == *neighbour_polygon
+                            }
+                        }
+                    })
+                else {
                     return Err(StringPullingError::NoLinkBetweenPathPoints);
                 };
 

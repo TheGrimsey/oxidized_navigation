@@ -7,7 +7,7 @@ use smallvec::SmallVec;
 
 use crate::{
     mesher::{EdgeConnection, EdgeConnectionDirection, VERTICES_IN_TRIANGLE},
-    NavMeshSettings, Area,
+    Area, NavMeshSettings,
 };
 
 use super::mesher::PolyMesh;
@@ -431,8 +431,7 @@ fn connect_external_links(
                     step_height,
                 );
 
-            polygon.links.reserve(connection_count);
-            for i in 0..connection_count {
+            polygon.links.extend((0..connection_count).map(|i| {
                 let neighbour_polygon = connected_polys[i];
                 let area = connection_areas[i];
 
@@ -458,14 +457,14 @@ fn connect_external_links(
                 let min_byte = (bound_min.clamp(0.0, 1.0) * 255.0).round() as u8;
                 let max_byte = (bound_max.clamp(0.0, 1.0) * 255.0).round() as u8;
 
-                polygon.links.push(Link::External {
+                Link::External {
                     edge: edge_index as u8,
                     neighbour_polygon,
                     direction: neighbour_direction,
                     bound_min: min_byte,
                     bound_max: max_byte,
-                });
-            }
+                }
+            }));
             break; // We can only have one edge parallel to the direction in a triangle.
         }
     }
@@ -613,30 +612,30 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
     // Slight worry that the compiler won't optimize this but damn, it's cool.
     let polygons = poly_mesh
         .polygons
-        .iter()
+        .into_iter()
         .zip(poly_mesh.edges.iter())
-        .zip(poly_mesh.areas.iter())
+        .zip(poly_mesh.areas)
         .map(|((indices, edges), area)| {
             // Pre build internal links.
             let links = edges
                 .iter()
                 .enumerate()
                 .filter_map(|(i, edge)| {
-                    let EdgeConnection::Internal(other_polygon) = edge else {
+                    let EdgeConnection::Internal(neighbour_polygon) = edge else {
                         return None;
                     };
 
                     Some(Link::Internal {
                         edge: i as u8,
-                        neighbour_polygon: *other_polygon,
+                        neighbour_polygon: *neighbour_polygon,
                     })
                 })
                 .collect();
 
             Polygon {
                 links,
-                indices: *indices,
-                area: *area,
+                indices,
+                area,
             }
         })
         .collect();

@@ -1,10 +1,14 @@
 use std::cmp::Ordering;
 
-use bevy::{prelude::{IVec2, UVec2, UVec4}, log::warn};
+use bevy::{
+    log::warn,
+    prelude::{IVec2, UVec2, UVec4},
+};
 
 use crate::{
     get_neighbour_index,
-    heightfields::{OpenSpan, OpenTile}, Area,
+    heightfields::{OpenSpan, OpenTile},
+    Area,
 };
 
 use super::{in_cone, intersect, NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION};
@@ -486,8 +490,7 @@ fn get_corner_height(
         regions[3] = other_span.region;
 
         if let Some(span_index) = other_span.neighbours[dir as usize] {
-            let other_cell_index =
-                get_neighbour_index(tile_side, other_cell_index, dir.into());
+            let other_cell_index = get_neighbour_index(tile_side, other_cell_index, dir.into());
             let other_span = &tile.cells[other_cell_index].spans[span_index as usize];
 
             height = height.max(other_span.min);
@@ -502,7 +505,7 @@ fn simplify_contour(
     points: &[u32],
     simplified: &mut Vec<UVec4>,
     max_error: f32,
-    max_edge_len: u32,
+    max_edge_len: u16,
 ) {
     let has_connections = {
         let mut has_connections = false;
@@ -659,7 +662,8 @@ fn simplify_contour(
                 let delta_x = b.x.abs_diff(a.x);
                 let delta_z = b.z.abs_diff(a.z);
 
-                if delta_x * delta_x + delta_z * delta_z > max_edge_len * max_edge_len {
+                if delta_x * delta_x + delta_z * delta_z > max_edge_len as u32 * max_edge_len as u32
+                {
                     let n = if b.w < a.w {
                         b.w as isize + point_count as isize - a.w as isize
                     } else {

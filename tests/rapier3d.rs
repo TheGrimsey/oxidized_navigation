@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{num::NonZeroU16, time::Duration};
 
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
@@ -76,10 +76,10 @@ fn setup_app(app: &mut App) {
             walkable_radius: 1,
             step_height: 3,
             min_region_area: 100,
-            merge_region_area: 500,
+            max_region_area_to_merge_into: 500,
             max_contour_simplification_error: 1.1,
             max_edge_length: 80,
-            max_tile_generation_tasks: Some(9), // Github Actions are limited to 7 GB.
+            max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
         }),
         RapierPhysicsPlugin::<NoUserData>::default(),
     ));

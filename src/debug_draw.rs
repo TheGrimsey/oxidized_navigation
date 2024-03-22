@@ -1,5 +1,6 @@
 //! Module for debug draws.
 use bevy::{
+    gizmos::{config::GizmoConfigGroup, AppGizmoBuilder},
     prelude::{
         any_with_component, App, Color, Commands, Component, Entity, Gizmos, IntoSystemConfigs,
         Plugin, Query, ReflectResource, Res, Resource, Update, Vec3,
@@ -23,8 +24,13 @@ impl Plugin for OxidizedNavigationDebugDrawPlugin {
                 draw_path_system.run_if(any_with_component::<DrawPath>),
             ),
         );
+
+        app.init_gizmo_group::<NavigationGroup>();
     }
 }
+
+#[derive(Default, Reflect, GizmoConfigGroup)]
+pub struct NavigationGroup;
 
 #[derive(Default, Resource, Reflect)]
 #[reflect(Resource)]
@@ -35,7 +41,7 @@ fn should_draw_nav_mesh(draw_nav_mesh: Res<DrawNavMesh>) -> bool {
     draw_nav_mesh.0
 }
 
-fn draw_nav_mesh_system(nav_mesh: Res<NavMesh>, mut gizmos: Gizmos) {
+fn draw_nav_mesh_system(nav_mesh: Res<NavMesh>, mut gizmos: Gizmos<NavigationGroup>) {
     if let Ok(nav_mesh) = nav_mesh.get().read() {
         for (tile_coord, tile) in nav_mesh.get_tiles().iter() {
             let tile_color = Color::Rgba {
@@ -80,7 +86,7 @@ fn draw_path_system(
     mut commands: Commands,
     mut path_query: Query<(Entity, &mut DrawPath)>,
     time: Res<Time>,
-    mut gizmos: Gizmos,
+    mut gizmos: Gizmos<NavigationGroup>,
 ) {
     path_query.iter_mut().for_each(|(entity, mut draw_path)| {
         if draw_path

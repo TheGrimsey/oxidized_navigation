@@ -1,3 +1,5 @@
+## 0.11
+
 ## 0.7
 
 ### ``OxidizedNavigationPlugin`` is now generic over OxidizedColliders.

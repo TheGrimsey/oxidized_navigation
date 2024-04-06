@@ -305,6 +305,12 @@ impl NavMeshSettings {
             max_tile_generation_tasks: NonZeroU16::new(8),
         }
     }
+    /// Setter for [`NavMeshSettings::walkable_radius`]
+    pub fn with_walkable_radius(mut self, walkable_radius: u16) -> Self {
+        self.walkable_radius = walkable_radius;
+
+        self
+    }
     /// Setter for [`NavMeshSettings::tile_width`]
     pub fn with_tile_width(mut self, tile_width: u16) -> Self {
         self.tile_width = tile_width;

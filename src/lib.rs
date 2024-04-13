@@ -127,21 +127,18 @@ where
         app.add_systems(
             Update,
             handle_removed_affectors_system
+                .run_if(any_component_removed::<NavMeshAffector>())
                 .before(send_tile_rebuild_tasks_system::<C>)
                 .in_set(OxidizedNavigation::RemovedComponent),
         );
 
         app.add_systems(
             Update,
-            remove_finished_tasks
-                .in_set(OxidizedNavigation::Main)
-                .before(send_tile_rebuild_tasks_system::<C>),
-        );
-
-        app.add_systems(
-            Update,
             (
-                update_navmesh_affectors_system::<C>,
+                (
+                    remove_finished_tasks,
+                    update_navmesh_affectors_system::<C>,
+                ),
                 send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),
             )
                 .chain()

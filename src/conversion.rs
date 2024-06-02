@@ -1,4 +1,14 @@
 use bevy::prelude::{Transform, Vec3};
+use cfg_if::cfg_if;
+
+cfg_if! {
+    if #[cfg(feature = "xpbd")] {
+        use parry3d_xpbd as parry3d;
+    } else if #[cfg(feature = "rapier")] {
+        use parry3d_rapier as parry3d;
+    }
+}
+
 use parry3d::{
     math::Real,
     na::Point3,

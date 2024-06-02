@@ -1,4 +1,13 @@
 use bevy::prelude::Component;
+use cfg_if::cfg_if;
+
+cfg_if! {
+    if #[cfg(feature = "xpbd")] {
+        use parry3d_xpbd as parry3d;
+    } else if #[cfg(feature = "rapier")] {
+        use parry3d_rapier as parry3d;
+    }
+}
 
 #[cfg(feature = "rapier")]
 pub mod rapier;

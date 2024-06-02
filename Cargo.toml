@@ -16,8 +16,8 @@ categories = ["game-development"]
 
 [features]
 default = []
-rapier = ["bevy_rapier3d"]
-xpbd = ["bevy_xpbd_3d"]
+rapier = ["bevy_rapier3d", "parry3d_rapier"]
+xpbd = ["bevy_xpbd_3d", "parry3d_xpbd"]
 debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 trace = []
 
@@ -58,12 +58,16 @@ bevy = { version = "0.13", default-features = false, features = ["multi-threaded
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
 nalgebra = { version = "0.32", features = ["convert-glam025"] }
-parry3d = "0.13"
 
-bevy_rapier3d = { version = "0.25", optional = true, default-features = false, features = ["dim3"] }
+# different parry3d versions depending on physics implementation
+parry3d_xpbd = { package = "parry3d", version = "0.13", optional = true }
+parry3d_rapier = { package = "parry3d", version = "0.15.1", optional = true }
+
+bevy_rapier3d = { version = "0.26.0", optional = true, default-features = false, features = ["dim3"] }
 bevy_xpbd_3d = { version = "0.4", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
 
 smallvec = { version = "1.13", features = ["union"] }
+cfg-if = "1.0.0"
 
 [dev-dependencies]
 bevy = { version = "0.13", default-features = false, features = [

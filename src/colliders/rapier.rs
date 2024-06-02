@@ -1,3 +1,5 @@
+use parry3d_rapier as parry3d;
+
 use parry3d::{bounding_volume::Aabb, shape::TypedShape};
 
 use super::OxidizedCollider;

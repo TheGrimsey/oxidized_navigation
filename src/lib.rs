@@ -54,6 +54,7 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
+use cfg_if::cfg_if;
 use colliders::OxidizedCollider;
 use contour::build_contours;
 use conversion::{
@@ -64,6 +65,15 @@ use heightfields::{
     erode_walkable_area, HeightFieldCollection,
 };
 use mesher::build_poly_mesh;
+
+cfg_if! {
+    if #[cfg(feature = "xpbd")] {
+        use parry3d_xpbd as parry3d;
+    } else if #[cfg(feature = "rapier")] {
+        use parry3d_rapier as parry3d;
+    }
+}
+
 use parry3d::math::Isometry;
 use parry3d::na::Vector3;
 use parry3d::shape::TypedShape;
@@ -115,6 +125,7 @@ where
     C: OxidizedCollider,
 {
     fn build(&self, app: &mut App) {
+
         app.insert_resource(self.settings.clone());
 
         app.init_resource::<TileAffectors>()
@@ -147,6 +158,10 @@ where
 
         app.register_type::<NavMeshAffector>()
             .register_type::<NavMeshAreaType>();
+
+        //Is there a better way to do this? -- Baron Von Scrub
+        #[cfg(all(feature = "xpbd", feature = "rapier"))]
+        panic!("Can't have both xpbd and rapier features enabled simultaneously!");
     }
 }
 
@@ -609,6 +624,10 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         {
             let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
+            // There seem to be some extra cases that appeared with Rapier 0.26.0, however perhaps due to the Parry3d
+            // version independence, I can't case them without encountering errors, nor can I leave them out. Wildcard
+            // is a temporary fix and it still says it's unreachable, but to do: Find a more robust way of doing this.
+            #[allow(unreachable_patterns)]
             let type_to_convert = match collider.oxidized_into_typed_shape() {
                 TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)),
                 TypedShape::Cuboid(cuboid) => {
@@ -683,6 +702,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
                 TypedShape::Polyline(_) => continue,  /* This is a line. */
                 TypedShape::Segment(_) => continue,   /* This is a line segment. */
                 TypedShape::Custom(_) => unimplemented!("Custom shapes are not yet supported for nav-mesh generation, skipping for now.."),
+                _ => unimplemented!("You've encountered an unsupported shape, skipping for now..")
             };
 
             geometry_collections.push(GeometryCollection {

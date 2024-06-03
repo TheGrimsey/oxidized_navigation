@@ -69,7 +69,7 @@ use mesher::build_poly_mesh;
 cfg_if! {
     if #[cfg(feature = "xpbd")] {
         use parry3d_xpbd as parry3d;
-    } else if #[cfg(feature = "rapier")] {
+    } else {
         use parry3d_rapier as parry3d;
     }
 }

@@ -1,19 +1,9 @@
 use std::{num::NonZeroU16, time::Duration};
 
 use bevy::prelude::*;
-use cfg_if::cfg_if;
-use oxidized_navigation::{
-    colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector,
-    NavMeshSettings, OxidizedNavigationPlugin,
-};
+use oxidized_navigation::{colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, use_appropriate_parry3d};
 
-cfg_if! {
-    if #[cfg(feature = "xpbd")] {
-        use parry3d_xpbd as parry3d;
-    } else {
-        use parry3d_rapier as parry3d;
-    }
-}
+use_appropriate_parry3d!();
 
 use parry3d::shape::SharedShape;
 

@@ -54,7 +54,6 @@ use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
-use cfg_if::cfg_if;
 use colliders::OxidizedCollider;
 use contour::build_contours;
 use conversion::{
@@ -66,13 +65,8 @@ use heightfields::{
 };
 use mesher::build_poly_mesh;
 
-cfg_if! {
-    if #[cfg(feature = "xpbd")] {
-        use parry3d_xpbd as parry3d;
-    } else {
-        use parry3d_rapier as parry3d;
-    }
-}
+mod parry3d_macro;
+use_appropriate_parry3d!();
 
 use parry3d::math::Isometry;
 use parry3d::na::Vector3;

@@ -1,15 +1,9 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
 use bevy::{math::Vec3A, prelude::*};
-use cfg_if::cfg_if;
 
-cfg_if! {
-    if #[cfg(feature = "xpbd")] {
-        use parry3d_xpbd as parry3d;
-    } else {
-        use parry3d_rapier as parry3d;
-    }
-}
+use crate::use_appropriate_parry3d;
+use_appropriate_parry3d!();
 
 use parry3d::shape::HeightField;
 use smallvec::SmallVec;

@@ -1,13 +1,6 @@
 use bevy::prelude::{Transform, Vec3};
-use cfg_if::cfg_if;
 
-cfg_if! {
-    if #[cfg(feature = "xpbd")] {
-        use parry3d_xpbd as parry3d;
-    } else {
-        use parry3d_rapier as parry3d;
-    }
-}
+use_appropriate_parry3d!();
 
 use parry3d::{
     math::Real,
@@ -15,7 +8,7 @@ use parry3d::{
     shape::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
 };
 
-use crate::{heightfields::TriangleCollection, Area};
+use crate::{heightfields::TriangleCollection, Area, use_appropriate_parry3d};
 
 pub struct GeometryCollection {
     pub transform: Transform,

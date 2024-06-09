@@ -1,4 +1,7 @@
 use bevy::prelude::Component;
+use crate::use_appropriate_parry3d;
+
+use_appropriate_parry3d!();
 
 #[cfg(feature = "rapier")]
 pub mod rapier;

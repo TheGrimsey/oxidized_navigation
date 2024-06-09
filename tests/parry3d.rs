@@ -1,10 +1,10 @@
 use std::{num::NonZeroU16, time::Duration};
 
 use bevy::prelude::*;
-use oxidized_navigation::{
-    colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector,
-    NavMeshSettings, OxidizedNavigationPlugin,
-};
+use oxidized_navigation::{colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin, use_appropriate_parry3d};
+
+use_appropriate_parry3d!();
+
 use parry3d::shape::SharedShape;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);

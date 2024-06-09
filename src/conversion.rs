@@ -1,11 +1,14 @@
 use bevy::prelude::{Transform, Vec3};
+
+use_appropriate_parry3d!();
+
 use parry3d::{
     math::Real,
     na::Point3,
     shape::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},
 };
 
-use crate::{heightfields::TriangleCollection, Area};
+use crate::{heightfields::TriangleCollection, Area, use_appropriate_parry3d};
 
 pub struct GeometryCollection {
     pub transform: Transform,

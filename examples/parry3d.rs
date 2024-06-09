@@ -1,11 +1,14 @@
 //! A simple example showing how to use oxidized_navigation with a custom component using parry3d colliders.
 
 use bevy::{math::primitives, prelude::*};
+
 use oxidized_navigation::{
     colliders::OxidizedCollider,
     debug_draw::{DrawNavMesh, OxidizedNavigationDebugDrawPlugin},
     NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+
+use parry3d_rapier as parry3d;
 use parry3d::shape::SharedShape;
 
 fn main() {

@@ -1,6 +1,10 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
 use bevy::{math::Vec3A, prelude::*};
+
+use crate::use_appropriate_parry3d;
+use_appropriate_parry3d!();
+
 use parry3d::shape::HeightField;
 use smallvec::SmallVec;
 

@@ -14,6 +14,7 @@ use bevy::{
 };
 // use bevy_editor_pls::EditorPlugin;
 use bevy::tasks::futures_lite::future;
+use bevy_rapier3d::plugin::TimestepMode;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
@@ -35,9 +36,15 @@ fn main() {
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
             RapierPhysicsPlugin::<NoUserData>::default(),
         ))
+        //This was previously setting the pipeline to false, then using ..default, however the default seems to be gone for RapierConfiguration
+        // As of 0.26.0. --Baron Von Scrub
         .insert_resource(RapierConfiguration {
+            gravity: Default::default(),
             physics_pipeline_active: false,
-            ..Default::default()
+            query_pipeline_active: false,
+            timestep_mode: TimestepMode::Fixed{ dt: 0.1, substeps: 1 },
+            scaled_shape_subdivision: 0,
+            force_update_from_transform_changes: false,
         })
         .insert_resource(AsyncPathfindingTasks::default())
         .add_systems(Startup, setup_world_system)

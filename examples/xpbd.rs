@@ -12,9 +12,9 @@ fn main() {
         // Default Plugins
         .add_plugins((
             DefaultPlugins,
-            OxidizedNavigationPlugin::<Collider>::new(
-                NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -1.0),
-            ),
+            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
+                0.5, 1.9, 250.0, -1.0,
+            )),
             OxidizedNavigationDebugDrawPlugin,
             PhysicsPlugins::default(),
         ))
@@ -62,7 +62,7 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(primitives::Rectangle::from_size(Vec2::new(50.0, 50.0))),
-            material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
+            material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
             transform: Transform::IDENTITY,
             ..default()
         },
@@ -74,7 +74,7 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(primitives::Cuboid::new(2.5, 2.5, 2.5)),
-            material: materials.add(Color::rgb(0.1, 0.1, 0.5)),
+            material: materials.add(Color::srgb(0.1, 0.1, 0.5)),
             transform: Transform::from_xyz(-5.0, 0.8, -5.0),
             ..default()
         },
@@ -86,7 +86,7 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(Mesh::from(primitives::Cuboid::new(0.1, 0.1, 0.1))),
-            material: materials.add(Color::rgb(0.1, 0.1, 0.5)),
+            material: materials.add(Color::srgb(0.1, 0.1, 0.5)),
             transform: Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
             ..default()
         },
@@ -114,7 +114,7 @@ fn spawn_or_despawn_affector_system(
             .spawn((
                 PbrBundle {
                     mesh: meshes.add(primitives::Cuboid::new(2.5, 2.5, 2.5)),
-                    material: materials.add(Color::rgb(1.0, 0.1, 0.5)),
+                    material: materials.add(Color::srgb(1.0, 0.1, 0.5)),
                     transform: Transform::from_xyz(5.0, 0.8, 0.0),
                     ..default()
                 },

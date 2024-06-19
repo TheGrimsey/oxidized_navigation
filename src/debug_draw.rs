@@ -44,12 +44,11 @@ fn should_draw_nav_mesh(draw_nav_mesh: Res<DrawNavMesh>) -> bool {
 fn draw_nav_mesh_system(nav_mesh: Res<NavMesh>, mut gizmos: Gizmos<NavigationGroup>) {
     if let Ok(nav_mesh) = nav_mesh.get().read() {
         for (tile_coord, tile) in nav_mesh.get_tiles().iter() {
-            let tile_color = Color::Rgba {
-                red: 0.0,
-                green: (tile_coord.x % 10) as f32 / 10.0,
-                blue: (tile_coord.y % 10) as f32 / 10.0,
-                alpha: 1.0,
-            };
+            let tile_color = Color::srgb(
+                0.0,
+                (tile_coord.x % 10) as f32 / 10.0,
+                (tile_coord.y % 10) as f32 / 10.0,
+            );
             // Draw polygons.
             for poly in tile.polygons.iter() {
                 let indices = &poly.indices;

@@ -64,7 +64,7 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(primitives::Rectangle::from_size(Vec2::new(20.0, 20.0))),
-            material: materials.add(Color::rgb(0.3, 0.5, 0.3)),
+            material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
             ..default()
         },
         MyParryCollider {
@@ -75,7 +75,7 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(primitives::Cuboid::new(2.0, 2.0, 2.0)),
-            material: materials.add(Color::rgb(0.4, 0.5, 0.9)),
+            material: materials.add(Color::srgb(0.4, 0.5, 0.9)),
             transform: Transform::from_xyz(2.0, 1.0, -3.0),
             ..default()
         },
@@ -88,7 +88,7 @@ fn setup(
     commands.spawn((
         PbrBundle {
             mesh: meshes.add(primitives::Cuboid::new(0.1, 0.1, 0.1)),
-            material: materials.add(Color::rgb(0.4, 0.8, 0.9)),
+            material: materials.add(Color::srgb(0.4, 0.8, 0.9)),
             transform: Transform::from_xyz(-3.0, 0.6, 3.0).with_scale(Vec3::new(30.0, 12.0, 1.0)),
             ..default()
         },
@@ -128,7 +128,7 @@ fn spawn_or_despawn_affector_system(
             .spawn((
                 PbrBundle {
                     mesh: meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5))),
-                    material: materials.add(Color::rgb(1.0, 0.1, 0.5)),
+                    material: materials.add(Color::srgb(1.0, 0.1, 0.5)),
                     transform: Transform::from_xyz(5.0, 0.8, 5.0),
                     ..default()
                 },

@@ -135,10 +135,7 @@ where
         app.add_systems(
             Update,
             (
-                (
-                    remove_finished_tasks,
-                    update_navmesh_affectors_system::<C>,
-                ),
+                (remove_finished_tasks, update_navmesh_affectors_system::<C>),
                 send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),
             )
                 .chain()

@@ -54,19 +54,19 @@ required-features = ["xpbd"]
 name = "parry3d"
 
 [dependencies]
-bevy = { version = "0.13", default-features = false, features = ["multi-threaded"] }
+bevy = { version = "0.14.0-rc.3", default-features = false, features = ["multi_threaded"] }
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
-nalgebra = { version = "0.32", features = ["convert-glam025"] }
-parry3d = "0.13"
+nalgebra = { version = "0.32", features = ["convert-glam027"] }
+parry3d = "0.15"
 
-bevy_rapier3d = { version = "0.25", optional = true, default-features = false, features = ["dim3"] }
-bevy_xpbd_3d = { version = "0.4", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
+bevy_rapier3d = { version = "0.27.0-rc.1", optional = true, default-features = false, features = ["dim3"] }
+bevy_xpbd_3d = { git = "https://github.com/Jondolf/bevy_xpbd.git", branch = "bevy-0.14", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
 
 smallvec = { version = "1.13", features = ["union"] }
 
 [dev-dependencies]
-bevy = { version = "0.13", default-features = false, features = [
+bevy = { version = "0.14.0-rc.3", default-features = false, features = [
     "bevy_asset",
     "bevy_pbr",
     "bevy_render",

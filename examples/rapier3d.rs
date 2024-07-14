@@ -24,7 +24,13 @@ fn main() {
     App::new()
         // Default Plugins
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    name: Some("Oxidized Navigation: Rapier 3d".to_owned()),
+                    ..default()
+                }),
+                ..default()
+            }),
             OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
                 0.5, 1.9, 250.0, -1.0,
             )),

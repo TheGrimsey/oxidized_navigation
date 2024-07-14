@@ -1,4 +1,4 @@
-use parry3d::{bounding_volume::Aabb, shape::TypedShape};
+use crate::parry::parry3d::{bounding_volume::Aabb, shape::TypedShape};
 
 use super::OxidizedCollider;
 

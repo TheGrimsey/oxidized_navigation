@@ -8,7 +8,7 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 
 ## Quick-start:
 **Nav-mesh generation:**
-1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier" or "xpbd" features, custom parry3d colliders don't require enabling any features).
+1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier", "xpbd", or "parry_016" features).
 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `bevy_xpbd_3d`.
 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for xpbd `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `bevy_xpbd_3D`) to any entity you want to affect the nav-mesh.

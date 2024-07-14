@@ -16,10 +16,13 @@ categories = ["game-development"]
 
 [features]
 default = []
-rapier = ["bevy_rapier3d"]
-xpbd = ["bevy_xpbd_3d"]
+rapier = ["bevy_rapier3d", "parry_016"]
+xpbd = ["bevy_xpbd_3d", "parry_015"]
 debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 trace = []
+
+parry_016 = ["parry3d_016"]
+parry_015 = ["parry3d_015"]
 
 [[example]]
 name = "rapier3d"
@@ -39,7 +42,7 @@ required-features = ["debug_draw", "xpbd"]
 
 [[example]]
 name = "parry3d"
-required-features = ["debug_draw"]
+required-features = ["parry_016", "debug_draw"]
 
 [[test]]
 name = "rapier3d"
@@ -57,8 +60,10 @@ name = "parry3d"
 bevy = { version = "0.14", default-features = false, features = ["multi_threaded"] }
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
-nalgebra = { version = "0.32", features = ["convert-glam027"] }
-parry3d = "0.16"
+nalgebra = { version = "0.33", features = ["convert-glam027"] }
+
+parry3d_016 = { package = "parry3d", version = "0.16", optional = true }
+parry3d_015 = { package = "parry3d", version = "0.15", optional = true }
 
 bevy_rapier3d = { version = "0.27", optional = true, default-features = false, features = ["dim3"] }
 bevy_xpbd_3d = { version = "0.5", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
@@ -81,10 +86,12 @@ criterion = { version = "0.5" }
 [[bench]]
 name = "simple_geometry"
 harness = false
+required-features = [ "parry_016" ]
 
 [[bench]]
 name = "simple_navigation"
 harness = false
+required-features = [ "parry_016" ] 
 
 [package.metadata.docs.rs]
 # Compile docs.rs docs with debug_draw so docs for it appear.

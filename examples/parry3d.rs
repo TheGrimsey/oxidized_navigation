@@ -6,12 +6,18 @@ use oxidized_navigation::{
     debug_draw::{DrawNavMesh, OxidizedNavigationDebugDrawPlugin},
     NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
-use parry3d::shape::SharedShape;
+use crate::parry::parry3d::shape::SharedShape;
 
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    name: Some("Oxidized Navigation: Parry3d".to_owned()),
+                    ..default()
+                }),
+                ..default()
+            }),
             OxidizedNavigationPlugin::<MyParryCollider>::new(
                 NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 10.0, -1.0),
             ),

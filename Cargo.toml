@@ -15,7 +15,7 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [features]
-default = []
+default = ["parry_016"]
 rapier = ["bevy_rapier3d", "parry_016"]
 xpbd = ["bevy_xpbd_3d", "parry_015"]
 debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]

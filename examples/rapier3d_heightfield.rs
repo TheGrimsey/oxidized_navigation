@@ -27,7 +27,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    name: Some("Oxidized Navigation: Rapier 3d Heightfield".to_owned()),
+                    title: "Oxidized Navigation: Rapier 3d Heightfield".to_owned(),
                     ..default()
                 }),
                 ..default()

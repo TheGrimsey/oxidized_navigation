@@ -11,10 +11,9 @@ fn main() {
     App::new()
         // Default Plugins
         .add_plugins((
-            
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    name: Some("Oxidized Navigation: XPBD".to_owned()),
+                    title: "Oxidized Navigation: XPBD".to_owned(),
                     ..default()
                 }),
                 ..default()

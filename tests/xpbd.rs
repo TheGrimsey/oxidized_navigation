@@ -65,6 +65,7 @@ fn setup_app(app: &mut App) {
             max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
         }),
         PhysicsPlugins::default(),
+        HierarchyPlugin::default()
     ));
 }
 

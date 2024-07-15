@@ -29,6 +29,12 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 
 You need to use `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`, where `Collider` is either a rapier or xpbd `Collider`, or your own custom collider that implements the `OxidizedCollider` trait. This is necessary to allow us to be generic over different `Collider` components.
 
+> When enabling XPBD, I get the error "You must pick a single parry3d feature."
+
+You need to disable the default `parry_016` feature as XPBD uses a different version of `Parry3d`. 
+
+*A version of `Parry3d` needs to be enabled by default for the crate to be compilable & publishable.*
+
 > I don't want to use the Rapier3d or XPBD3d physics engines just to generate a navmesh. How do I create my own `parry3d` wrapper component?
 
 You need to create a component that contains a parry3d `SharedShape`, then implement the `OxidizedCollider` trait. See the [parry3d example](./examples/parry3d.rs) for a basic example.

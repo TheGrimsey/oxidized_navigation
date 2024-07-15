@@ -5,7 +5,7 @@ use oxidized_navigation::{
     colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector,
     NavMeshSettings, OxidizedNavigationPlugin,
 };
-use parry3d::shape::SharedShape;
+use parry3d_016::shape::SharedShape;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
@@ -16,11 +16,11 @@ struct MyParryCollider {
 }
 
 impl OxidizedCollider for MyParryCollider {
-    fn oxidized_into_typed_shape(&self) -> parry3d::shape::TypedShape {
+    fn oxidized_into_typed_shape(&self) -> parry3d_016::shape::TypedShape {
         self.collider.as_typed_shape()
     }
 
-    fn oxidized_compute_local_aabb(&self) -> parry3d::bounding_volume::Aabb {
+    fn oxidized_compute_local_aabb(&self) -> parry3d_016::bounding_volume::Aabb {
         self.collider.compute_local_aabb()
     }
 }

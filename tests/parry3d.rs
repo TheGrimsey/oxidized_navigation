@@ -5,7 +5,7 @@ use oxidized_navigation::{
     colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector,
     NavMeshSettings, OxidizedNavigationPlugin,
 };
-use parry3d::shape::SharedShape;
+use parry3d_016::shape::SharedShape;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
@@ -16,11 +16,11 @@ struct MyParryCollider {
 }
 
 impl OxidizedCollider for MyParryCollider {
-    fn oxidized_into_typed_shape(&self) -> parry3d::shape::TypedShape {
+    fn oxidized_into_typed_shape(&self) -> parry3d_016::shape::TypedShape {
         self.collider.as_typed_shape()
     }
 
-    fn oxidized_compute_local_aabb(&self) -> parry3d::bounding_volume::Aabb {
+    fn oxidized_compute_local_aabb(&self) -> parry3d_016::bounding_volume::Aabb {
         self.collider.compute_local_aabb()
     }
 }
@@ -94,9 +94,9 @@ fn wait_for_generation_to_finish(app: &mut App) {
     loop {
         app.update();
 
-        if app.world.resource::<ActiveGenerationTasks>().is_empty() {
+        if app.world().resource::<ActiveGenerationTasks>().is_empty() {
             break;
-        } else if app.world.resource::<Time>().elapsed() >= TIMEOUT_DURATION {
+        } else if app.world().resource::<Time>().elapsed() >= TIMEOUT_DURATION {
             panic!("Generation timed out.");
         }
 
@@ -114,8 +114,8 @@ fn test_simple_navigation() {
 
     wait_for_generation_to_finish(&mut app);
 
-    let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
-    let nav_mesh = app.world.resource::<NavMesh>().get();
+    let nav_mesh_settings = app.world().resource::<NavMeshSettings>();
+    let nav_mesh = app.world().resource::<NavMesh>().get();
     let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
 
     let start_pos = Vec3::new(5.0, 1.0, 5.0);

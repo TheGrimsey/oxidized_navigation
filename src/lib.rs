@@ -64,9 +64,7 @@ use heightfields::{
     erode_walkable_area, HeightFieldCollection,
 };
 use mesher::build_poly_mesh;
-use parry3d::math::Isometry;
-use parry3d::na::Vector3;
-use parry3d::shape::TypedShape;
+use crate::parry::parry3d::{math::Isometry, na::Vector3,shape::TypedShape};
 use regions::build_regions;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTile, NavMeshTiles};
@@ -78,6 +76,7 @@ pub mod conversion;
 pub mod debug_draw;
 mod heightfields;
 mod mesher;
+mod parry;
 pub mod query;
 mod regions;
 pub mod tiles;
@@ -135,10 +134,7 @@ where
         app.add_systems(
             Update,
             (
-                (
-                    remove_finished_tasks,
-                    update_navmesh_affectors_system::<C>,
-                ),
+                (remove_finished_tasks, update_navmesh_affectors_system::<C>),
                 send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),
             )
                 .chain()

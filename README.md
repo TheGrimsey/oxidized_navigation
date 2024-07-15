@@ -8,7 +8,7 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 
 ## Quick-start:
 **Nav-mesh generation:**
-1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier" or "xpbd" features, custom parry3d colliders don't require enabling any features).
+1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier", "xpbd", or "parry_016" features).
 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `bevy_xpbd_3d`.
 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for xpbd `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `bevy_xpbd_3D`) to any entity you want to affect the nav-mesh.
@@ -53,6 +53,7 @@ Debug draw is available behind the ``debug_draw`` feature and using the ``Oxidiz
 
 | Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Parry3d Version |
 | ------------- | ------------ | ---------------------- | -------------------- | --------------- |
+| 0.11.0        | 0.14         | 0.27                   | 0.5                  | 0.15/0.16       |
 | 0.10.0        | 0.13         | 0.25                   | 0.4                  | 0.13            |
 | 0.9.0         | 0.12         | 0.24                   | 0.3                  | 0.13            |
 | 0.8.0         | 0.12         | 0.23                   | 0.3                  | 0.13            |

@@ -1,5 +1,5 @@
 use bevy::prelude::{Transform, Vec3};
-use parry3d::{
+use crate::parry::parry3d::{
     math::Real,
     na::Point3,
     shape::{Ball, Capsule, Cone, Cuboid, Cylinder, Triangle},

@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
 use bevy::{math::Vec3A, prelude::*};
-use parry3d::shape::HeightField;
+use crate::parry::parry3d::shape::HeightField;
 use smallvec::SmallVec;
 
 use crate::{conversion::Triangles, Area};

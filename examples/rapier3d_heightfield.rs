@@ -7,13 +7,14 @@
 
 use std::sync::{Arc, RwLock};
 
+use bevy::color::palettes;
 use bevy::tasks::futures_lite::future;
 use bevy::{
     math::primitives,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
-use bevy_rapier3d::prelude::{Collider, NoUserData, RapierConfiguration, RapierPhysicsPlugin};
+use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
@@ -24,19 +25,21 @@ use oxidized_navigation::{
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins,
-            OxidizedNavigationPlugin::<Collider>::new(
-                NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -1.0),
-            ),
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    title: "Oxidized Navigation: Rapier 3d Heightfield".to_owned(),
+                    ..default()
+                }),
+                ..default()
+            }),
+            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
+                0.5, 1.9, 250.0, -1.0,
+            )),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
             RapierPhysicsPlugin::<NoUserData>::default(),
         ))
-        .insert_resource(RapierConfiguration {
-            physics_pipeline_active: false,
-            ..Default::default()
-        })
         .insert_resource(AsyncPathfindingTasks::default())
         .add_systems(Startup, (setup_world_system, info_system))
         .add_systems(
@@ -92,7 +95,7 @@ fn run_blocking_pathfinding(
                         commands.spawn(DrawPath {
                             timer: Some(Timer::from_seconds(4.0, TimerMode::Once)),
                             pulled_path: string_path,
-                            color: Color::RED,
+                            color: palettes::css::RED.into(),
                         });
                     }
                     Err(error) => error!("Error with string path: {:?}", error),
@@ -158,7 +161,7 @@ fn poll_pathfinding_tasks_system(
             commands.spawn(DrawPath {
                 timer: Some(Timer::from_seconds(4.0, TimerMode::Once)),
                 pulled_path: string_path.clone(),
-                color: Color::BLUE,
+                color: palettes::css::BLUE.into(),
             });
 
             false
@@ -259,7 +262,7 @@ fn spawn_or_despawn_affector_system(
             .spawn((
                 PbrBundle {
                     mesh: meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5))),
-                    material: materials.add(Color::rgb(1.0, 0.1, 0.5)),
+                    material: materials.add(Color::srgb(1.0, 0.1, 0.5)),
                     transform: Transform::from_xyz(5.0, 0.8, -5.0),
                     ..default()
                 },

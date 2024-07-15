@@ -1,4 +1,6 @@
-## 0.11.0 (Unreleased)
+
+## 0.11.0 (2024-07-15)
+
 - Added `NavMeshSettings::from_agent_and_bounds` helper for creating a nav-mesh with 'reasonable' defaults.
 - Added many `NavMeshSettings::with_*` functions to adjust the 'reasonable' defaults.
 - Added gizmo config group `NavigationGroup` for debug draw.
@@ -6,6 +8,8 @@
 - Switch to using an EntityHashMap for storing tile relations.
 - Renamed `NavMeshSettings::merge_region_area` to `NavMeshSettings::max_region_area_to_merge_into`
 - `NavMeshSettings::max_edge_length` is now a `u16` instead of `u32`. An edge can't be longer than `tile_length` anyway which is a `u16`.
+- Updated to Bevy 0.14
+- Support multiple Parry3d versions (adopted from PR by @BaronVonScrub)
 
 ## 0.10.0 (2024-02-23)
 - Update to Bevy 0.13
@@ -46,7 +50,7 @@
 - ``find_path`` has been renamed ``find_polygon_path``
 - A new ``find_path`` function has been added that does both polygon path finding and stringpulling in one.
 - Defer much of geometry handling to async task, frame should now be blocked less.
-- Added ``max_tile_generation_tasks`` to optionally limit how many tiles can be generated concurrently. 
+- Added ``max_tile_generation_tasks`` to optionally limit how many tiles can be generated concurrently.
 
 ## 0.4.0 (2023-04-11)
 
@@ -56,11 +60,11 @@
 ## 0.3.0 (2023-03-07)
 
 - Updated to Bevy 0.10
-- Removed ``NavMeshGenerationState``, you can replicate the same functionality by using ``configure_set`` to add a run condition to the ``OxidizedNavigation`` SystemSet. 
+- Removed ``NavMeshGenerationState``, you can replicate the same functionality by using ``configure_set`` to add a run condition to the ``OxidizedNavigation`` SystemSet.
 
 ## 0.2.0 (2023-02-13)
 
-- Implemented ``walkable_radius``. This will "pull-back" the nav-mesh from edges, which means anywhere on the nav-mesh should be fine to stand on for a character with a radius of ``walkable_radius * cell_width`` 
+- Implemented ``walkable_radius``. This will "pull-back" the nav-mesh from edges, which means anywhere on the nav-mesh should be fine to stand on for a character with a radius of ``walkable_radius * cell_width``
 - Added area cost multipliers.
 - Added ``NavMeshAreaType`` component, allowing changing the area type of an entity from the default 0, where a value of ``None`` is unwalkable.
 - Added ``NavMeshGenerationState`` allowing you to pause nav-mesh tile generation.
@@ -68,7 +72,7 @@
 - Added debug draw to example.
 - Disabled compiling default Bevy features.
 - Refactored code to be more rust-y.
-- Update to ``bevy_rapier`` 0.20 
+- Update to ``bevy_rapier`` 0.20
 
 ## 0.1.1 (2023-01-18)
 

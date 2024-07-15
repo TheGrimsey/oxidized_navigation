@@ -90,9 +90,9 @@ fn wait_for_generation_to_finish(app: &mut App) {
     loop {
         app.update();
 
-        if app.world.resource::<ActiveGenerationTasks>().is_empty() {
+        if app.world().resource::<ActiveGenerationTasks>().is_empty() {
             break;
-        } else if app.world.resource::<Time>().elapsed() >= TIMEOUT_DURATION {
+        } else if app.world().resource::<Time>().elapsed() >= TIMEOUT_DURATION {
             panic!("Generation timed out.");
         }
 
@@ -110,8 +110,8 @@ fn test_simple_navigation() {
 
     wait_for_generation_to_finish(&mut app);
 
-    let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
-    let nav_mesh = app.world.resource::<NavMesh>().get();
+    let nav_mesh_settings = app.world().resource::<NavMeshSettings>();
+    let nav_mesh = app.world().resource::<NavMesh>().get();
     let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
 
     let start_pos = Vec3::new(5.0, 1.0, 5.0);
@@ -135,8 +135,8 @@ fn test_heightfield_navigation() {
 
     wait_for_generation_to_finish(&mut app);
 
-    let nav_mesh_settings = app.world.resource::<NavMeshSettings>();
-    let nav_mesh = app.world.resource::<NavMesh>().get();
+    let nav_mesh_settings = app.world().resource::<NavMeshSettings>();
+    let nav_mesh = app.world().resource::<NavMesh>().get();
     let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
 
     let start_pos = Vec3::new(5.0, 1.0, 5.0);

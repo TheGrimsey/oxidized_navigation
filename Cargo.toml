@@ -55,6 +55,7 @@ required-features = ["xpbd"]
 
 [[test]]
 name = "parry3d"
+required-features = ["parry_016"]
 
 [dependencies]
 bevy = { version = "0.14", default-features = false, features = ["multi_threaded"] }

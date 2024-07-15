@@ -1,5 +1,5 @@
 
-## 0.11.0 (2024-07-10)
+## 0.11.0 (2024-07-15)
 
 - Added `NavMeshSettings::from_agent_and_bounds` helper for creating a nav-mesh with 'reasonable' defaults.
 - Added many `NavMeshSettings::with_*` functions to adjust the 'reasonable' defaults.
@@ -9,6 +9,7 @@
 - Renamed `NavMeshSettings::merge_region_area` to `NavMeshSettings::max_region_area_to_merge_into`
 - `NavMeshSettings::max_edge_length` is now a `u16` instead of `u32`. An edge can't be longer than `tile_length` anyway which is a `u16`.
 - Updated to Bevy 0.14
+- Support multiple Parry3d versions (adopted from PR by @BaronVonScrub)
 
 ## 0.10.0 (2024-02-23)
 - Update to Bevy 0.13

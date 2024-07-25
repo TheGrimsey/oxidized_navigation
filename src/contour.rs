@@ -11,7 +11,8 @@ use crate::{
     Area,
 };
 
-use super::{in_cone, intersect, NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION};
+use super::{NavMeshSettings, FLAG_BORDER_VERTEX, MASK_CONTOUR_REGION};
+use super::math::{in_cone, intersect};
 
 #[derive(Default, Clone, Debug)]
 pub struct Contour {

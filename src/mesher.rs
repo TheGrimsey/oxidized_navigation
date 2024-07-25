@@ -5,7 +5,8 @@ use bevy::{
 
 use crate::{contour::ContourSet, Area};
 
-use super::{intersect, intersect_prop, left, left_on, NavMeshSettings};
+use super::math::{intersect, intersect_prop, left, left_on};
+use super::NavMeshSettings;
 
 #[derive(Default)]
 pub struct PolyMesh {

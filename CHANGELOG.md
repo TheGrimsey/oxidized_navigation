@@ -1,4 +1,7 @@
 
+## 0.12.0 (Unreleased)
+- Add `TileGenerated` event which is emitted when a nav-mesh tile has been updated.
+
 ## 0.11.0 (2024-07-15)
 
 - Added `NavMeshSettings::from_agent_and_bounds` helper for creating a nav-mesh with 'reasonable' defaults.

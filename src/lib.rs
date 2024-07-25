@@ -48,6 +48,7 @@ use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
 
 use bevy::ecs::entity::EntityHashMap;
+use bevy::tasks::futures_lite::future;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
     ecs::system::Resource,
@@ -80,6 +81,7 @@ mod parry;
 pub mod query;
 mod regions;
 pub mod tiles;
+mod math;
 
 /// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
@@ -143,6 +145,8 @@ where
 
         app.register_type::<NavMeshAffector>()
             .register_type::<NavMeshAreaType>();
+
+        app.add_event::<TileGenerated>();
     }
 }
 
@@ -153,7 +157,7 @@ const MASK_CONTOUR_REGION: u32 = 0xffff; // Masks out the above value.
 struct NavMeshAffectorRelations(EntityHashMap<SmallVec<[UVec2; 4]>>);
 
 #[derive(Resource, Default)]
-pub struct ActiveGenerationTasks(Vec<Task<()>>);
+pub struct ActiveGenerationTasks(Vec<Task<Option<UVec2>>>);
 impl ActiveGenerationTasks {
     pub fn len(&self) -> usize {
         self.0.len()
@@ -706,8 +710,27 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     heightfields.clear();
 }
 
-fn remove_finished_tasks(mut active_generation_tasks: ResMut<ActiveGenerationTasks>) {
-    active_generation_tasks.0.retain(|task| !task.is_finished());
+/// Event containing the tile coordinate of a generated/regenerated tile.
+/// 
+/// Emitted when a tile has been updated.
+#[derive(Event)]
+pub struct TileGenerated(pub UVec2);
+
+fn remove_finished_tasks(
+    mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
+    mut event: EventWriter<TileGenerated>
+) {
+    active_generation_tasks.0.retain_mut(|task| {
+        if let Some(tile) = future::block_on(future::poll_once(task)) {
+            if let Some(tile) = tile {
+                event.send(TileGenerated(tile));
+            }
+
+            false
+        } else {
+            true
+        }
+    });
 }
 
 async fn remove_tile(
@@ -732,7 +755,7 @@ async fn build_tile(
     geometry_collections: Vec<GeometryCollection>,
     heightfields: Box<[Arc<HeightFieldCollection>]>,
     nav_mesh: Arc<RwLock<NavMeshTiles>>,
-) {
+) -> Option<UVec2> {
     #[cfg(feature = "trace")]
     let _span = info_span!("Async build Tile").entered();
 
@@ -745,13 +768,17 @@ async fn build_tile(
 
     let Ok(mut nav_mesh) = nav_mesh.write() else {
         error!("Nav-Mesh lock has been poisoned. Generation can no longer be continued.");
-        return;
+        return None;
     };
 
     if nav_mesh.tile_generations.get(&tile_coord).unwrap_or(&0) < &generation {
         nav_mesh.tile_generations.insert(tile_coord, generation);
 
         nav_mesh.add_tile(tile_coord, nav_mesh_tile, &nav_mesh_settings);
+        
+        Some(tile_coord)
+    } else {
+        None
     }
 }
 
@@ -835,69 +862,4 @@ fn get_neighbour_index(tile_size: usize, index: usize, dir: usize) -> usize {
         3 => index - tile_size,
         _ => panic!("Not a valid direction"),
     }
-}
-
-fn intersect_prop(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
-    if collinear(a, b, c) || collinear(a, b, d) || collinear(c, d, a) || collinear(c, d, b) {
-        return false;
-    }
-
-    (left(a, b, c) ^ left(a, b, d)) && (left(c, d, a) ^ left(c, d, b))
-}
-
-fn between(a: IVec4, b: IVec4, c: IVec4) -> bool {
-    if !collinear(a, b, c) {
-        return false;
-    }
-
-    if a.x != b.x {
-        return (a.x <= c.x && c.x <= b.x) || (a.x >= c.x && c.x >= b.x);
-    }
-
-    (a.z <= c.z && c.z <= b.z) || (a.z >= c.z && c.z >= b.z)
-}
-
-fn intersect(a: IVec4, b: IVec4, c: IVec4, d: IVec4) -> bool {
-    intersect_prop(a, b, c, d)
-        || between(a, b, c)
-        || between(a, b, d)
-        || between(c, d, a)
-        || between(c, d, b)
-}
-
-fn area_sqr(a: IVec4, b: IVec4, c: IVec4) -> i32 {
-    (b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)
-}
-
-fn collinear(a: IVec4, b: IVec4, c: IVec4) -> bool {
-    area_sqr(a, b, c) == 0
-}
-
-fn left(a: IVec4, b: IVec4, c: IVec4) -> bool {
-    area_sqr(a, b, c) < 0
-}
-fn left_on(a: IVec4, b: IVec4, c: IVec4) -> bool {
-    area_sqr(a, b, c) <= 0
-}
-
-fn in_cone(i: usize, outline_vertices: &[UVec4], point: UVec4) -> bool {
-    let point_i = outline_vertices[i];
-    let point_next = outline_vertices[(i + 1) % outline_vertices.len()];
-    let point_previous =
-        outline_vertices[(outline_vertices.len() + i - 1) % outline_vertices.len()];
-
-    if left_on(point_i.as_ivec4(), point.as_ivec4(), point_next.as_ivec4()) {
-        return left(
-            point_i.as_ivec4(),
-            point.as_ivec4(),
-            point_previous.as_ivec4(),
-        ) && left(point.as_ivec4(), point_i.as_ivec4(), point_next.as_ivec4());
-    }
-
-    !left_on(point_i.as_ivec4(), point.as_ivec4(), point_next.as_ivec4())
-        && left_on(
-            point.as_ivec4(),
-            point_i.as_ivec4(),
-            point_previous.as_ivec4(),
-        )
 }

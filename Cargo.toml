@@ -17,7 +17,7 @@ categories = ["game-development"]
 [features]
 default = ["parry_016"]
 rapier = ["bevy_rapier3d", "parry_016"]
-xpbd = ["bevy_xpbd_3d", "parry_015"]
+avian = ["avian3d", "parry_015"]
 debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 trace = []
 
@@ -37,8 +37,8 @@ name = "rapier3d_multi_floor"
 required-features = ["debug_draw", "rapier"]
 
 [[example]]
-name = "xpbd"
-required-features = ["debug_draw", "xpbd"]
+name = "avian"
+required-features = ["debug_draw", "avian"]
 
 [[example]]
 name = "parry3d"
@@ -50,8 +50,8 @@ required-features = ["rapier"]
 
 
 [[test]]
-name = "xpbd"
-required-features = ["xpbd"]
+name = "avian"
+required-features = ["avian"]
 
 [[test]]
 name = "parry3d"
@@ -67,7 +67,7 @@ parry3d_016 = { package = "parry3d", version = "0.16", optional = true }
 parry3d_015 = { package = "parry3d", version = "0.15", optional = true }
 
 bevy_rapier3d = { version = "0.27", optional = true, default-features = false, features = ["dim3"] }
-bevy_xpbd_3d = { version = "0.5", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
+avian3d  = { version = "0.1", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
 
 smallvec = { version = "1.13", features = ["union"] }
 cfg-if = "1.0.0"

@@ -2,13 +2,13 @@ use bevy::prelude::Component;
 
 #[cfg(feature = "rapier")]
 pub mod rapier;
-#[cfg(feature = "xpbd")]
-pub mod xpbd;
+#[cfg(feature = "avian")]
+pub mod avian;
 
 /// The trait that is require to implement for the collider component that you want to use with oxidized-navigation.
 /// Essentially it allows you to use any bevy component that contains a `parry3d::shape::SharedShape` as a collider.
 ///
-/// This trait is already implemented for `bevy_rapier3d::prelude::Collider` and `bevy_xpbd_3d::prelude::Collider`.
+/// This trait is already implemented for `bevy_rapier3d::prelude::Collider` and `avian::prelude::Collider`.
 ///
 /// See the parry3d example for how to implement this trait for a custom component that wraps a `parry3d::shape::SharedShape`.
 pub trait OxidizedCollider: Component {

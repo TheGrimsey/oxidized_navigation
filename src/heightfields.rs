@@ -87,7 +87,7 @@ pub(super) fn build_heightfield_tile(
     let mut translated_vertices = Vec::default();
 
     for collection in triangle_collections.iter() {
-        // TODO: This might be wrong for xpbd or custom parry3d colliders, but I can't figure out a nice way to know whether or not we're actually dealing with a rapier3d collider.
+        // TODO: This might be wrong for avian or custom parry3d colliders, but I can't figure out a nice way to know whether or not we're actually dealing with a rapier3d collider.
         let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         match &collection.triangles {
@@ -135,7 +135,7 @@ pub(super) fn build_heightfield_tile(
     }
 
     for collection in heightfields.iter() {
-        // TODO: This might be wrong for xpbd or custom parry3d colliders, but I can't figure out a nice way to know whether or not we're actually dealing with a rapier3d collider.
+        // TODO: This might be wrong for avian or custom parry3d colliders, but I can't figure out a nice way to know whether or not we're actually dealing with a rapier3d collider.
         let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         for triangle in collection.heightfield.triangles() {

@@ -1,7 +1,7 @@
 use std::{num::NonZeroU16, time::Duration};
 
 use bevy::prelude::*;
-use bevy_xpbd_3d::prelude::{Collider, PhysicsPlugins};
+use avian3d::prelude::{Collider, PhysicsPlugins};
 use oxidized_navigation::{
     query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
     OxidizedNavigationPlugin,

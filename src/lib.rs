@@ -4,10 +4,10 @@
 //!
 //! ## Quick-start:
 //! **Nav-mesh generation:**
-//! 1. Choose which backend you're going to use (bevy_rapier3d, bevy_xpbd_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier" or "xpbd" features, custom parry3d colliders don't require enabling any features).
-//! 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `bevy_xpbd_3d`.
-//! 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for xpbd `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
-//! 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `bevy_xpbd_3D`) to any entity you want to affect the nav-mesh.
+//! 1. Choose which backend you're going to use (bevy_rapier3d, avian3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier" or "avian" features, custom parry3d colliders don't require enabling any features).
+//! 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `avian3d`.
+//! 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for avian `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
+//! 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `avian3d`) to any entity you want to affect the nav-mesh.
 //!
 //! *At this point nav-meshes will be automatically generated whenever the collider or ``GlobalTransform`` of any entity with a ``NavMeshAffector`` is changed.*
 //!
@@ -23,7 +23,7 @@
 //!
 //! > I added the `OxidizedNavigationPlugin` to my app and now it won't compile.
 //!
-//! You need to use `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`, where `Collider` is either a rapier or xpbd `Collider`, or your own custom collider that implements the `OxidizedCollider` trait. This is necessary to allow us to be generic over different `Collider` components.
+//! You need to use `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`, where `Collider` is either a rapier or avian `Collider`, or your own custom collider that implements the `OxidizedCollider` trait. This is necessary to allow us to be generic over different `Collider` components.
 //!
 //! > I don't want to use the Rapier3d or XPBD3d physics engines just to generate a navmesh. How do I create my own `parry3d` wrapper component?
 //!
@@ -39,7 +39,7 @@
 //!
 //! [Bevy]: https://crates.io/crates/bevy
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
-//! [Bevy XPBD 3D]: https://crates.io/crates/bevy_xpbd_3d
+//! [Avian]: https://crates.io/crates/avian3d
 //! [Bevy Rapier3D]: https://crates.io/crates/bevy_rapier3d
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 

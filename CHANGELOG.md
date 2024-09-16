@@ -1,6 +1,8 @@
 
 ## 0.12.0 (Unreleased)
 - Add `TileGenerated` event which is emitted when a nav-mesh tile has been updated.
+- Added support for `Avian3d`
+- Removed support for `bevy_xpbd`, use avian instead.
 
 ## 0.11.0 (2024-07-15)
 

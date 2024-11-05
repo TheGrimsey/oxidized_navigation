@@ -1,25 +1,25 @@
 use bevy::{
-    log::info,
-    prelude::{UVec2, UVec3, UVec4},
+    log::info, prelude::{UVec2, UVec3, UVec4}
 };
 
-use crate::{contour::ContourSet, Area};
+use crate::{contour::ContourSet, detail_mesh::build_detail_mesh, heightfields::OpenTile, Area};
 
 use super::math::{intersect, intersect_prop, left, left_on};
 use super::NavMeshSettings;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct PolyMesh {
     pub vertices: Vec<UVec3>,
     pub polygons: Vec<[u32; VERTICES_IN_TRIANGLE]>, //
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
     pub areas: Vec<Area>,
+    pub regions: Vec<u16>
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
 pub const VERTICES_IN_TRIANGLE: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
-pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSettings) -> PolyMesh {
+pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSettings, open_tile: &OpenTile) -> PolyMesh {
     let mut max_vertices = 0;
     let mut max_tris = 0;
     let mut max_verts_per_contour = 0;
@@ -39,6 +39,7 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
         polygons: Vec::with_capacity(max_tris),
         edges: Vec::with_capacity(max_tris),
         areas: Vec::with_capacity(max_tris),
+        regions: Vec::with_capacity(max_tris)
     };
 
     let mut first_vertex = vec![-1; VERTEX_BUCKET_COUNT];
@@ -85,8 +86,13 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
                 ]);
 
                 poly_mesh.areas.push(contour.area);
+                poly_mesh.regions.push(contour.region);
             }
         }
+    }
+
+    if let Some(detail_poly_mesh) = build_detail_mesh(nav_mesh_settings, open_tile, &poly_mesh) {
+        poly_mesh = detail_poly_mesh;
     }
 
     // For each edge, find other polygon that shares that edge.
@@ -169,7 +175,7 @@ fn build_mesh_adjacency(
 ) {
     let max_edge_count = polygons.len() * VERTICES_IN_TRIANGLE;
 
-    let mut first_edge = vec![None; vertex_count];
+    let mut first_edge: Vec<Option<usize>> = vec![None; vertex_count];
     let mut next_edge = vec![None; max_edge_count];
     let mut edges = Vec::with_capacity(max_edge_count);
 

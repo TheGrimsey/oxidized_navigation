@@ -66,7 +66,7 @@ nalgebra = { version = "0.33", features = ["convert-glam027"] }
 parry3d_016 = { package = "parry3d", version = "0.16", optional = true }
 parry3d_015 = { package = "parry3d", version = "0.15", optional = true }
 
-bevy_rapier3d = { version = "0.27", optional = true, default-features = false, features = ["dim3"] }
+bevy_rapier3d = { version = "0.27", optional = true, default-features = false, features = ["dim3", "debug-render-3d"] }
 avian3d  = { version = "0.1", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
 
 smallvec = { version = "1.13", features = ["union"] }
@@ -84,6 +84,7 @@ bevy = { version = "0.14.0", default-features = false, features = [
     "zstd",
 ] }
 criterion = { version = "0.5" }
+bevy_editor_pls = { git = "https://github.com/soraxas/bevy_editor_pls.git", branch = "feat-bump-version" }
 
 [[bench]]
 name = "simple_geometry"

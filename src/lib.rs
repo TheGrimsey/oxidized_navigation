@@ -82,6 +82,7 @@ pub mod query;
 mod regions;
 pub mod tiles;
 mod math;
+mod detail_mesh;
 
 /// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
@@ -268,6 +269,8 @@ pub struct NavMeshSettings {
     ///
     /// Adjust this to control memory & CPU usage. More tiles generating at once will have a higher memory footprint.
     pub max_tile_generation_tasks: Option<NonZeroU16>,
+
+    pub max_height_error: u16,
 }
 impl NavMeshSettings {
     /// Helper function for creating nav-mesh settings with reasonable defaults from the size of your navigation agent and bounds of your world.
@@ -300,6 +303,7 @@ impl NavMeshSettings {
             max_edge_length: 80,
             max_contour_simplification_error: 1.1,
             max_tile_generation_tasks: NonZeroU16::new(8),
+            max_height_error: 3
         }
     }
     /// Setter for [`NavMeshSettings::walkable_radius`]
@@ -832,13 +836,13 @@ pub fn build_tile_sync(
     let contour_set = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build contours").entered();
-        build_contours(open_tile, nav_mesh_settings)
+        build_contours(&open_tile, nav_mesh_settings)
     };
 
     let poly_mesh = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build poly mesh").entered();
-        build_poly_mesh(contour_set, nav_mesh_settings)
+        build_poly_mesh(contour_set, nav_mesh_settings, &open_tile)
     };
 
     {
@@ -848,11 +852,6 @@ pub fn build_tile_sync(
         create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, nav_mesh_settings)
     }
 }
-
-/*
-*   Lots of math stuff.
-*   Don't know where else to put it.
-*/
 
 fn get_neighbour_index(tile_size: usize, index: usize, dir: usize) -> usize {
     match dir {

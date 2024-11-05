@@ -5,6 +5,7 @@
 //! Press B to run blocking path finding.
 //!
 
+use std::num::NonZeroU16;
 use std::sync::{Arc, RwLock};
 
 use bevy::color::palettes;
@@ -14,7 +15,9 @@ use bevy::{
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
+use bevy_editor_pls::EditorPlugin;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
+use bevy_rapier3d::render::RapierDebugRenderPlugin;
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
@@ -33,12 +36,14 @@ fn main() {
                 ..default()
             }),
             OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
-                0.5, 1.9, 250.0, -1.0,
-            )),
+                0.5, 1.9, 250.0, -10.0,
+            ).with_max_tile_generation_tasks(Some(NonZeroU16::MIN))),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
             RapierPhysicsPlugin::<NoUserData>::default(),
+            RapierDebugRenderPlugin::default(),
+            EditorPlugin::default(),
         ))
         .insert_resource(AsyncPathfindingTasks::default())
         .add_systems(Startup, (setup_world_system, info_system))
@@ -222,12 +227,12 @@ fn setup_world_system(mut commands: Commands) {
 
     // Camera
     commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(60.0, 50.0, 50.0)
+        transform: Transform::from_xyz(0.0, 15.0, 50.0)
             .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
         ..default()
     });
 
-    let heightfield_heights = (0..(50 * 50))
+    let heightfield_heights = (0..(10 * 10))
         .map(|value| {
             let position = value / 50;
 
@@ -238,7 +243,7 @@ fn setup_world_system(mut commands: Commands) {
     // Heightfield.
     commands.spawn((
         TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
-        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
+        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(10.0, 50.0, 10.0)),
         NavMeshAffector,
     ));
 }

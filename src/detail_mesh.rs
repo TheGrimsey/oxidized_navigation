@@ -383,9 +383,11 @@ fn build_poly_detail(
     let mut edge = [UVec3::ZERO; (MAX_VERTS_PER_EDGE+1)];
     let mut hull = Vec::with_capacity(MAX_VERTS);
 
+    verts.clear();
     verts.extend(poly.iter().cloned());
     edges.clear();
     triangles.clear();
+    samples.clear();
 
     let min_extent = poly_min_extent(verts);
 
@@ -444,9 +446,9 @@ fn build_poly_detail(
                 }
             
                 // Add new point if deviation is greater than sample_max_error
-                if let Some(maxi) = max_i {
+                if let Some(max_i) = max_i {
                     if max_dev > sample_max_error * sample_max_error {
-                        idx.insert(k + 1, maxi);
+                        idx.insert(k + 1, max_i);
                     } else {
                         k += 1;
                     }
@@ -493,7 +495,6 @@ fn build_poly_detail(
             max_bounds = max_bounds.max(*vertex);
         }
 
-        samples.clear();
         for z in min_bounds.z..max_bounds.z {
             for x in min_bounds.x..max_bounds.x {
                 let pt = UVec3::new(
@@ -526,6 +527,8 @@ fn build_poly_detail(
             let mut best_distance = 0.0;
             let mut best_i = None;
 
+            info!("Verts ({}): {verts:?}", verts.len());
+
             for i in 0..nsamples {
                 let s = &samples[i * 4..(i + 1) * 4];
                 if s[3] != 0 {
@@ -542,10 +545,12 @@ fn build_poly_detail(
                     best_distance = d;
                     best_i = Some(i);
                     best_point = UVec3::from_slice(s);
-
-                    info!("BD: {best_distance}, BP: {best_point:?}");
                 }
             }
+
+            info!("Poly: {poly:?}");
+            info!("BD: {best_distance}, BP: {best_point:?}");
+            info!("===");
 
             // Stop tessellating if error is within the threshold or no sample found
             if best_distance <= (sample_max_error * sample_max_error) || best_i.is_none() {

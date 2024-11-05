@@ -234,7 +234,7 @@ fn setup_world_system(mut commands: Commands) {
 
     let heightfield_heights = (0..(10 * 10))
         .map(|value| {
-            let position = value / 50;
+            let position = value / 10;
 
             (position as f32 / 10.0).sin() / 10.0
         })
@@ -243,7 +243,7 @@ fn setup_world_system(mut commands: Commands) {
     // Heightfield.
     commands.spawn((
         TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
-        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(10.0, 50.0, 10.0)),
+        Collider::heightfield(heightfield_heights, 10, 10, Vec3::new(10.0, 50.0, 10.0)),
         NavMeshAffector,
     ));
 }

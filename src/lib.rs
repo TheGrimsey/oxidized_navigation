@@ -65,7 +65,7 @@ use heightfields::{
     erode_walkable_area, HeightFieldCollection,
 };
 use mesher::build_poly_mesh;
-use crate::parry::parry3d::{math::Isometry, na::Vector3,shape::TypedShape};
+use parry3d::{math::Isometry, na::Vector3,shape::TypedShape};
 use regions::build_regions;
 use smallvec::SmallVec;
 use tiles::{create_nav_mesh_tile_from_poly_mesh, NavMeshTile, NavMeshTiles};
@@ -77,7 +77,6 @@ pub mod conversion;
 pub mod debug_draw;
 mod heightfields;
 mod mesher;
-mod parry;
 pub mod query;
 mod regions;
 pub mod tiles;
@@ -128,7 +127,7 @@ where
         app.add_systems(
             Update,
             handle_removed_affectors_system
-                .run_if(any_component_removed::<NavMeshAffector>())
+                .run_if(any_component_removed::<NavMeshAffector>)
                 .before(send_tile_rebuild_tasks_system::<C>)
                 .in_set(OxidizedNavigation::RemovedComponent),
         );

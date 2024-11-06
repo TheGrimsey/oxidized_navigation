@@ -1,11 +1,14 @@
 use std::{num::NonZeroU16, time::Duration};
 
 use bevy::prelude::*;
+use parry3d::{
+    bounding_volume::Aabb,
+    shape::{SharedShape, TypedShape}
+};
 use oxidized_navigation::{
     colliders::OxidizedCollider, query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector,
     NavMeshSettings, OxidizedNavigationPlugin,
 };
-use parry3d_016::shape::SharedShape;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
@@ -16,11 +19,11 @@ struct MyParryCollider {
 }
 
 impl OxidizedCollider for MyParryCollider {
-    fn oxidized_into_typed_shape(&self) -> parry3d_016::shape::TypedShape {
+    fn oxidized_into_typed_shape(&self) -> TypedShape {
         self.collider.as_typed_shape()
     }
 
-    fn oxidized_compute_local_aabb(&self) -> parry3d_016::bounding_volume::Aabb {
+    fn oxidized_compute_local_aabb(&self) -> Aabb {
         self.collider.compute_local_aabb()
     }
 }
@@ -28,7 +31,7 @@ impl OxidizedCollider for MyParryCollider {
 fn setup_world_system(mut commands: Commands) {
     // Plane
     commands.spawn((
-        TransformBundle::IDENTITY,
+        Transform::IDENTITY,
         MyParryCollider {
             collider: SharedShape::cuboid(25.0, 0.1, 25.0),
         },
@@ -37,7 +40,7 @@ fn setup_world_system(mut commands: Commands) {
 
     // Cube
     commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(-5.0, 0.8, -5.0)),
+        Transform::from_xyz(-5.0, 0.8, -5.0),
         MyParryCollider {
             collider: SharedShape::cuboid(1.25, 1.25, 1.25),
         },
@@ -46,9 +49,7 @@ fn setup_world_system(mut commands: Commands) {
 
     // Tall Cube
     commands.spawn((
-        TransformBundle::from_transform(
-            Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
-        ),
+        Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
         MyParryCollider {
             collider: SharedShape::cuboid(1.25, 1.25, 1.25),
         },
@@ -57,9 +58,7 @@ fn setup_world_system(mut commands: Commands) {
 
     // Thin wall
     commands.spawn((
-        TransformBundle::from_transform(
-            Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
-        ),
+        Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
         MyParryCollider {
             collider: SharedShape::cuboid(0.05, 0.05, 0.05),
         },

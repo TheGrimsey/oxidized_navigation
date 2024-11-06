@@ -15,39 +15,35 @@ keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
 [features]
-default = ["parry_016"]
-rapier = ["bevy_rapier3d", "parry_016"]
-avian = ["avian3d", "parry_015"]
+default = ["parry3d"]
+rapier = ["bevy_rapier3d", "parry3d"]
+avian = ["avian3d", "parry3d"]
 debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]
 trace = []
 
-parry_016 = ["parry3d_016"]
-parry_015 = ["parry3d_015"]
-
 [[example]]
 name = "rapier3d"
-required-features = ["debug_draw", "rapier"]
+required-features = ["rapier", "debug_draw"]
 
 [[example]]
 name = "rapier3d_heightfield"
-required-features = ["debug_draw", "rapier"]
+required-features = ["rapier", "debug_draw"]
 
 [[example]]
 name = "rapier3d_multi_floor"
-required-features = ["debug_draw", "rapier"]
+required-features = ["rapier", "debug_draw"]
 
 [[example]]
 name = "avian"
-required-features = ["debug_draw", "avian"]
+required-features = ["avian", "debug_draw"]
 
 [[example]]
 name = "parry3d"
-required-features = ["parry_016", "debug_draw"]
+required-features = ["parry3d", "debug_draw"]
 
 [[test]]
 name = "rapier3d"
 required-features = ["rapier"]
-
 
 [[test]]
 name = "avian"
@@ -55,25 +51,24 @@ required-features = ["avian"]
 
 [[test]]
 name = "parry3d"
-required-features = ["parry_016"]
+required-features = ["parry3d"]
 
 [dependencies]
-bevy = { version = "0.14", default-features = false, features = ["multi_threaded"] }
+bevy = { version = "0.15.0-rc.3", default-features = false, features = ["multi_threaded"] }
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
-nalgebra = { version = "0.33", features = ["convert-glam027"] }
+nalgebra = { version = "0.33.2", features = ["convert-glam029"] }
 
-parry3d_016 = { package = "parry3d", version = "0.16", optional = true }
-parry3d_015 = { package = "parry3d", version = "0.15", optional = true }
+parry3d = { version = "0.17", optional = true }
 
 bevy_rapier3d = { version = "0.27", optional = true, default-features = false, features = ["dim3"] }
-avian3d  = { version = "0.1", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"]  }
+avian3d = { git = "https://github.com/Jondolf/avian.git", branch = "main", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"] }
 
 smallvec = { version = "1.13", features = ["union"] }
 cfg-if = "1.0.0"
 
 [dev-dependencies]
-bevy = { version = "0.14.0", default-features = false, features = [
+bevy = { version = "0.15.0-rc.3", default-features = false, features = [
     "bevy_asset",
     "bevy_pbr",
     "bevy_render",
@@ -88,13 +83,13 @@ criterion = { version = "0.5" }
 [[bench]]
 name = "simple_geometry"
 harness = false
-required-features = [ "parry_016" ]
+required-features = ["parry3d"]
 
 [[bench]]
 name = "simple_navigation"
 harness = false
-required-features = [ "parry_016" ] 
+required-features = ["parry3d"]
 
 [package.metadata.docs.rs]
 # Compile docs.rs docs with debug_draw so docs for it appear.
-features = [ "debug_draw" ]
+features = ["debug_draw"]

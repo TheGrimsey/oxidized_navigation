@@ -1,4 +1,4 @@
-name: Test Parry
+name: Test Benches
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       - uses: taiki-e/install-action@nextest
       - name: Test with nextest
-        run: cargo nextest run --no-default-features --features "parry3d" --test parry3d --profile ci
+        run: cargo nextest run --no-default-features --features "parry3d" --benches --profile ci
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v5
         if: success() || failure()
@@ -30,4 +30,4 @@ jobs:
           detailed_summary: true
           comment: true
           group_suite: true
-          check_name: Parry Test Report
+          check_name: Benches Test Report

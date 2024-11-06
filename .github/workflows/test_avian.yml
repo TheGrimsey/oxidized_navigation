@@ -1,7 +1,7 @@
 name: Test Avian
 
 on:
-  push:
+  workflow_dispatch:
   pull_request:
     branches: [ "master", "dev" ]
 
@@ -9,13 +9,25 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
+  tests:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout repository code.
-      uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
-    - name: Install alsalib headers
-      run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
-    - name: Run tests for repository.
-      run: cargo test --no-default-features --features "avian"
+      - name: Checkout repository code.
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install alsalib headers
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - uses: taiki-e/install-action@nextest
+      - name: Test with nextest
+        run: cargo nextest run --no-default-features --features "avian" --test avian --profile ci
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v5
+        if: success() || failure()
+        with:
+          report_paths: 'target/nextest/ci/junit.xml'
+          include_passed: true
+          job_summary: true
+          detailed_summary: true
+          comment: true
+          group_suite: true
+          check_name: Avian Test Report

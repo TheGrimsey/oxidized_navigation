@@ -1,4 +1,7 @@
-use bevy::{log::{error, info, warn}, math::{UVec2, UVec3, Vec3, Vec3Swizzles}, utils::hashbrown::HashMap};
+use bevy::{log::warn, math::{UVec2, UVec3, Vec3, Vec3Swizzles}, utils::hashbrown::HashMap};
+
+#[cfg(feature = "trace")]
+use bevy::log::info_span;
 
 use crate::{get_neighbour_index, heightfields::OpenTile, mesher::{PolyMesh, VERTICES_IN_TRIANGLE}, NavMeshSettings};
 
@@ -9,19 +12,29 @@ struct HeightPatch {
     width: u16,
     height: u16,
 
-    // height data?
-    data: Vec<u16>
+    /// Heights of the area covered by the patch extracted from OpenTile. 
+    heights: Vec<u16>
 }
 
+/// Builds a height corrected "detail" mesh from the original poly-mesh.
+/// 
+/// Adding vertices at points where the height difference compared to the OpenTile is too great.
 pub fn build_detail_mesh(
     nav_mesh_settings: &NavMeshSettings,
     open_tile: &OpenTile,
     poly_mesh: &PolyMesh
 ) -> Option<PolyMesh> {
+    let Some(max_height_error) = nav_mesh_settings.max_height_error else {
+        return None;
+    };
+
+    #[cfg(feature = "trace")]
+    let _span = info_span!("Build Detail Mesh").entered();
+
     let mut max_bounds = UVec2::ZERO;
 
     let polygon_bounds = poly_mesh.polygons.iter().map(|polygon| {
-        let mut min = UVec2::splat(nav_mesh_settings.tile_width.into());
+        let mut min = UVec2::splat(nav_mesh_settings.tile_width.get().into());
         let mut max = UVec2::ZERO;
 
         for i in polygon {
@@ -32,7 +45,7 @@ pub fn build_detail_mesh(
         }
 
         min = min.saturating_sub(UVec2::ONE);
-        max = (max + UVec2::ONE).min(UVec2::splat(nav_mesh_settings.tile_width.into()));
+        max = (max + UVec2::ONE).min(UVec2::splat(nav_mesh_settings.tile_width.get().into()));
 
         max_bounds = max_bounds.max(max.saturating_sub(min));
 
@@ -47,7 +60,7 @@ pub fn build_detail_mesh(
         min_y: 0,
         width: 0,
         height: 0,
-        data: vec![0u16; (max_bounds.x * max_bounds.y) as usize],
+        heights: vec![0u16; (max_bounds.x * max_bounds.y) as usize],
     };
 
     let mut vertices_to_index = HashMap::with_capacity(poly_mesh.vertices.len());
@@ -77,14 +90,13 @@ pub fn build_detail_mesh(
         height_patch.width = max.x.saturating_sub(min.x) as u16;
         height_patch.height = max.y.saturating_sub(min.y) as u16;
 
-        get_height_data(nav_mesh_settings, open_tile, &vertices, *region, &mut height_patch, &mut queue);
+        extract_height_data(nav_mesh_settings, open_tile, &vertices, *region, &mut height_patch, &mut queue);
     
-        if !build_poly_detail(&height_patch, &vertices, 1, &mut verts, &mut polygons, &mut edges, &mut samples, 5.0, 3) {
+        if !build_poly_detail(&height_patch, &vertices, 1, &mut verts, &mut polygons, &mut edges, &mut samples, max_height_error.get() as f32, 3) {
             return None;
         }
 
         // Merge vertices into the high detail poly mesh.
-        // This is fun
         let mut resolve_vertex = | vertex: UVec3 | if let Some(i) = vertices_to_index.get(&vertex) {
             *i
         } else {
@@ -114,7 +126,7 @@ pub fn build_detail_mesh(
     Some(high_detail_poly_mesh)
 }
 
-fn get_height_data(
+fn extract_height_data(
     nav_mesh_settings: &NavMeshSettings,
     open_tile: &OpenTile,
     triangle_vertices: &[UVec3],
@@ -124,7 +136,7 @@ fn get_height_data(
 ) {
     queue.clear();
 
-    height_patch.data.fill(u16::MAX);
+    height_patch.heights.fill(u16::MAX);
 
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
 
@@ -135,13 +147,13 @@ fn get_height_data(
         let cell_y = y + height_patch.min_y + nav_mesh_settings.walkable_radius;
 
         for x in 0..height_patch.width {
-            let cell_x = x + height_patch.width + nav_mesh_settings.walkable_radius;
+            let cell_x = x + height_patch.min_x + nav_mesh_settings.walkable_radius;
             let cell_i = cell_x as usize + cell_y as usize * tile_side;
             let cell = &open_tile.cells[cell_i];
 
             for (span_i, span) in cell.spans.iter().enumerate() {
                 if span.region == region {
-                    height_patch.data[x as usize + y as usize * height_patch.width as usize] = span.min;
+                    height_patch.heights[x as usize + y as usize * height_patch.width as usize] = span.min;
                     empty = false;
 
                     let border = span.neighbours.iter()
@@ -165,7 +177,7 @@ fn get_height_data(
         seed_array_with_poly_center(open_tile, triangle_vertices, nav_mesh_settings, queue, height_patch);
     }
 
-    // If iterate go over this, we clear out the first retract_size elements in the queue.
+    // If we go over this, we clear out the first retract_size elements in the queue.
     let retract_size = 256;
     let mut head = 0;
 
@@ -203,13 +215,13 @@ fn get_height_data(
                 continue;
             }
 
-            if height_patch.data[height_patch_x as usize + height_patch_y as usize * height_patch.width as usize] != u16::MAX {
+            if height_patch.heights[height_patch_x as usize + height_patch_y as usize * height_patch.width as usize] != u16::MAX {
                 continue;
             }
 
             let neighbour_span = &open_tile.cells[neighbour_i].spans[neighbour as usize];
 
-            height_patch.data[height_patch_x as usize + height_patch_y as usize * height_patch.width as usize] = neighbour_span.min;
+            height_patch.heights[height_patch_x as usize + height_patch_y as usize * height_patch.width as usize] = neighbour_span.min;
 
             queue.push((neighbour_i, neighbour as usize));
         }
@@ -272,7 +284,7 @@ fn seed_array_with_poly_center(
     
     // Set up the height_patch data and DFS for traversing toward the polygon center
     let mut dirs = [0, 1, 2, 3];
-    height_patch.data.fill(0);
+    height_patch.heights.fill(0);
 
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
     let mut last_step = start_cell;
@@ -321,11 +333,11 @@ fn seed_array_with_poly_center(
                 continue;
             }
 
-            if height_patch.data[hpx as usize + hpy as usize * height_patch.width as usize] != 0 {
+            if height_patch.heights[hpx as usize + hpy as usize * height_patch.width as usize] != 0 {
                 continue;
             }
 
-            height_patch.data[hpx as usize + hpy as usize * height_patch.width as usize] = 1;
+            height_patch.heights[hpx as usize + hpy as usize * height_patch.width as usize] = 1;
             queue.push((new_i, neighbour_span_i as usize));
         }
 
@@ -346,9 +358,9 @@ fn seed_array_with_poly_center(
     let height_patch_i = h_x + h_y * height_patch.width as usize;
 
     // Reset the height patch data for height data retrieval
-    height_patch.data.fill(u16::MAX);
+    height_patch.heights.fill(u16::MAX);
     let open_span = &open_tile.cells[last_step.0].spans[last_step.1];
-    height_patch.data[height_patch_i] = open_span.min;
+    height_patch.heights[height_patch_i] = open_span.min;
 }
 
 fn distance_pt_seg(point: Vec3, va: Vec3, vb: Vec3) -> f32 {
@@ -373,12 +385,11 @@ fn build_poly_detail(
     verts: &mut Vec<UVec3>,
     triangles: &mut Vec<[u32; VERTICES_IN_TRIANGLE]>,
     edges: &mut Vec<u32>,
-    samples: &mut Vec<u32>,
+    samples: &mut Vec<u16>,
     sample_max_error: f32,
     search_radius: u16
 ) -> bool {
     const MAX_VERTS: usize = 127;
-    const MAX_TRIS: u32 = 255;
     const MAX_VERTS_PER_EDGE: usize = 32;
     let mut edge = [UVec3::ZERO; (MAX_VERTS_PER_EDGE+1)];
     let mut hull = Vec::with_capacity(MAX_VERTS);
@@ -482,7 +493,6 @@ fn build_poly_detail(
     }
 
     if triangles.is_empty() {
-        warn!("Couldn't triangle polygon ({} vertices).", verts.len());
         return true;
     }
 
@@ -508,9 +518,10 @@ fn build_poly_detail(
                     continue;
                 }
     
-                samples.push(x);
-                samples.push(get_height(pt.x, pt.y, pt.z, search_radius, height_patch) as u32);
-                samples.push(z);
+                // Coordinates can't be greater than a u16 since we limit a tile to max u16 in a side.
+                samples.push(x as u16);
+                samples.push(get_height(pt.x, pt.y, pt.z, search_radius, height_patch));
+                samples.push(z as u16);
                 samples.push(0); // Not added
             }
         }
@@ -527,16 +538,15 @@ fn build_poly_detail(
             let mut best_distance = 0.0;
             let mut best_i = None;
 
-            info!("Verts ({}): {verts:?}", verts.len());
-
             for i in 0..nsamples {
                 let s = &samples[i * 4..(i + 1) * 4];
                 if s[3] != 0 {
                     continue; // skip already added samples
                 }
+                let point = UVec3::new(s[0].into(), s[1].into(), s[2].into());
 
                 // Calculate distance to the mesh
-                let d = dist_to_tri_mesh(UVec3::from_slice(s).as_vec3(), &verts, &triangles);
+                let d = dist_to_tri_mesh(point.as_vec3(), &verts, &triangles);
                 let Some(d) = d else {
                     continue; // did not hit the mesh
                 };
@@ -544,13 +554,9 @@ fn build_poly_detail(
                 if d > best_distance {
                     best_distance = d;
                     best_i = Some(i);
-                    best_point = UVec3::from_slice(s);
+                    best_point = point;
                 }
             }
-
-            info!("Poly: {poly:?}");
-            info!("BD: {best_distance}, BP: {best_point:?}");
-            info!("===");
 
             // Stop tessellating if error is within the threshold or no sample found
             if best_distance <= (sample_max_error * sample_max_error) || best_i.is_none() {
@@ -575,14 +581,6 @@ fn build_poly_detail(
     return true;
 }
 
-fn get_jitter_x(i: usize) -> f32 {
-    (((i.wrapping_mul(0x8da6b343) & 0xffff) as f32) / 65535.0 * 2.0) - 1.0
-}
-
-fn get_jitter_y(i: usize) -> f32 {
-    (((i.wrapping_mul(0xd8163841) & 0xffff) as f32) / 65535.0 * 2.0) - 1.0
-}
-
 fn get_height(
     fx: u32,
     fy: u32,
@@ -596,7 +594,7 @@ fn get_height(
     ix = ix.saturating_sub(height_patch.min_x.into()).clamp(0, (height_patch.width - 1).into());
     iz = iz.saturating_sub(height_patch.min_y.into()).clamp(0, (height_patch.height - 1).into());
 
-    let mut h = height_patch.data[(ix + iz * height_patch.width as u32) as usize];
+    let mut h = height_patch.heights[(ix + iz * height_patch.width as u32) as usize];
     if h == u16::MAX {
         // Special case: search adjacent cells in a spiral up to `radius` for valid height data
         let mut x = 1u16;
@@ -615,7 +613,7 @@ fn get_height(
             let nz = iz.saturating_add(z.into());
 
             if nx < height_patch.width.into() && nz < height_patch.height.into() {
-                let nh = height_patch.data[(nx + nz * height_patch.width as u32) as usize];
+                let nh = height_patch.heights[(nx + nz * height_patch.width as u32) as usize];
                 if nh != u16::MAX {
                     let d = (nh as u32).abs_diff(fy);
                     if d < dmin {
@@ -827,32 +825,32 @@ fn delaunay_hull(
     triangles: &mut Vec<[u32; VERTICES_IN_TRIANGLE]>,
     edges: &mut Vec<u32>,
 ) {
-    let mut nfaces = 0;
-    let mut nedges = 0;
+    let mut num_faces = 0;
+    let mut num_edges = 0;
     let max_edges = vertices.len() * 10;
     edges.resize(max_edges * 4, 0);
 
     // Initialize hull edges
     for i in 0..hull.len() {
         let j = if i == 0 { hull.len() - 1 } else { i - 1 };
-        add_edge(edges, &mut nedges, max_edges, hull[j] as u32, hull[i] as u32, u32::MAX, u32::MAX);
+        add_edge(edges, &mut num_edges, max_edges, hull[j] as u32, hull[i] as u32, u32::MAX, u32::MAX);
     }
 
     // Complete facets
-    for edge in 0..nedges {
+    for edge in 0..num_edges {
         if edges[edge * 4 + 2] == u32::MAX {
-            complete_facet(vertices, edges, &mut nedges, max_edges, &mut nfaces, edge);
+            complete_facet(vertices, edges, &mut num_edges, max_edges, &mut num_faces, edge);
         }
         if edges[edge * 4 + 3] == u32::MAX {
-            complete_facet(vertices, edges, &mut nedges, max_edges, &mut nfaces, edge);
+            complete_facet(vertices, edges, &mut num_edges, max_edges, &mut num_faces, edge);
         }
     }
 
     // Initialize triangles
-    triangles.resize(nfaces, [u32::MAX; VERTICES_IN_TRIANGLE]);
+    triangles.resize(num_faces, [u32::MAX; VERTICES_IN_TRIANGLE]);
 
     // Populate triangles from edges
-    for i in 0..nedges {
+    for i in 0..num_edges {
         let e = &edges[i * 4..(i + 1) * 4];
         if e[3] != u32::MAX {
             // Left face
@@ -881,18 +879,7 @@ fn delaunay_hull(
     }
 
     // Remove dangling faces
-    let mut i = triangles.len();
-    while i > 0 {
-        i -= 1;
-        let t = &mut triangles[i];
-        if t[0] == u32::MAX || t[1] == u32::MAX || t[2] == u32::MAX {
-            /*warn!(
-                "delaunayHull: Removing dangling face {} {:?}.",
-                i, t
-            );*/
-            triangles.remove(i);
-        }
-    }
+    triangles.retain(|triangle| triangle[0] != u32::MAX && triangle[1] != u32::MAX && triangle[2] != u32::MAX);
 }
 
 

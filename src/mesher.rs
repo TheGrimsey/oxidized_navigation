@@ -104,7 +104,7 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
 
     // Fix portal edges.
     let border_side = nav_mesh_settings.get_border_side() as u32;
-    let far_edge = nav_mesh_settings.tile_width as u32 + border_side;
+    let far_edge = nav_mesh_settings.tile_width.get() as u32 + border_side;
 
     for (polygon_index, edges) in poly_mesh.edges.iter_mut().enumerate() {
         let indices = &poly_mesh.polygons[polygon_index];

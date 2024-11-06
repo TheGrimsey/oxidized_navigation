@@ -225,7 +225,7 @@ pub struct NavMeshSettings {
     /// **Suggested value**: ???
     ///
     /// Higher means more to update each time something within the tile changes, smaller means you will have more overhead from connecting the edges to other tiles & generating the tile itself.
-    pub tile_width: u16,
+    pub tile_width: NonZeroU16,
 
     /// Extents of the world as measured from the world origin (0.0, 0.0) on the XZ-plane.
     ///
@@ -253,7 +253,7 @@ pub struct NavMeshSettings {
 
     /// Minimum size of a region in cells, anything smaller than this will be removed. This is used to filter out smaller disconnected island that may appear on surfaces like tables.
     pub min_region_area: u32,
-    /// Maximum size of a region in cells we can merge other regions into.a
+    /// Maximum size of a region in cells we can merge other regions into.
     pub max_region_area_to_merge_into: u32,
 
     /// Maximum length of an edge before it's split.
@@ -270,7 +270,10 @@ pub struct NavMeshSettings {
     /// Adjust this to control memory & CPU usage. More tiles generating at once will have a higher memory footprint.
     pub max_tile_generation_tasks: Option<NonZeroU16>,
 
-    pub max_height_error: u16,
+    /// When not None, height correct nav-mesh polygons where the surface height differs too much from the surface in cells.
+    /// 
+    /// Helps on bumpy shapes like terrain but comes at a performance cost.
+    pub max_height_error: Option<NonZeroU16>,
 }
 impl NavMeshSettings {
     /// Helper function for creating nav-mesh settings with reasonable defaults from the size of your navigation agent and bounds of your world.
@@ -291,7 +294,7 @@ impl NavMeshSettings {
         Self {
             cell_width,
             cell_height,
-            tile_width: 120,
+            tile_width: NonZeroU16::new(120).unwrap(),
             world_half_extents: world_half_extents.abs(),
             world_bottom_bound,
             max_traversable_slope_radians: 50.0_f32.to_radians(),
@@ -303,7 +306,7 @@ impl NavMeshSettings {
             max_edge_length: 80,
             max_contour_simplification_error: 1.1,
             max_tile_generation_tasks: NonZeroU16::new(8),
-            max_height_error: 3
+            max_height_error: NonZeroU16::new(4)
         }
     }
     /// Setter for [`NavMeshSettings::walkable_radius`]
@@ -313,7 +316,7 @@ impl NavMeshSettings {
         self
     }
     /// Setter for [`NavMeshSettings::tile_width`]
-    pub fn with_tile_width(mut self, tile_width: u16) -> Self {
+    pub fn with_tile_width(mut self, tile_width: NonZeroU16) -> Self {
         self.tile_width = tile_width;
 
         self
@@ -365,11 +368,18 @@ impl NavMeshSettings {
 
         self
     }
+    
+    /// Setter for [`NavMeshSettings::max_traversable_slope_radians`]
+    pub fn with_max_height_error(mut self, max_height_error: Option<NonZeroU16>) -> Self {
+        self.max_height_error = max_height_error;
+
+        self
+    }
 
     /// Returns the length of a tile's side in world units.
     #[inline]
     pub fn get_tile_size(&self) -> f32 {
-        self.cell_width * f32::from(self.tile_width)
+        self.cell_width * f32::from(self.tile_width.get())
     }
     #[inline]
     pub fn get_border_size(&self) -> f32 {
@@ -398,7 +408,7 @@ impl NavMeshSettings {
 
     #[inline]
     pub fn get_tile_side_with_border(&self) -> usize {
-        usize::from(self.tile_width) + usize::from(self.walkable_radius) * 2
+        usize::from(self.tile_width.get()) + usize::from(self.walkable_radius) * 2
     }
     #[inline]
     pub fn get_border_side(&self) -> usize {

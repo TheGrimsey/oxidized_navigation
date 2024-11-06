@@ -41,6 +41,10 @@ name = "avian"
 required-features = ["avian", "debug_draw"]
 
 [[example]]
+name = "avian_multi_floor"
+required-features = ["avian", "debug_draw"]
+
+[[example]]
 name = "parry3d"
 required-features = ["parry3d", "debug_draw"]
 

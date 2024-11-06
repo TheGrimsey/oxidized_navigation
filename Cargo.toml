@@ -14,6 +14,9 @@ documentation = "https://docs.rs/crate/oxidized_navigation"
 keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
 categories = ["game-development"]
 
+[lib]
+bench = false
+
 [features]
 default = ["parry3d"]
 rapier = ["bevy_rapier3d", "parry3d"]

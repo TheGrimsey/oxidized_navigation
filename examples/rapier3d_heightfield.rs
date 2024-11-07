@@ -232,13 +232,14 @@ fn setup_world_system(mut commands: Commands) {
         ..default()
     });
 
-    let heightfield_size = 50;
+    let heightfield_size = 70;
 
     let heightfield_heights = (0..(heightfield_size * heightfield_size))
         .map(|value| {
-            let position = value / heightfield_size;
+            let y = value / heightfield_size;
+            let x = value % heightfield_size;
 
-            (position as f32 / 10.0).sin() / 10.0
+            ((y as f32 / 10.0).sin() + (x as f32 / 10.0).cos()) / 10.0
         })
         .collect();
 

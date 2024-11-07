@@ -77,7 +77,7 @@ pub mod conversion;
 pub mod debug_draw;
 mod heightfields;
 mod mesher;
-mod parry;
+pub mod parry;
 pub mod query;
 mod regions;
 pub mod tiles;

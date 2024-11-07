@@ -74,7 +74,7 @@ fn setup_app(app: &mut App) {
         OxidizedNavigationPlugin::<MyParryCollider>::new(NavMeshSettings {
             cell_width: 0.25,
             cell_height: 0.1,
-            tile_width: 100,
+            tile_width: NonZeroU16::new(100).unwrap(),
             world_half_extents: 250.0,
             world_bottom_bound: -100.0,
             max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
@@ -86,6 +86,7 @@ fn setup_app(app: &mut App) {
             max_contour_simplification_error: 1.1,
             max_edge_length: 80,
             max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
+            max_height_error: None
         }),
     ));
 }

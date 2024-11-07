@@ -1,5 +1,5 @@
 use bevy::{
-    log::info, prelude::{UVec2, UVec3, UVec4}
+    log::info, math::U16Vec3, prelude::{UVec2, UVec4}
 };
 
 use crate::{contour::ContourSet, detail_mesh::build_detail_mesh, heightfields::OpenTile, Area};
@@ -9,7 +9,7 @@ use super::NavMeshSettings;
 
 #[derive(Default, Debug)]
 pub struct PolyMesh {
-    pub vertices: Vec<UVec3>,
+    pub vertices: Vec<U16Vec3>,
     pub polygons: Vec<[u32; VERTICES_IN_TRIANGLE]>, //
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
     pub areas: Vec<Area>,
@@ -64,7 +64,7 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
 
         for vertex in contour.vertices.iter() {
             let index = add_vertex(
-                vertex.truncate(),
+                vertex.as_u16vec4().truncate(),
                 &mut poly_mesh.vertices,
                 &mut first_vertex,
                 &mut next_vertex,
@@ -103,8 +103,8 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
     );
 
     // Fix portal edges.
-    let border_side = nav_mesh_settings.get_border_side() as u32;
-    let far_edge = nav_mesh_settings.tile_width.get() as u32 + border_side;
+    let border_side = nav_mesh_settings.get_border_side() as u16;
+    let far_edge = nav_mesh_settings.tile_width.get() + border_side;
 
     for (polygon_index, edges) in poly_mesh.edges.iter_mut().enumerate() {
         let indices = &poly_mesh.polygons[polygon_index];
@@ -239,8 +239,8 @@ fn compute_vertex_hash(x: u64, z: u64) -> u64 {
 }
 
 fn add_vertex(
-    vertex: UVec3,
-    vertices: &mut Vec<UVec3>,
+    vertex: U16Vec3,
+    vertices: &mut Vec<U16Vec3>,
     first_vertex: &mut [i32],
     next_vertex: &mut [i32],
 ) -> u32 {

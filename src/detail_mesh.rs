@@ -529,13 +529,6 @@ fn build_poly_detail(
             }
         }
 
-        // Pre-remove all samples outside of the tri-mesh.
-        samples.retain(|sample| {
-            let point = UVec3::new(sample[0].into(), sample[1].into(), sample[2].into());
-
-            dist_to_tri_mesh(point.as_vec3(), &verts, &triangles).is_some()
-        });
-
         // Find and add samples with the largest errors
         let nsamples = samples.len();
         for _ in 0..nsamples {
@@ -549,10 +542,11 @@ fn build_poly_detail(
             let mut best_i = None;
 
             for (i, sample) in samples.iter().enumerate() {
-
                 // Calculate distance to the mesh.
                 // Can't fail because we only tesselate the inside of the mesh & we purge all outside points earlier.
-                let d = dist_to_tri_mesh(sample.as_vec3(), &verts, &triangles).unwrap();
+                let Some(d) = dist_to_tri_mesh(sample.as_vec3(), &verts, &triangles) else {
+                    continue;
+                };
 
                 if d > best_distance {
                     best_distance = d;

@@ -24,7 +24,7 @@ pub fn build_detail_mesh(
     open_tile: &OpenTile,
     poly_mesh: &PolyMesh
 ) -> Option<PolyMesh> {
-    let Some(max_height_error) = nav_mesh_settings.max_height_error else {
+    let Some(detail_mesh_settings) = &nav_mesh_settings.detail_mesh_generation else {
         return None;
     };
 
@@ -76,8 +76,8 @@ pub fn build_detail_mesh(
     let mut polygons = Vec::with_capacity(512);
     let mut samples = Vec::with_capacity(512);
     let mut verts = Vec::with_capacity(256);
+    let mut queue = Vec::with_capacity(512);
 
-    let mut queue = Vec::with_capacity(128);
     for (((polygon, (min, max)), region), area) in poly_mesh.polygons.iter().zip(polygon_bounds.iter()).zip(poly_mesh.regions.iter()).zip(poly_mesh.areas.iter()) {
         let vertices = [
             poly_mesh.vertices[polygon[0] as usize],
@@ -92,7 +92,7 @@ pub fn build_detail_mesh(
 
         extract_height_data(nav_mesh_settings, open_tile, &vertices, *region, &mut height_patch, &mut queue);
     
-        if !build_poly_detail(&height_patch, &vertices, 2, &mut verts, &mut polygons, &mut edges, &mut samples, max_height_error.get() as f32, 3) {
+        if !build_poly_detail(&height_patch, &vertices, 2, &mut verts, &mut polygons, &mut edges, &mut samples, detail_mesh_settings.max_height_error.get() as f32, 3, detail_mesh_settings.sample_step.get() as usize) {
             return None;
         }
 
@@ -134,48 +134,47 @@ fn extract_height_data(
     height_patch: &mut HeightPatch,
     queue: &mut Vec<(usize, usize)>,
 ) {
-    #[cfg(feature = "trace")]
-    let _span = info_span!("Extract Height Data").entered();
     queue.clear();
 
     height_patch.heights.fill(u16::MAX);
 
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
+    let height_patch_width = height_patch.width as usize;
+    
+    let mut found_seed = false;
+    
+    let max_x = height_patch.min_x + height_patch.width;
+    
+    let max_y = height_patch.min_y + height_patch.height;
 
-    let mut empty = true;
-    for y in 0..height_patch.height {
-        // Including walkable radius because it acts as a buffer zone around the tile
-        // but this is not included in the poly mesh.
-        let cell_y = y + height_patch.min_y + nav_mesh_settings.walkable_radius;
+    // Use vertices as initial seed points
+    for &vertex in triangle_vertices {
+        let cell_x = vertex.x as usize;
+        let cell_y = vertex.z as usize;
+        if cell_x >= max_x.into()
+        || cell_y >= max_y.into()
+        {
+            continue;
+        }
 
-        for x in 0..height_patch.width {
-            let cell_x = x + height_patch.min_x + nav_mesh_settings.walkable_radius;
-            let cell_i = cell_x as usize + cell_y as usize * tile_side;
-            let cell = &open_tile.cells[cell_i];
+        let cell_i = (cell_x + nav_mesh_settings.walkable_radius as usize) + (cell_y + nav_mesh_settings.walkable_radius as usize) * tile_side;
 
-            for (span_i, span) in cell.spans.iter().enumerate() {
-                if span.region == region {
-                    height_patch.heights[x as usize + y as usize * height_patch.width as usize] = span.min;
-                    empty = false;
+        if let Some((span_i, span)) = open_tile.cells[cell_i].spans.iter().enumerate().find(|&(_, s)| s.region == region) {
+            // Calculate height_patch coordinates based on vertex and height patch offset
+            let height_patch_x = cell_x - height_patch.min_x as usize;
+            let height_patch_y = cell_y - height_patch.min_y as usize;
 
-                    let border = span.neighbours.iter()
-                        .enumerate().filter_map(|(i, neighbour)| Some(i).zip(*neighbour))
-                        .any(|(i, neighbour)| {
-                            let neighbour_i = get_neighbour_index(tile_side, cell_i, i);
-
-                            open_tile.cells[neighbour_i].spans[neighbour as usize].region != region
-                        });
-
-                    if border {
-                        queue.push((cell_i, span_i));
-                    }
-                    break;
-                }
+            if height_patch_x < height_patch.width as usize && height_patch_y < height_patch.height as usize {
+                let height_patch_index = height_patch_x + height_patch_y * height_patch_width;
+                height_patch.heights[height_patch_index] = span.min;
+                queue.push((cell_i, span_i)); // Seed the flood-fill from this cell
+                found_seed = true;
             }
         }
     }
 
-    if empty {
+    // If no seed points were found, fall back to the polygon center
+    if !found_seed {
         seed_array_with_poly_center(open_tile, triangle_vertices, nav_mesh_settings, queue, height_patch);
     }
 
@@ -189,16 +188,8 @@ fn extract_height_data(
         head += 1;
 
         if head >= retract_size {
+            queue.drain(..retract_size);
             head = 0;
-
-            if queue.len() > retract_size {
-                let length_to_move = queue.len() - retract_size;
-                for i in 0..length_to_move {
-                    queue[i] = queue[retract_size + i];
-                }
-
-                queue.truncate(queue.len() - retract_size);
-            }
         }
 
         let open_cell = &open_tile.cells[cell_i];
@@ -244,32 +235,49 @@ fn seed_array_with_poly_center(
     let mut start_cell = None;
     let mut span_height_distance_to_vertex = u16::MAX;
 
+    let min_x = height_patch.min_x;
+    let max_x = height_patch.min_x + height_patch.width;
+    
+    let min_y = height_patch.min_y;
+    let max_y = height_patch.min_y + height_patch.height;
+
+    let tile_side = nav_mesh_settings.get_tile_side_with_border();
+
     for &vertex in vertices {
-        if span_height_distance_to_vertex == 0 {
-            break;
-        }
         for &(offset_x, offset_y) in &OFFSETS {
             let ax = vertex.x.saturating_add_signed(offset_x);
             let ay = vertex.y;
             let az = vertex.z.saturating_add_signed(offset_y);
 
-            if ax < height_patch.min_x.into()
-                || ax >= (height_patch.min_x + height_patch.width).into()
-                || az < height_patch.min_y.into()
-                || az >= (height_patch.min_y + height_patch.height).into()
+            if ax < min_x
+                || ax >= max_x
+                || az < min_y
+                || az >= max_y
             {
                 continue;
             }
 
-            let cell_i = (ax + nav_mesh_settings.walkable_radius) as usize + (az + nav_mesh_settings.walkable_radius) as usize * nav_mesh_settings.get_tile_side_with_border();
+            let cell_i = (ax + nav_mesh_settings.walkable_radius) as usize + (az + nav_mesh_settings.walkable_radius) as usize * tile_side;
             let cell = &open_tile.cells[cell_i];
             for (span_i, open_span) in cell.spans.iter().enumerate() {
                 let height_difference = ay.abs_diff(open_span.min);
                 if height_difference < span_height_distance_to_vertex {
                     start_cell = Some((cell_i, span_i));
                     span_height_distance_to_vertex = height_difference;
+                    
+                    if span_height_distance_to_vertex == 0 {
+                        break;
+                    }
                 }
             }
+            
+            if span_height_distance_to_vertex == 0 {
+                break;
+            }
+        }
+        
+        if span_height_distance_to_vertex == 0 {
+            break;
         }
     }
 
@@ -277,92 +285,9 @@ fn seed_array_with_poly_center(
         return;
     };
 
-    // Calculate the polygon center
-    let pc = vertices.iter().cloned().fold(UVec3::ZERO, |acc, entry| acc + entry.as_uvec3()) / vertices.len() as u32;
-
     // Initialize the DFS stack with the start cell
     queue.clear();
     queue.push(start_cell);
-    
-    // Set up the height_patch data and DFS for traversing toward the polygon center
-    let mut dirs = [0, 1, 2, 3];
-    height_patch.heights.fill(0);
-
-    let tile_side = nav_mesh_settings.get_tile_side_with_border();
-    let mut last_step = start_cell;
-    while let Some((cell_i, span_i)) = queue.pop() {
-        let cell_x = (cell_i % tile_side) as u32;
-        let cell_y = (cell_i / tile_side) as u32;
-
-        last_step = (cell_i, span_i);
-
-        if cell_x == pc.x && cell_y == pc.z {
-            break;
-        }
-
-        // Determine the preferred traversal direction
-        let preferred_dir = if cell_x == pc.x {
-            if pc.z > cell_y { 
-                1
-            } else {
-                3
-            }
-        } else if pc.x > cell_x {
-            2
-        } else {
-            0
-        };
-
-        // Swap to prioritize the preferred direction
-        dirs.swap(preferred_dir, 3);
-
-        let open_cell = &open_tile.cells[cell_i];
-        let open_span = &open_cell.spans[span_i];
-        for &dir in &dirs {
-            let Some(neighbour_span_i) = open_span.neighbours[dir] else {
-                continue;
-            };
-
-            let new_i = get_neighbour_index(tile_side, cell_i, dir);
-
-            let new_x = (new_i % tile_side) as i32;
-            let new_y = (new_i / tile_side) as i32;
-
-            let hpx = new_x - height_patch.min_x as i32;
-            let hpy = new_y - height_patch.min_y as i32;
-
-            if hpx < 0 || hpy < 0 || hpx >= height_patch.width.into() || hpy >= height_patch.height.into() {
-                continue;
-            }
-
-            if height_patch.heights[hpx as usize + hpy as usize * height_patch.width as usize] != u16::MAX {
-                continue;
-            }
-
-            height_patch.heights[hpx as usize + hpy as usize * height_patch.width as usize] = 1;
-            queue.push((new_i, neighbour_span_i as usize));
-        }
-
-        // Swap back the direction array
-        dirs.swap(preferred_dir as usize, 3);
-    }
-
-    // Clear and push the final center point as a seed
-    queue.clear();
-    queue.push(last_step);
-
-    let y = last_step.0 / nav_mesh_settings.get_tile_side_with_border();
-    let x = last_step.0 % nav_mesh_settings.get_tile_side_with_border();
-
-    let h_x = x - height_patch.min_x as usize - nav_mesh_settings.walkable_radius as usize;
-    let h_y = y - height_patch.min_y as usize - nav_mesh_settings.walkable_radius as usize;
-    
-    let height_patch_i = h_x + h_y * height_patch.width as usize;
-
-    // Reset the height patch data for height data retrieval
-    height_patch.heights.fill(u16::MAX);
-    let open_span = &open_tile.cells[last_step.0].spans[last_step.1];
-    height_patch.heights[height_patch_i] = open_span.min;
 }
 
 fn distance_pt_seg(point: Vec3, va: Vec3, vb: Vec3) -> f32 {
@@ -389,11 +314,9 @@ fn build_poly_detail(
     edges: &mut Vec<u32>,
     samples: &mut Vec<U16Vec3>,
     sample_max_error: f32,
-    search_radius: u16
+    search_radius: u16,
+    sample_step: usize
 ) -> bool {
-    #[cfg(feature = "trace")]
-    let _span = info_span!("Build Poly Detail").entered();
-
     const MAX_VERTS: usize = 127;
     const MAX_VERTS_PER_EDGE: usize = 32;
     let mut edge = [U16Vec3::ZERO; (MAX_VERTS_PER_EDGE+1)];
@@ -409,9 +332,6 @@ fn build_poly_detail(
 
     // Tesselate outlines.
     if sample_distance > 0 {
-        #[cfg(feature = "trace")]
-        let _span = info_span!("Tesselate Outline").entered();
-
         for i in 0..poly.len() {
             let j = (i + poly.len() - 1) % poly.len();
             let mut vertex_j = poly[j];
@@ -501,6 +421,7 @@ fn build_poly_detail(
     }
 
     if sample_distance > 0 {
+        // Except for Y this is stored in the min & max of the height_patch :thinking:
         let mut min_bounds = poly[0];
         let mut max_bounds = poly[0];
 
@@ -508,25 +429,35 @@ fn build_poly_detail(
             min_bounds = min_bounds.min(*vertex);
             max_bounds = max_bounds.max(*vertex);
         }
+        let y = ((max_bounds.y as f32 + min_bounds.y as f32) * 0.5).floor() as u16;
 
-        for z in min_bounds.z..max_bounds.z {
-            for x in min_bounds.x..max_bounds.x {
-                let pt = U16Vec3::new(
+        for z in (min_bounds.z..max_bounds.z).step_by(sample_step) {
+            for x in (min_bounds.x..max_bounds.x).step_by(sample_step) {
+                let point = U16Vec3::new(
                     x,
-                    ((max_bounds.y as f32 + min_bounds.y as f32) * 0.5).floor() as u16,
+                    y,
                     z,
                 );
     
                 // Make sure the samples are not too close to the edges.
-                if dist_to_poly(poly, pt.as_vec3()) > -(sample_distance as f32) / 2.0 {
+                if dist_to_poly(poly, point.as_vec3()) > -(sample_distance as f32) / 2.0 {
                     continue;
                 }
     
-                let y = get_height(pt.x.into(), pt.y.into(), pt.z.into(), search_radius, height_patch);
+                let y = get_height(point.x.into(), point.y.into(), point.z.into(), search_radius, height_patch);
 
                 // Coordinates can't be greater than a u16 since we limit a tile to max u16 in a side.
-                samples.push(pt.with_y(y));
+                samples.push(point.with_y(y));
             }
+        }
+
+        // Make sure there is at least one sample at the center of the polygon.
+        if samples.is_empty() {
+            let point_center = poly.iter().fold(UVec3::ZERO, |acc, entry| acc + entry.as_uvec3()) / poly.len() as u32;
+
+            let y = get_height(point_center.x, point_center.y, point_center.z, search_radius, height_patch);
+
+            samples.push(point_center.as_u16vec3().with_y(y));
         }
 
         // Find and add samples with the largest errors
@@ -609,7 +540,7 @@ fn get_height(
             let nx = initial_x as i32 + x;
             let nz = initial_z as i32 + z;
 
-            if nx < height_patch.width.into() && nz < height_patch.height.into() {
+            if nx >= 0 && nz >= 0 && nx < height_patch.width.into() && nz < height_patch.height.into() {
                 let new_height = height_patch.heights[(nx + nz * height_patch.width as i32) as usize];
                 if new_height != u16::MAX {
                     let d = (new_height as u32).abs_diff(fy);

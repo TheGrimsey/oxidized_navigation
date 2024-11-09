@@ -44,7 +44,7 @@
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 
 use std::marker::PhantomData;
-use std::num::NonZeroU16;
+use std::num::{NonZeroU16, NonZeroU8};
 use std::sync::{Arc, RwLock};
 
 use bevy::ecs::entity::EntityHashMap;
@@ -204,6 +204,20 @@ struct TileAffectors(HashMap<UVec2, HashSet<Entity>>);
 #[derive(Default, Resource)]
 struct DirtyTiles(HashSet<UVec2>);
 
+/// Settings for generating height-corrected detail meshes.
+#[derive(Clone)]
+pub struct DetailMeshSettings {
+    /// The maximum acceptible error in height between the nav-mesh polygons & the true world (in cells).
+    pub max_height_error: NonZeroU16,
+    /// Determines how often (in cells) to sample the height when generating the height-corrected nav-mesh. 
+    /// 
+    /// This greatly affects generation performance. Higher values reduce samples by half to the previous one.
+    /// Ex. 1.0, 0.5, 0.25, 0.125.
+    /// 
+    /// **Suggested value:** >=2. Start high & reduce as needed.  
+    pub sample_step: NonZeroU8
+}
+
 /// Settings for nav-mesh generation.
 #[derive(Resource, Clone)]
 pub struct NavMeshSettings {
@@ -273,7 +287,7 @@ pub struct NavMeshSettings {
     /// When not None, height correct nav-mesh polygons where the surface height differs too much from the surface in cells.
     /// 
     /// Helps on bumpy shapes like terrain but comes at a performance cost.
-    pub max_height_error: Option<NonZeroU16>,
+    pub detail_mesh_generation: Option<DetailMeshSettings>,
 }
 impl NavMeshSettings {
     /// Helper function for creating nav-mesh settings with reasonable defaults from the size of your navigation agent and bounds of your world.
@@ -306,7 +320,7 @@ impl NavMeshSettings {
             max_edge_length: 80,
             max_contour_simplification_error: 1.1,
             max_tile_generation_tasks: NonZeroU16::new(8),
-            max_height_error: NonZeroU16::new(4)
+            detail_mesh_generation: None
         }
     }
     /// Setter for [`NavMeshSettings::walkable_radius`]
@@ -370,8 +384,8 @@ impl NavMeshSettings {
     }
     
     /// Setter for [`NavMeshSettings::max_traversable_slope_radians`]
-    pub fn with_max_height_error(mut self, max_height_error: Option<NonZeroU16>) -> Self {
-        self.max_height_error = max_height_error;
+    pub fn with_detail_mesh_generation(mut self, detail_mesh_generation_settings: DetailMeshSettings) -> Self {
+        self.detail_mesh_generation = Some(detail_mesh_generation_settings);
 
         self
     }

@@ -5,7 +5,7 @@
 //! Press B to run blocking path finding.
 //!
 
-use std::num::NonZeroU16;
+use std::num::{NonZeroU16, NonZeroU8};
 use std::sync::{Arc, RwLock};
 
 use bevy::color::palettes;
@@ -18,6 +18,7 @@ use bevy::{
 use bevy_editor_pls::EditorPlugin;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use bevy_rapier3d::render::RapierDebugRenderPlugin;
+use oxidized_navigation::DetailMeshSettings;
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
@@ -37,7 +38,10 @@ fn main() {
             }),
             OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
                 0.5, 1.9, 250.0, -10.0,
-            ).with_max_tile_generation_tasks(Some(NonZeroU16::MIN))),
+            ).with_max_tile_generation_tasks(Some(NonZeroU16::MIN)).with_detail_mesh_generation(DetailMeshSettings {
+                max_height_error: NonZeroU16::new(4).unwrap(),
+                sample_step: NonZeroU8::new(16).unwrap(),
+            })),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.

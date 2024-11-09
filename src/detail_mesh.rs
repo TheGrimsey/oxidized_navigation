@@ -141,40 +141,41 @@ fn extract_height_data(
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
     let height_patch_width = height_patch.width as usize;
     
-    let mut found_seed = false;
-    
-    let max_x = height_patch.min_x + height_patch.width;
-    
-    let max_y = height_patch.min_y + height_patch.height;
+    let mut empty = true;
+    for y in 0..height_patch.height {
+        // Including walkable radius because it acts as a buffer zone around the tile
+        // but this is not included in the poly mesh.
+        let cell_y = y + height_patch.min_y + nav_mesh_settings.walkable_radius;
 
-    // Use vertices as initial seed points
-    for &vertex in triangle_vertices {
-        let cell_x = vertex.x as usize;
-        let cell_y = vertex.z as usize;
-        if cell_x >= max_x.into()
-        || cell_y >= max_y.into()
-        {
-            continue;
-        }
+        for x in 0..height_patch.width {
+            let cell_x = x + height_patch.min_x + nav_mesh_settings.walkable_radius;
+            let cell_i = cell_x as usize + cell_y as usize * tile_side;
+            let cell = &open_tile.cells[cell_i];
 
-        let cell_i = (cell_x + nav_mesh_settings.walkable_radius as usize) + (cell_y + nav_mesh_settings.walkable_radius as usize) * tile_side;
+            for (span_i, span) in cell.spans.iter().enumerate() {
+                if span.region == region {
+                    height_patch.heights[x as usize + y as usize * height_patch.width as usize] = span.min;
+                    empty = false;
 
-        if let Some((span_i, span)) = open_tile.cells[cell_i].spans.iter().enumerate().find(|&(_, s)| s.region == region) {
-            // Calculate height_patch coordinates based on vertex and height patch offset
-            let height_patch_x = cell_x - height_patch.min_x as usize;
-            let height_patch_y = cell_y - height_patch.min_y as usize;
+                    let border = span.neighbours.iter()
+                        .enumerate().filter_map(|(i, neighbour)| Some(i).zip(*neighbour))
+                        .any(|(i, neighbour)| {
+                            let neighbour_i = get_neighbour_index(tile_side, cell_i, i);
 
-            if height_patch_x < height_patch.width as usize && height_patch_y < height_patch.height as usize {
-                let height_patch_index = height_patch_x + height_patch_y * height_patch_width;
-                height_patch.heights[height_patch_index] = span.min;
-                queue.push((cell_i, span_i)); // Seed the flood-fill from this cell
-                found_seed = true;
+                            open_tile.cells[neighbour_i].spans[neighbour as usize].region != region
+                        });
+
+                    if border {
+                        queue.push((cell_i, span_i));
+                    }
+                    break;
+                }
             }
         }
     }
 
     // If no seed points were found, fall back to the polygon center
-    if !found_seed {
+    if empty {
         seed_array_with_poly_center(open_tile, triangle_vertices, nav_mesh_settings, queue, height_patch);
     }
 
@@ -440,7 +441,8 @@ fn build_poly_detail(
                 );
     
                 // Make sure the samples are not too close to the edges.
-                if dist_to_poly(poly, point.as_vec3()) > -(sample_distance as f32) / 2.0 {
+                let distance = dist_to_poly(poly, point.as_vec3());
+                if distance > -(sample_distance as f32) / 2.0 {
                     continue;
                 }
     
@@ -452,13 +454,13 @@ fn build_poly_detail(
         }
 
         // Make sure there is at least one sample at the center of the polygon.
-        //if samples.is_empty() {
+        if samples.is_empty() {
             let point_center = poly.iter().fold(UVec3::ZERO, |acc, entry| acc + entry.as_uvec3()) / poly.len() as u32;
 
             let y = get_height(point_center.x, point_center.y, point_center.z, search_radius, height_patch);
 
             samples.push(point_center.as_u16vec3().with_y(y));
-        //}
+        }
 
         // Find and add samples with the largest errors
         let nsamples = samples.len();
@@ -633,11 +635,7 @@ fn distance_pt_seg_2d(pt: Vec3, p: Vec3, q: Vec3) -> f32 {
     if d > 0.0 {
         t /= d;
     }
-    if t < 0.0 {
-        t = 0.0;
-    } else if t > 1.0 {
-        t = 1.0;
-    }
+    t = t.clamp(0.0, 1.0);
 
     let dx = p.x + t * pqx - pt.x;
     let dz = p.z + t * pqz - pt.z;
@@ -759,7 +757,7 @@ fn delaunay_hull(
     let mut num_faces = 0;
     let mut num_edges = 0;
     let max_edges = vertices.len() * 10;
-    edges.resize(max_edges * 4, 0);
+    edges.resize(max_edges * 4, u32::MAX);
 
     // Initialize hull edges
     for i in 0..hull.len() {
@@ -824,7 +822,7 @@ fn complete_facet(
     nfaces: &mut usize,
     e: usize,
 ) {
-    let EPS = 1e-5f32;
+    const EPS: f32 = 1e-5;
 
     let edge = &mut edges[e * 4..(e + 1) * 4];
 

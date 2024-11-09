@@ -452,13 +452,13 @@ fn build_poly_detail(
         }
 
         // Make sure there is at least one sample at the center of the polygon.
-        if samples.is_empty() {
+        //if samples.is_empty() {
             let point_center = poly.iter().fold(UVec3::ZERO, |acc, entry| acc + entry.as_uvec3()) / poly.len() as u32;
 
             let y = get_height(point_center.x, point_center.y, point_center.z, search_radius, height_patch);
 
             samples.push(point_center.as_u16vec3().with_y(y));
-        }
+        //}
 
         // Find and add samples with the largest errors
         let nsamples = samples.len();
@@ -487,7 +487,7 @@ fn build_poly_detail(
             }
 
             // Stop tessellating if error is within the threshold or no sample found
-            if best_distance <= (sample_max_error * sample_max_error) {
+            if best_distance <= sample_max_error {
                 break;
             }
             let Some(best_i) = best_i else {
@@ -504,6 +504,11 @@ fn build_poly_detail(
             triangles.clear();
             delaunay_hull(&verts, &hull, triangles, edges);
         }
+    }
+
+    // If we failed to add more points, let's just triangulate with the hull again.
+    if triangles.is_empty() {
+        triangulate_hull(&verts, &hull, poly.len(), triangles);
     }
 
     return true;
@@ -668,7 +673,6 @@ fn dist_point_to_triangle(p: Vec3, a: Vec3, b: Vec3, c: Vec3) -> Option<f32> {
     } else {
         None // Point is outside the triangle
     }
-    
 }
 
 fn prev(i: usize, len: usize) -> usize {
@@ -698,7 +702,7 @@ fn triangulate_hull(verts: &[U16Vec3], hull: &[usize], nin: usize, tris: &mut Ve
         let cv = verts[hull[i]].as_vec3();
         let nv = verts[hull[ni]].as_vec3();
 
-        let perimeter = pv.xz().distance_squared(cv.xz()) + cv.xz().distance_squared(nv.xz()) + nv.xz().distance_squared(pv.xz());
+        let perimeter = pv.xz().distance(cv.xz()) + cv.xz().distance(nv.xz()) + nv.xz().distance(pv.xz());
         
         if perimeter < min_perimeter {
             start = i;
@@ -725,9 +729,8 @@ fn triangulate_hull(verts: &[U16Vec3], hull: &[usize], nin: usize, tris: &mut Ve
         let cv_right = verts[hull[right]].as_vec3();
         let nv_right = verts[hull[nright]].as_vec3();
 
-        // Inline squared distance calculation
-        let dleft = cv_left.distance_squared(nv_left) + nv_left.distance_squared(cv_right);
-        let dright = cv_right.distance_squared(nv_right) + cv_left.distance_squared(nv_right);
+        let dleft = cv_left.xz().distance(nv_left.xz()) + nv_left.xz().distance(cv_right.xz());
+        let dright = cv_right.xz().distance(nv_right.xz()) + cv_left.xz().distance(nv_right.xz());
 
         if dleft < dright {
             tris.push([
@@ -765,13 +768,15 @@ fn delaunay_hull(
     }
 
     // Complete facets
-    for edge in 0..num_edges {
-        if edges[edge * 4 + 2] == u32::MAX {
-            complete_facet(vertices, edges, &mut num_edges, max_edges, &mut num_faces, edge);
+    let mut current_edge = 0;
+    while current_edge < num_edges {
+        if edges[current_edge * 4 + 2] == u32::MAX {
+            complete_facet(vertices, edges, &mut num_edges, max_edges, &mut num_faces, current_edge);
         }
-        if edges[edge * 4 + 3] == u32::MAX {
-            complete_facet(vertices, edges, &mut num_edges, max_edges, &mut num_faces, edge);
+        if edges[current_edge * 4 + 3] == u32::MAX {
+            complete_facet(vertices, edges, &mut num_edges, max_edges, &mut num_faces, current_edge);
         }
+        current_edge += 1;
     }
 
     // Initialize triangles
@@ -819,6 +824,8 @@ fn complete_facet(
     nfaces: &mut usize,
     e: usize,
 ) {
+    let EPS = 1e-5f32;
+
     let edge = &mut edges[e * 4..(e + 1) * 4];
 
     // Cache `s` and `t`
@@ -839,14 +846,14 @@ fn complete_facet(
         if u == s as usize || u == t as usize {
             continue;
         }
-        if vcross2(vertices[s as usize].as_vec3(), vertices[t as usize].as_vec3(), vertices[u].as_vec3()) > f32::EPSILON {
+        if vcross2(vertices[s as usize].as_vec3(), vertices[t as usize].as_vec3(), vertices[u].as_vec3()) > EPS {
             if r < 0.0 {
                 // The circumcircle is not updated yet, do it now
                 pt = u;
                 circum_circle(vertices[s as usize].as_vec3(), vertices[t as usize].as_vec3(), vertices[u].as_vec3(), &mut c, &mut r);
                 continue;
             }
-            let d = c.distance_squared(vertices[u].as_vec3());
+            let d = c.xz().distance(vertices[u].as_vec3().xz());
             let tol = 0.001;
             if d > r * (1.0 + tol) {
                 // Outside current circumcircle, skip

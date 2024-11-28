@@ -7,7 +7,7 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    color::palettes, math::primitives, prelude::*, tasks::{AsyncComputeTaskPool, Task}
+    color::palettes, prelude::*, tasks::{AsyncComputeTaskPool, Task}
 };
 // use bevy_editor_pls::EditorPlugin;
 use bevy::tasks::futures_lite::future;
@@ -218,40 +218,32 @@ fn setup_world_system(
 ) {
     print_controls();
 
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(15.0, 10.0, 20.0)
-            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(15.0, 10.0, 20.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+    ));
 
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             shadows_enabled: true,
             ..default()
         },
-        transform: Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, -0.5, 0.0)),
-        ..default()
-    });
+        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, -0.5, 0.0)),
+    ));
 
     // Plane
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(primitives::Rectangle::from_size(Vec2::new(10.0, 10.0))),
-            material: materials.add(Color::srgb(0.3, 0.5, 0.3)),
-            transform: Transform::IDENTITY,
-            ..default()
-        },
-        Collider::cuboid(5.0, 0.1, 5.0),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(25.0, 25.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
+        Transform::IDENTITY,
+        Collider::cuboid(12.5, 0.1, 12.5),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
     commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(primitives::Rectangle::from_size(Vec2::new(10.0, 10.0))),
-            material: materials.add(Color::srgb(0.68, 0.68, 1.0)),
-            transform: Transform::from_xyz(0.0, 6.0, 0.0),
-            ..default()
-        },
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(10.0, 10.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.68, 0.68, 1.0))),
+        Transform::from_xyz(0.0, 6.0, 0.0),
         Collider::cuboid(5.0, 0.1, 5.0),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
@@ -274,12 +266,9 @@ fn spawn_or_despawn_affector_system(
     } else {
         let entity = commands
             .spawn((
-                PbrBundle {
-                    mesh: meshes.add(primitives::Cuboid::new(2.5, 2.5, 2.5)),
-                    material: materials.add(Color::srgb(1.0, 0.1, 0.5)),
-                    transform: Transform::from_xyz(5.0, 0.8, -5.0),
-                    ..default()
-                },
+                Mesh3d(meshes.add(Cuboid::new(2.5, 2.5, 2.5))),
+                MeshMaterial3d(materials.add(Color::srgb(1.0, 0.1, 0.5))),
+                Transform::from_xyz(5.0, 0.8, -5.0),
                 Collider::cuboid(1.25, 1.25, 1.25),
                 NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
             ))

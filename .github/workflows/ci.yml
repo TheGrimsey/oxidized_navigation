@@ -29,33 +29,33 @@ jobs:
       matrix:
         backend:
           - feature: parry3d
-            profile_name: benches
+            artifact_key: benches
             test_arg: --benches
           - feature: parry3d
-            profile_name: parry3d
+            artifact_key: parry3d
             test_arg: --test parry3d
           - feature: avian
-            profile_name: avian
+            artifact_key: avian
             test_arg: --test avian
           - feature: rapier
-            profile_name: rapier3d
+            artifact_key: rapier3d
             test_arg: --test rapier3d
     steps:
       - name: Checkout repository code.
         uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.backend.profile_name }}
+          key: ${{ matrix.backend.artifact_key }}
       - name: Install alsalib headers
         run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       - uses: taiki-e/install-action@nextest
       - name: Test with nextest
-        run: cargo nextest run --no-default-features --features "${{ matrix.backend.feature }}" ${{ matrix.backend.test_arg }} --profile ${{ matrix.backend.profile_name }}
+        run: cargo nextest run --no-default-features --features "${{ matrix.backend.feature }}" ${{ matrix.backend.test_arg }} --profile ci
       - name: Upload Test Report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: junit-test-results-${{ matrix.backend.profile_name }}
+          name: junit-test-results-${{ matrix.backend.artifact_key }}
           path: target/nextest/**/*.xml
           retention-days: 1
 
@@ -78,3 +78,5 @@ jobs:
           group_suite: true
           comment: true
           annotate_notice: true
+          check_annotations: true
+          updateComment: true

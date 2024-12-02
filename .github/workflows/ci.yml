@@ -72,3 +72,7 @@ jobs:
         if: success() || failure() # always run even if the previous step fails
         with:
           report_paths: '**/*.xml'
+          detailed_summary: true
+          group_suite: true
+          comment: true
+          annotate_notice: true

@@ -2,8 +2,8 @@ name: Test Avian
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches: [ "master", "dev" ]
+#  pull_request:
+#    branches: [ "master", "dev" ]
 
 env:
   CARGO_TERM_COLOR: always

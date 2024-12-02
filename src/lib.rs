@@ -439,10 +439,7 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
     mut tile_affectors: ResMut<TileAffectors>,
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
-    mut query: Query<
-        (Entity, &C, &GlobalTransform),
-        NavmeshAffectorChangedQueryFilter<C>,
-    >,
+    mut query: Query<(Entity, &C, &GlobalTransform), NavmeshAffectorChangedQueryFilter<C>>,
 ) {
     // Expand by 2 * walkable_radius to match with erode_walkable_area.
     let border_expansion =

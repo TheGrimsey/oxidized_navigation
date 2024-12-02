@@ -27,6 +27,7 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
         backend:
           - feature: parry3d

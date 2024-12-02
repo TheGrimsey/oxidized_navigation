@@ -37,6 +37,10 @@ jobs:
         backend:
           - feature: parry3d
             test: parry3d
+          - feature: avian
+            test: avian
+          - feature: rapier
+            test: rapier3d
     steps:
       - name: Checkout repository code.
         uses: actions/checkout@v4

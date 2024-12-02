@@ -1,8 +1,31 @@
-[profile.ci]
-# Do not cancel the test run on the first failure.
+[profile.benches]
 fail-fast = false
 
-[profile.ci.junit]  # this can be some other profile, too
-path = "junit.xml"
+[profile.benches.junit]
+path = "junit-benches.xml"
+store-success-output = true
+store-failure-output = true
+
+[profile.parry3d]
+fail-fast = false
+
+[profile.parry3d.junit]
+path = "junit-parry3d.xml"
+store-success-output = true
+store-failure-output = true
+
+[profile.avian]
+fail-fast = false
+
+[profile.avian.junit]
+path = "junit-avian.xml"
+store-success-output = true
+store-failure-output = true
+
+[profile.rapier3d]
+fail-fast = false
+
+[profile.rapier3d.junit]
+path = "junit-rapier3d.xml"
 store-success-output = true
 store-failure-output = true

@@ -425,22 +425,21 @@ impl NavMesh {
     }
 }
 
+type NavmeshAffectorChangedQueryFilter<C> = (
+    Or<(
+        Changed<GlobalTransform>,
+        Changed<C>,
+        Changed<NavMeshAffector>,
+    )>,
+    With<NavMeshAffector>,
+);
+
 fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
-    mut query: Query<
-        (Entity, &C, &GlobalTransform),
-        (
-            Or<(
-                Changed<GlobalTransform>,
-                Changed<C>,
-                Changed<NavMeshAffector>,
-            )>,
-            With<NavMeshAffector>,
-        ),
-    >,
+    mut query: Query<(Entity, &C, &GlobalTransform), NavmeshAffectorChangedQueryFilter<C>>,
 ) {
     // Expand by 2 * walkable_radius to match with erode_walkable_area.
     let border_expansion =
@@ -546,6 +545,7 @@ fn can_generate_new_tiles(
         && !dirty_tiles.0.is_empty()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
     mut generation_ticker: ResMut<GenerationTicker>,

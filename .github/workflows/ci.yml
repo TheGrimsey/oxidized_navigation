@@ -28,3 +28,21 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run cargo clippy
         run: cargo clippy -- -D warnings
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        backend:
+          - feature: parry3d
+            test: parry3d
+    steps:
+      - name: Checkout repository code.
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Install alsalib headers
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - uses: taiki-e/install-action@nextest
+      - name: Test with nextest
+        run: cargo nextest run --no-default-features --features "${{ matrix.backend.feature }}" --test ${{ matrix.backend.test }} --profile ci

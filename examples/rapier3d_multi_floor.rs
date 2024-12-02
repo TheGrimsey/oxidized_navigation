@@ -7,7 +7,9 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    color::palettes, prelude::*, tasks::{AsyncComputeTaskPool, Task}
+    color::palettes,
+    prelude::*,
+    tasks::{AsyncComputeTaskPool, Task},
 };
 // use bevy_editor_pls::EditorPlugin;
 use bevy::tasks::futures_lite::future;

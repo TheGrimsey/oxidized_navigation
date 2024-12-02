@@ -1,7 +1,7 @@
 use std::{num::NonZeroU16, time::Duration};
 
-use bevy::prelude::*;
 use avian3d::prelude::{Collider, PhysicsPlugins};
+use bevy::prelude::*;
 use oxidized_navigation::{
     query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
     OxidizedNavigationPlugin,
@@ -61,7 +61,7 @@ fn setup_app(app: &mut App) {
             max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
         }),
         PhysicsPlugins::default(),
-        HierarchyPlugin::default()
+        HierarchyPlugin::default(),
     ));
 }
 

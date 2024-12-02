@@ -8,7 +8,10 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    color::palettes, math::primitives, prelude::*, tasks::{AsyncComputeTaskPool, Task}
+    color::palettes,
+    math::primitives,
+    prelude::*,
+    tasks::{AsyncComputeTaskPool, Task},
 };
 // use bevy_editor_pls::EditorPlugin;
 use bevy::tasks::futures_lite::future;
@@ -218,12 +221,11 @@ fn setup_world_system(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     print_controls();
-    
+
     // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(10.0, 10.0, 15.0)
-            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        Transform::from_xyz(10.0, 10.0, 15.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
     ));
 
     // Directional light

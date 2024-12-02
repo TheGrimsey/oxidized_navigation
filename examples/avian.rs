@@ -2,8 +2,8 @@
 //! Press M to draw nav-mesh.
 //! Press X to spawn or despawn red cube.
 
-use bevy::{math::primitives, prelude::*};
 use avian3d::prelude::{Collider, PhysicsPlugins};
+use bevy::{math::primitives, prelude::*};
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, OxidizedNavigationDebugDrawPlugin},
     NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
@@ -34,7 +34,10 @@ fn main() {
         .run();
 }
 
-fn toggle_nav_mesh_debug_draw(keys: Res<ButtonInput<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
+fn toggle_nav_mesh_debug_draw(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut show_navmesh: ResMut<DrawNavMesh>,
+) {
     if keys.just_pressed(KeyCode::KeyM) {
         show_navmesh.0 = !show_navmesh.0;
     }
@@ -50,8 +53,7 @@ fn setup(
     // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(10.0, 10.0, 15.0)
-            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        Transform::from_xyz(10.0, 10.0, 15.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
     ));
 
     // Directional light

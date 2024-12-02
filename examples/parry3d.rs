@@ -2,7 +2,7 @@
 //! Press M to draw nav-mesh.
 //! Press X to spawn or despawn red cube.
 
-use bevy::{prelude::*};
+use bevy::prelude::*;
 use oxidized_navigation::{
     colliders::OxidizedCollider,
     debug_draw::{DrawNavMesh, OxidizedNavigationDebugDrawPlugin},
@@ -107,7 +107,10 @@ fn setup(
     ));
 }
 
-fn toggle_nav_mesh_debug_draw(keys: Res<ButtonInput<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
+fn toggle_nav_mesh_debug_draw(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut show_navmesh: ResMut<DrawNavMesh>,
+) {
     if keys.just_pressed(KeyCode::KeyM) {
         show_navmesh.0 = !show_navmesh.0;
     }

@@ -13,7 +13,7 @@ const SLEEP_DURATION: Duration = Duration::from_millis(2);
 fn setup_world_system(mut commands: Commands) {
     // Plane
     commands.spawn((
-       Transform::IDENTITY,
+        Transform::IDENTITY,
         Collider::cuboid(25.0, 0.1, 25.0),
         NavMeshAffector,
     ));

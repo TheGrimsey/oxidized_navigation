@@ -193,7 +193,10 @@ async fn async_path_find(
     None
 }
 
-fn toggle_nav_mesh_debug_draw(keys: Res<ButtonInput<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
+fn toggle_nav_mesh_debug_draw(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut show_navmesh: ResMut<DrawNavMesh>,
+) {
     if keys.just_pressed(KeyCode::KeyM) {
         show_navmesh.0 = !show_navmesh.0;
     }

@@ -140,3 +140,16 @@ fn test_annotations() {
 
     assert_eq!(0, 0);
 }
+
+#[test]
+fn test_failure() {
+    let mut app = App::new();
+
+    setup_app(&mut app);
+
+    app.add_systems(Startup, setup_world_system);
+
+    wait_for_generation_to_finish(&mut app);
+
+    assert_eq!(0, 1, "{} must equal {}", 0, 1);
+}

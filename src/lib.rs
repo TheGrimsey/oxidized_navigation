@@ -425,6 +425,7 @@ impl NavMesh {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
@@ -546,6 +547,7 @@ fn can_generate_new_tiles(
         && !dirty_tiles.0.is_empty()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
     mut generation_ticker: ResMut<GenerationTicker>,

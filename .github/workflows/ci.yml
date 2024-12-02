@@ -77,9 +77,10 @@ jobs:
           report_paths: '**/*.xml'
           check_name: Nextest Report
           detailed_summary: true
-          include_passed: true
+          include_passed: false
           group_suite: true
           comment: true
           annotate_notice: true
           check_annotations: true
           updateComment: true
+          update_check: true

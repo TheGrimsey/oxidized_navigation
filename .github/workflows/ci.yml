@@ -51,17 +51,10 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Test with nextest
         run: cargo nextest run --no-default-features --features "${{ matrix.backend.feature }}" ${{ matrix.backend.test_arg }} --profile ${{ matrix.backend.profile_name }}
-
-  upload_reports:
-    name: Upload Reports
-    runs-on: ubuntu-latest
-    needs:
-      - tests
-    steps:
       - name: Upload Test Report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: junit-test-results
+          name: junit-test-results-${{ matrix.backend.profile_name }}
           path: target/nextest/**/*.xml
           retention-days: 1

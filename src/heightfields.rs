@@ -168,7 +168,7 @@ pub(super) fn build_heightfield_tile(
     voxel_tile
 }
 
-#[allow(clippy::too_many_arguments)]
+// #[allow(clippy::too_many_arguments)]
 fn process_triangle(
     a: Vec3A,
     b: Vec3A,

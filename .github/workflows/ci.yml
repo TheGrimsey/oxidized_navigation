@@ -19,9 +19,9 @@ jobs:
       - name: Run cargo fmt
         run: cargo fmt --all -- --check
       - name: Run cargo check
-        run: cargo check --lib --all-features
+        run: cargo check --lib --all-features | cargo-action-fmt
       - name: Run cargo clippy
-        run: cargo clippy --all-features --no-deps -- -D warning
+        run: cargo clippy --all-features --no-deps -- -D warning | cargo-action-fmt
 
   tests:
     name: Test Suite

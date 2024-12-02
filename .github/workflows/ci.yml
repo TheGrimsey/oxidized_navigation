@@ -73,6 +73,7 @@ jobs:
         with:
           report_paths: '**/*.xml'
           detailed_summary: true
+          include_passed: true
           group_suite: true
           comment: true
           annotate_notice: true

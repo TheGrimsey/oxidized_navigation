@@ -11,7 +11,7 @@ env:
 jobs:
   checks:
     name: Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: Swatinem/rust-cache@v2
@@ -24,7 +24,7 @@ jobs:
 
   tests:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         backend:
@@ -61,7 +61,7 @@ jobs:
 
   report:
     name: Publish reports
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - tests
     steps:
@@ -72,6 +72,7 @@ jobs:
         if: success() || failure() # always run even if the previous step fails
         with:
           report_paths: '**/*.xml'
+          check_name: Nextest Report
           detailed_summary: true
           include_passed: true
           group_suite: true

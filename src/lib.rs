@@ -425,7 +425,15 @@ impl NavMesh {
     }
 }
 
-#[allow(clippy::type_complexity)]
+type NavmeshAffectorChangedQueryFilter<C> = (
+    Or<(
+        Changed<GlobalTransform>,
+        Changed<C>,
+        Changed<NavMeshAffector>,
+    )>,
+    With<NavMeshAffector>,
+);
+
 fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
@@ -433,14 +441,7 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
     mut dirty_tiles: ResMut<DirtyTiles>,
     mut query: Query<
         (Entity, &C, &GlobalTransform),
-        (
-            Or<(
-                Changed<GlobalTransform>,
-                Changed<C>,
-                Changed<NavMeshAffector>,
-            )>,
-            With<NavMeshAffector>,
-        ),
+        NavmeshAffectorChangedQueryFilter<C>,
     >,
 ) {
     // Expand by 2 * walkable_radius to match with erode_walkable_area.

@@ -1,0 +1,33 @@
+name: CI Results
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [ completed ]
+
+permissions:
+  checks: write
+
+jobs:
+  report:
+    name: Publish reports
+    runs-on: ubuntu-22.04
+    if: ${{ always() }}
+    steps:
+      - name: Download all workflow run artifacts
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: ${{ github.event.workflow.id }}
+          run_id: ${{ github.event.workflow_run.id }}
+      - name: Publish Test Report
+        uses: ptsd/action-junit-report@feature/allow_ignore_classname_in_resolver
+        if: always()
+        with:
+          commit: ${{github.event.workflow_run.head_sha}}
+          report_paths: '**/*.xml'
+          check_name: Nextest Report
+          detailed_summary: true
+          include_passed: false
+          group_suite: true
+          annotate_notice: true
+          check_annotations: true
+          resolve_ignore_classname: true

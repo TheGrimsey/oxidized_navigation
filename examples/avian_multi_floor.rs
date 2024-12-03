@@ -4,22 +4,23 @@
 //!
 //! Press B to run blocking path finding.
 //!
-use std::sync::{Arc, RwLock};
 
+use avian3d::prelude::Collider;
+use avian3d::PhysicsPlugins;
+use bevy::tasks::futures_lite::future;
 use bevy::{
     color::palettes,
+    math::primitives,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
-// use bevy_editor_pls::EditorPlugin;
-use bevy::tasks::futures_lite::future;
-use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+use std::sync::{Arc, RwLock};
 
 fn main() {
     App::new()
@@ -38,7 +39,7 @@ fn main() {
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
-            RapierPhysicsPlugin::<NoUserData>::default(),
+            PhysicsPlugins::default(),
         ))
         .insert_resource(AsyncPathfindingTasks::default())
         .add_systems(Startup, setup_world_system)
@@ -48,19 +49,13 @@ fn main() {
                 run_blocking_pathfinding,
                 run_async_pathfinding,
                 poll_pathfinding_tasks_system,
-                toggle_nav_mesh_system,
+                toggle_nav_mesh_debug_draw,
                 spawn_or_despawn_affector_system,
             ),
         )
         .run();
 }
 
-//
-//  Blocking Pathfinding.
-//  Press B to run.
-//
-//  Running pathfinding in a system.
-//
 fn run_blocking_pathfinding(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
@@ -106,14 +101,9 @@ fn run_blocking_pathfinding(
     }
 }
 
-//
-//  Async Pathfinding.
-//  Press A to run.
-//
 //  Running pathfinding in a task without blocking the frame.
 //  Also check out Bevy's async compute example.
 //  https://github.com/bevyengine/bevy/blob/main/examples/async_tasks/async_compute.rs
-//
 
 // Holder resource for tasks.
 #[derive(Default, Resource)]
@@ -203,11 +193,10 @@ async fn async_path_find(
     None
 }
 
-//
-//  Toggle drawing Nav-mesh.
-//  Press M to toggle drawing the navmesh.
-//
-fn toggle_nav_mesh_system(keys: Res<ButtonInput<KeyCode>>, mut show_navmesh: ResMut<DrawNavMesh>) {
+fn toggle_nav_mesh_debug_draw(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut show_navmesh: ResMut<DrawNavMesh>,
+) {
     if keys.just_pressed(KeyCode::KeyM) {
         show_navmesh.0 = !show_navmesh.0;
     }
@@ -235,10 +224,10 @@ fn setup_world_system(
 
     // Plane
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(25.0, 25.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(10.0, 10.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
         Transform::IDENTITY,
-        Collider::cuboid(12.5, 0.1, 12.5),
+        Collider::cuboid(10.0, 0.2, 10.0),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
@@ -246,7 +235,7 @@ fn setup_world_system(
         Mesh3d(meshes.add(Plane3d::default().mesh().size(10.0, 10.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.68, 0.68, 1.0))),
         Transform::from_xyz(0.0, 6.0, 0.0),
-        Collider::cuboid(5.0, 0.1, 5.0),
+        Collider::cuboid(10.0, 0.2, 10.0),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 }
@@ -271,7 +260,7 @@ fn spawn_or_despawn_affector_system(
                 Mesh3d(meshes.add(Cuboid::new(2.5, 2.5, 2.5))),
                 MeshMaterial3d(materials.add(Color::srgb(1.0, 0.1, 0.5))),
                 Transform::from_xyz(5.0, 0.8, -5.0),
-                Collider::cuboid(1.25, 1.25, 1.25),
+                Collider::cuboid(2.5, 2.5, 2.5),
                 NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
             ))
             .id();

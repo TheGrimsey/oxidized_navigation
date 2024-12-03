@@ -13,32 +13,28 @@ const SLEEP_DURATION: Duration = Duration::from_millis(2);
 fn setup_world_system(mut commands: Commands) {
     // Plane
     commands.spawn((
-        TransformBundle::IDENTITY,
+        Transform::IDENTITY,
         Collider::cuboid(25.0, 0.1, 25.0),
         NavMeshAffector,
     ));
 
     // Cube
     commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(-5.0, 0.8, -5.0)),
+        Transform::from_xyz(-5.0, 0.8, -5.0),
         Collider::cuboid(1.25, 1.25, 1.25),
         NavMeshAffector,
     ));
 
     // Tall Cube
     commands.spawn((
-        TransformBundle::from_transform(
-            Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
-        ),
+        Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
         Collider::cuboid(1.25, 1.25, 1.25),
         NavMeshAffector,
     ));
 
     // Thin wall
     commands.spawn((
-        TransformBundle::from_transform(
-            Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
-        ),
+        Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
         Collider::cuboid(0.05, 0.05, 0.05),
         NavMeshAffector,
     ));
@@ -55,7 +51,7 @@ fn setup_heightfield_system(mut commands: Commands) {
 
     // Heightfield.
     commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+        Transform::from_xyz(0.0, 0.0, 0.0),
         Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
         NavMeshAffector,
     ));

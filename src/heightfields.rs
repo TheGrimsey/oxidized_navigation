@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, ops::Div, sync::Arc};
 
 use bevy::{math::Vec3A, prelude::*};
-use crate::parry::parry3d::shape::HeightField;
+use parry3d::shape::HeightField;
 use smallvec::SmallVec;
 
 use crate::{conversion::Triangles, Area};
@@ -168,6 +168,7 @@ pub(super) fn build_heightfield_tile(
     voxel_tile
 }
 
+#[allow(clippy::too_many_arguments)]
 fn process_triangle(
     a: Vec3A,
     b: Vec3A,

@@ -103,4 +103,4 @@ required-features = ["parry3d"]
 features = ["debug_draw"]
 
 [patch.crates-io]
-avian3d = { git = "https://github.com/Jondolf/avian.git", branch = "main" }
+avian3d = { git = "https://github.com/Jondolf/avian.git", rev = "52cbcec" }

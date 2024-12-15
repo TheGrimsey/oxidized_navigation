@@ -1,3 +1,38 @@
+## 0.12.0
+
+### Minimum `bevy` version is `0.15.0`
+
+### Replaced `Xpbd` support with its replacement `Avian3d`
+
+See [Rebrand Bevy XPBD](https://github.com/Jondolf/avian/issues/346).
+
+Currently `Avian3D` has yet to publish an official `bevy:0.15` release, so you will need to use a crates-io patch to use this backend:
+
+```toml
+[dependencies]
+avian3d = { version = "0.1" }
+oxidized_navigation = { version = "0.12.0", features = ["avian"] }
+
+[patch.crates-io]
+avian3d = { git = "https://github.com/Jondolf/avian.git", rev = "52cbcec" }
+```
+
+### Removed `parry_<version>` features
+
+If you were depending on the `parry_015` / `parry_016` features these have been replaced with a single `parry3d` feature that currently adds a dependency on `parry3d:0.17`:
+
+```toml
+# 0.11:
+[dependencies]
+parry3d = { version = "0.16" }
+oxidized_navigation = { version = "0.11.0", features = ["parry_016"] }
+
+# 0.12:
+[dependencies]
+parry3d = { version = "0.17" }
+oxidized_navigation = { version = "0.12.0", features = ["parry3d"] }
+```
+
 ## 0.7
 
 ### ``OxidizedNavigationPlugin`` is now generic over OxidizedColliders.

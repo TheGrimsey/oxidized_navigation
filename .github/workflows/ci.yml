@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ "master", "dev" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: Lints
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: olix0r/cargo-action-fmt/setup@v2
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+      - name: Run cargo check
+        if: always()
+        run: cargo check --lib --all-features --message-format json | cargo-action-fmt
+      - name: Run cargo clippy
+        if: always()
+        run: cargo clippy --all-features --no-deps --message-format json -- -D warnings | cargo-action-fmt
+
+  tests:
+    name: Test Suite
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        backend:
+          - feature: parry3d
+            artifact_key: benches
+            test_arg: --benches
+          - feature: parry3d
+            artifact_key: parry3d
+            test_arg: --test parry3d
+          - feature: avian
+            artifact_key: avian
+            test_arg: --test avian
+          - feature: rapier
+            artifact_key: rapier3d
+            test_arg: --test rapier3d
+    steps:
+      - name: Checkout repository code.
+        uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.backend.artifact_key }}
+      - name: Install alsalib headers
+        run: sudo apt-get update; sudo apt-get install --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - uses: taiki-e/install-action@nextest
+      - name: Test with nextest
+        run: cargo nextest run --no-default-features --features "${{ matrix.backend.feature }}" ${{ matrix.backend.test_arg }} --profile ci
+      - name: Upload Test Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: junit-test-results-${{ matrix.backend.artifact_key }}
+          path: target/nextest/**/*.xml
+          retention-days: 1

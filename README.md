@@ -8,7 +8,7 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 
 ## Quick-start:
 **Nav-mesh generation:**
-1. Choose which backend you're going to use (bevy_rapier3d, avian_3d, or custom parry3d based colliders) and enable the relevant crate features ("rapier", "avian", or "parry_016" features).
+1. Choose which backend you're going to use (bevy_rapier3d, avian_3d, or custom parry3d based colliders) and enable the relevant crate features (`rapier`, `avian`, or `parry3d` features).
 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `avian_3d`.
 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for avian `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `avian_3d`) to any entity you want to affect the nav-mesh.
@@ -57,21 +57,28 @@ Debug draw is available behind the ``debug_draw`` feature and using the ``Oxidiz
 
 ## Supported versions
 
-| Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Parry3d Version |
-| ------------- | ------------ | ---------------------- | -------------------- | --------------- |
-| 0.11.0        | 0.14         | 0.27                   | 0.5                  | 0.15/0.16       |
-| 0.10.0        | 0.13         | 0.25                   | 0.4                  | 0.13            |
-| 0.9.0         | 0.12         | 0.24                   | 0.3                  | 0.13            |
-| 0.8.0         | 0.12         | 0.23                   | 0.3                  | 0.13            |
-| 0.7.0         | 0.11         | 0.22                   | 0.2                  | 0.13            |
-| 0.6.0         | 0.11         | 0.22                   | unsupported          | unsupported     |
-| 0.5.X         | 0.10.X       | 0.21                   | unsupported          | unsupported     |
-| 0.4.0         | 0.10.X       | 0.21                   | unsupported          | unsupported     |
-| 0.3.0         | 0.10.0       | 0.21                   | unsupported          | unsupported     |
-| 0.2.0         | 0.9.X        | 0.20                   | unsupported          | unsupported     |
-| 0.1.X         | 0.9.X        | 0.19                   | unsupported          | unsupported     |
+| Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Avian3D Version     | Parry3d Version |
+|---------------|--------------|------------------------|----------------------|---------------------|-----------------|
+| 0.12.0        | 0.15         | 0.28                   | unsupported          | git-rev-52cbcec (1) | 0.17            |
+| 0.11.0        | 0.14         | 0.27                   | 0.5                  | unsupported         | 0.15/0.16       |
+| 0.9.0         | 0.12         | 0.24                   | 0.3                  | unsupported         | 0.13            |
+| 0.10.0        | 0.13         | 0.25                   | 0.4                  | unsupported         | 0.13            |
+| 0.8.0         | 0.12         | 0.23                   | 0.3                  | unsupported         | 0.13            |
+| 0.7.0         | 0.11         | 0.22                   | 0.2                  | unsupported         | 0.13            |
+| 0.6.0         | 0.11         | 0.22                   | unsupported          | unsupported         | unsupported     |
+| 0.5.X         | 0.10.X       | 0.21                   | unsupported          | unsupported         | unsupported     |
+| 0.4.0         | 0.10.X       | 0.21                   | unsupported          | unsupported         | unsupported     |
+| 0.3.0         | 0.10.0       | 0.21                   | unsupported          | unsupported         | unsupported     |
+| 0.2.0         | 0.9.X        | 0.20                   | unsupported          | unsupported         | unsupported     |
+| 0.1.X         | 0.9.X        | 0.19                   | unsupported          | unsupported         | unsupported     |
 
-**Using an unsupported Rapier, Xpbd, or parry3d version will cause Oxidized Navigation to fail as it tries to get the wrong version of components.**
+### (1)
+- Avian3D has yet to publish an official bevy-0.15 release. There will be a 0.12.1 release when they do
+- You will need to use a `[patch.crates-io]` override for now see [MIGRATING - 0.12.0](https://github.com/TheGrimsey/oxidized_navigation/blob/master/MIGRATING.md#0120)
+- The minimum git rev sha supported is [52cbcec](https://github.com/Jondolf/avian/commit/52cbcecce0fd05a65005ab6935ebeb231373c2c6)
+- Newer git revs will possibly (probably) work but are untested with this crate, YMMV 🤷🏼
+
+**Using an unsupported Rapier, Xpbd, Avian3d or parry3d version will cause Oxidized Navigation to fail as it tries to get the wrong version of components.**
 In this case you may be able to [override which version Oxidized Navigation depends on](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html).
 
 ## Non-exhaustive TODO-list:

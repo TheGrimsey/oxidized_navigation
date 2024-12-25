@@ -69,7 +69,7 @@ nalgebra = { version = "0.33", features = ["convert-glam029"] }
 parry3d = { version = "0.17", optional = true }
 
 bevy_rapier3d = { version = "0.28", optional = true, default-features = false, features = ["dim3"] }
-avian3d = { version = "0.1", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"] }
+avian3d = { version = "0.2", optional = true, default-features = false, features = ["3d", "f32", "parry-f32"] }
 
 smallvec = { version = "1.13", features = ["union"] }
 cfg-if = "1.0"
@@ -101,6 +101,3 @@ required-features = ["parry3d"]
 [package.metadata.docs.rs]
 # Compile docs.rs docs with debug_draw so docs for it appear.
 features = ["debug_draw"]
-
-[patch.crates-io]
-avian3d = { git = "https://github.com/Jondolf/avian.git", rev = "52cbcec" }

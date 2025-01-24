@@ -33,7 +33,7 @@ pub fn build_detail_mesh(
     open_tile: &OpenTile,
     poly_mesh: &PolyMesh,
 ) -> Option<PolyMesh> {
-    let Some(detail_mesh_settings) = &nav_mesh_settings.detail_mesh_generation else {
+    let Some(detail_mesh_settings) = &nav_mesh_settings.experimental_detail_mesh_generation else {
         return None;
     };
 

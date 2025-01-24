@@ -283,10 +283,11 @@ pub struct NavMeshSettings {
     /// Adjust this to control memory & CPU usage. More tiles generating at once will have a higher memory footprint.
     pub max_tile_generation_tasks: Option<NonZeroU16>,
 
-    /// When not None, height correct nav-mesh polygons where the surface height differs too much from the surface in cells.
+    /// When not None, height correct nav-mesh polygons where the surface height differs too much from the surface in cells. This is very useful for bumpy terrain. 
     ///
     /// Helps on bumpy shapes like terrain but comes at a performance cost.
-    pub detail_mesh_generation: Option<DetailMeshSettings>,
+    /// **Experimental**: This may have issues at the edges of regions.
+    pub experimental_detail_mesh_generation: Option<DetailMeshSettings>,
 }
 impl NavMeshSettings {
     /// Helper function for creating nav-mesh settings with reasonable defaults from the size of your navigation agent and bounds of your world.
@@ -319,7 +320,7 @@ impl NavMeshSettings {
             max_edge_length: 80,
             max_contour_simplification_error: 1.1,
             max_tile_generation_tasks: NonZeroU16::new(8),
-            detail_mesh_generation: None,
+            experimental_detail_mesh_generation: None,
         }
     }
     /// Setter for [`NavMeshSettings::walkable_radius`]
@@ -382,12 +383,14 @@ impl NavMeshSettings {
         self
     }
 
-    /// Setter for [`NavMeshSettings::max_traversable_slope_radians`]
-    pub fn with_detail_mesh_generation(
+    /// Setter for [`NavMeshSettings::experimental_detail_mesh_generation`]
+    /// 
+    /// **Experimental**: This may have issues at the edges of regions.
+    pub fn with_experimental_detail_mesh_generation(
         mut self,
         detail_mesh_generation_settings: DetailMeshSettings,
     ) -> Self {
-        self.detail_mesh_generation = Some(detail_mesh_generation_settings);
+        self.experimental_detail_mesh_generation = Some(detail_mesh_generation_settings);
 
         self
     }

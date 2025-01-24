@@ -39,7 +39,7 @@ fn main() {
             OxidizedNavigationPlugin::<Collider>::new(
                 NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -10.0)
                     .with_max_tile_generation_tasks(Some(NonZeroU16::MIN))
-                    .with_detail_mesh_generation(DetailMeshSettings {
+                    .with_experimental_detail_mesh_generation(DetailMeshSettings {
                         max_height_error: NonZeroU16::new(4).unwrap(),
                         sample_step: NonZeroU8::new(16).unwrap(),
                     }),

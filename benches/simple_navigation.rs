@@ -12,7 +12,7 @@ use oxidized_navigation::{
     tiles::{NavMeshTile, NavMeshTiles},
     NavMeshSettings,
 };
-use oxidized_navigation::parry::parry3d::shape::Cuboid;
+use parry3d::shape::Cuboid;
 
 fn generate_single_primitive_geometry(nav_mesh_settings: &NavMeshSettings) -> NavMeshTile {
     let tile_coord = UVec2::new(0, 0);
@@ -100,7 +100,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         max_contour_simplification_error: 1.1,
         max_edge_length: 80,
         max_tile_generation_tasks: NonZeroU16::new(1),
-        max_height_error: None
+        detail_mesh_generation: None
     };
 
     let simple_tiles = NavMeshTiles {

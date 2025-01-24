@@ -87,7 +87,7 @@ bevy = { version = "0.15", default-features = false, features = [
     "zstd",
 ] }
 criterion = { version = "0.5" }
-bevy_editor_pls = { git = "https://github.com/soraxas/bevy_editor_pls.git", branch = "feat-bump-version" }
+bevy_editor_pls = { git = "https://github.com/onkoe/bevy_editor_pls.git" }
 
 [[bench]]
 name = "simple_geometry"

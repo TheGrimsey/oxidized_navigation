@@ -246,7 +246,7 @@ fn setup_world_system(mut commands: Commands) {
     // Heightfield.
     commands.spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
-        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
+        Collider::heightfield(heightfield_heights, heightfield_size, heightfield_size, Vec3::splat(heightfield_size as f32)),
         NavMeshAffector,
     ));
 }

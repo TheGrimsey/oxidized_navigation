@@ -85,10 +85,10 @@ pub fn build_detail_mesh(
             poly_mesh.vertices[polygon[2] as usize],
         ];
 
-        height_patch.min_x = min.x as u16;
-        height_patch.min_y = min.y as u16;
-        height_patch.width = max.x.saturating_sub(min.x) as u16;
-        height_patch.height = max.y.saturating_sub(min.y) as u16;
+        height_patch.min_x = min.x;
+        height_patch.min_y = min.y;
+        height_patch.width = max.x.saturating_sub(min.x);
+        height_patch.height = max.y.saturating_sub(min.y);
 
         extract_height_data(nav_mesh_settings, open_tile, &vertices, *region, &mut height_patch, &mut queue);
     
@@ -139,7 +139,6 @@ fn extract_height_data(
     height_patch.heights.fill(u16::MAX);
 
     let tile_side = nav_mesh_settings.get_tile_side_with_border();
-    let height_patch_width = height_patch.width as usize;
     
     let mut empty = true;
     for y in 0..height_patch.height {
@@ -415,7 +414,7 @@ fn build_poly_detail(
         }
     }
 
-    triangulate_hull(&verts, &hull, poly.len(), triangles);
+    triangulate_hull(verts, &hull, poly.len(), triangles);
 
     if min_extent < (sample_distance * 2) as f32 || triangles.is_empty() {
         return true;
@@ -477,7 +476,7 @@ fn build_poly_detail(
             for (i, sample) in samples.iter().enumerate() {
                 // Calculate distance to the mesh.
                 // Can't fail because we only tesselate the inside of the mesh & we purge all outside points earlier.
-                let Some(d) = dist_to_tri_mesh(sample.as_vec3(), &verts, &triangles) else {
+                let Some(d) = dist_to_tri_mesh(sample.as_vec3(), verts, triangles) else {
                     continue;
                 };
 
@@ -504,16 +503,16 @@ fn build_poly_detail(
             // Rebuild triangulation
             edges.clear();
             triangles.clear();
-            delaunay_hull(&verts, &hull, triangles, edges);
+            delaunay_hull(verts, &hull, triangles, edges);
         }
     }
 
     // If we failed to add more points, let's just triangulate with the hull again.
     if triangles.is_empty() {
-        triangulate_hull(&verts, &hull, poly.len(), triangles);
+        triangulate_hull(verts, &hull, poly.len(), triangles);
     }
 
-    return true;
+    true
 }
 
 fn get_height(
@@ -1030,12 +1029,12 @@ fn poly_min_extent(
         let next_vertex = vertices[next_i];
 
         let mut max_edge_distance = 0.0_f32;
-        for j in 0..vertices.len() {
+        for (j, other_vertex) in vertices.iter().enumerate() {
             if j == i || j == next_i {
                 continue;
             }
 
-            let distance = distance_pt_seg_2d(vertices[j].as_vec3(), vertex.as_vec3(), next_vertex.as_vec3());
+            let distance = distance_pt_seg_2d(other_vertex.as_vec3(), vertex.as_vec3(), next_vertex.as_vec3());
 
             max_edge_distance = max_edge_distance.max(distance);
         }

@@ -95,7 +95,7 @@ pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings)
             walk_contour(
                 cell_index,
                 span_index,
-                &open_tile,
+                open_tile,
                 nav_mesh_settings,
                 &mut boundry_flags,
                 &mut vertices,

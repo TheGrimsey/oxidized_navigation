@@ -85,7 +85,7 @@ fn setup_app(app: &mut App) {
             max_contour_simplification_error: 1.1,
             max_edge_length: 80,
             max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
-            max_height_error: None
+            detail_mesh_generation: None,
         }),
     ));
 }

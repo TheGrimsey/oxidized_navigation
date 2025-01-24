@@ -139,9 +139,15 @@ pub(super) fn build_heightfield_tile(
         let transform = collection.transform.with_scale(Vec3::ONE).compute_affine(); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         for triangle in collection.heightfield.triangles() {
-            let a = transform.transform_point3a(Vec3A::new(triangle.a.x, triangle.a.y, triangle.a.z)) - tile_origin;
-            let b = transform.transform_point3a(Vec3A::new(triangle.b.x, triangle.b.y, triangle.b.z)) - tile_origin;
-            let c = transform.transform_point3a(Vec3A::new(triangle.c.x, triangle.c.y, triangle.c.z)) - tile_origin;
+            let a =
+                transform.transform_point3a(Vec3A::new(triangle.a.x, triangle.a.y, triangle.a.z))
+                    - tile_origin;
+            let b =
+                transform.transform_point3a(Vec3A::new(triangle.b.x, triangle.b.y, triangle.b.z))
+                    - tile_origin;
+            let c =
+                transform.transform_point3a(Vec3A::new(triangle.c.x, triangle.c.y, triangle.c.z))
+                    - tile_origin;
 
             process_triangle(
                 a,
@@ -220,8 +226,9 @@ fn process_triangle(
             column_max_vert_x = column_max_vert_x.max(vertex.x);
         }
         let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
-        let column_max =
-            ((column_max_vert_x / nav_mesh_settings.cell_width) as i32).min((tile_side - 1) as i32) + 1;
+        let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
+            .min((tile_side - 1) as i32)
+            + 1;
 
         for x in column_min..column_max {
             let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
@@ -362,11 +369,9 @@ fn divide_polygon(
         // Check if both vertices are on the same side of the line.
         if in_a != in_b {
             // We slide the vertex along to the edge.
-            let slide =
-            delta_prev / (delta_prev - delta_i);
-            
-            polygon_left[verts_left] =
-            vertex_prev + (vertex_i - vertex_prev) * slide;
+            let slide = delta_prev / (delta_prev - delta_i);
+
+            polygon_left[verts_left] = vertex_prev + (vertex_i - vertex_prev) * slide;
             polygon_right[verts_right] = polygon_left[verts_left];
             verts_left += 1;
             verts_right += 1;

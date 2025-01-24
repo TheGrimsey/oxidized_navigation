@@ -631,10 +631,7 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
                 })
                 .collect();
 
-            Polygon {
-                links,
-                indices,
-            }
+            Polygon { links, indices }
         })
         .collect();
 
@@ -656,6 +653,6 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
         vertices,
         edges: poly_mesh.edges.into_boxed_slice(),
         polygons,
-        areas: poly_mesh.areas.into_boxed_slice()
+        areas: poly_mesh.areas.into_boxed_slice(),
     }
 }

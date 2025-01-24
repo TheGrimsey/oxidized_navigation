@@ -1,5 +1,7 @@
 use bevy::{
-    log::info, math::U16Vec3, prelude::{UVec2, UVec4}
+    log::info,
+    math::U16Vec3,
+    prelude::{UVec2, UVec4},
 };
 
 use crate::{contour::ContourSet, detail_mesh::build_detail_mesh, heightfields::OpenTile, Area};
@@ -13,13 +15,17 @@ pub struct PolyMesh {
     pub polygons: Vec<[u32; VERTICES_IN_TRIANGLE]>, //
     pub edges: Vec<[EdgeConnection; VERTICES_IN_TRIANGLE]>, // For each polygon edge points to a polygon (if any) that shares the edge.
     pub areas: Vec<Area>,
-    pub regions: Vec<u16>
+    pub regions: Vec<u16>,
 }
 
 const VERTEX_BUCKET_COUNT: usize = 1 << 12; // 4 096
 pub const VERTICES_IN_TRIANGLE: usize = 3; // Don't change this. The mesher can't make anything other than triangles.
 
-pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSettings, open_tile: &OpenTile) -> PolyMesh {
+pub fn build_poly_mesh(
+    contour_set: ContourSet,
+    nav_mesh_settings: &NavMeshSettings,
+    open_tile: &OpenTile,
+) -> PolyMesh {
     let mut max_vertices = 0;
     let mut max_tris = 0;
     let mut max_verts_per_contour = 0;
@@ -39,7 +45,7 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
         polygons: Vec::with_capacity(max_tris),
         edges: Vec::with_capacity(max_tris),
         areas: Vec::with_capacity(max_tris),
-        regions: Vec::with_capacity(max_tris)
+        regions: Vec::with_capacity(max_tris),
     };
 
     let mut first_vertex = vec![-1; VERTEX_BUCKET_COUNT];

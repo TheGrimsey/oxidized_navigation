@@ -36,12 +36,14 @@ fn main() {
                 }),
                 ..default()
             }),
-            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
-                0.5, 1.9, 250.0, -10.0,
-            ).with_max_tile_generation_tasks(Some(NonZeroU16::MIN)).with_detail_mesh_generation(DetailMeshSettings {
-                max_height_error: NonZeroU16::new(4).unwrap(),
-                sample_step: NonZeroU8::new(16).unwrap(),
-            })),
+            OxidizedNavigationPlugin::<Collider>::new(
+                NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -10.0)
+                    .with_max_tile_generation_tasks(Some(NonZeroU16::MIN))
+                    .with_detail_mesh_generation(DetailMeshSettings {
+                        max_height_error: NonZeroU16::new(4).unwrap(),
+                        sample_step: NonZeroU8::new(16).unwrap(),
+                    }),
+            ),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
@@ -246,7 +248,12 @@ fn setup_world_system(mut commands: Commands) {
     // Heightfield.
     commands.spawn((
         Transform::from_xyz(0.0, 0.0, 0.0),
-        Collider::heightfield(heightfield_heights, heightfield_size, heightfield_size, Vec3::splat(heightfield_size as f32)),
+        Collider::heightfield(
+            heightfield_heights,
+            heightfield_size,
+            heightfield_size,
+            Vec3::splat(heightfield_size as f32),
+        ),
         NavMeshAffector,
     ));
 }

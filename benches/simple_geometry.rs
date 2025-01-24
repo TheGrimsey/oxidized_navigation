@@ -35,7 +35,7 @@ fn generate_single_primitive_geometry() {
         max_contour_simplification_error: 1.1,
         max_edge_length: 80,
         max_tile_generation_tasks: NonZeroU16::new(1),
-        detail_mesh_generation: None
+        detail_mesh_generation: None,
     };
 
     black_box(build_tile_sync(
@@ -102,7 +102,7 @@ fn generate_many_primitive_geometry() {
         max_contour_simplification_error: 1.1,
         max_edge_length: 80,
         max_tile_generation_tasks: NonZeroU16::new(1),
-        detail_mesh_generation: None
+        detail_mesh_generation: None,
     };
 
     black_box(build_tile_sync(

@@ -75,13 +75,13 @@ mod contour;
 pub mod conversion;
 #[cfg(feature = "debug_draw")]
 pub mod debug_draw;
+mod detail_mesh;
 mod heightfields;
 mod math;
 mod mesher;
 pub mod query;
 mod regions;
 pub mod tiles;
-mod detail_mesh;
 
 /// System sets containing the crate's systems.
 #[derive(SystemSet, Debug, PartialEq, Eq, Hash, Clone)]
@@ -208,13 +208,13 @@ struct DirtyTiles(HashSet<UVec2>);
 pub struct DetailMeshSettings {
     /// The maximum acceptible error in height between the nav-mesh polygons & the true world (in cells).
     pub max_height_error: NonZeroU16,
-    /// Determines how often (in cells) to sample the height when generating the height-corrected nav-mesh. 
-    /// 
+    /// Determines how often (in cells) to sample the height when generating the height-corrected nav-mesh.
+    ///
     /// This greatly affects generation performance. Higher values reduce samples by half to the previous one.
     /// Ex. 1.0, 0.5, 0.25, 0.125.
-    /// 
+    ///
     /// **Suggested value:** >=2. Start high & reduce as needed.  
-    pub sample_step: NonZeroU8
+    pub sample_step: NonZeroU8,
 }
 
 /// Settings for nav-mesh generation.
@@ -284,7 +284,7 @@ pub struct NavMeshSettings {
     pub max_tile_generation_tasks: Option<NonZeroU16>,
 
     /// When not None, height correct nav-mesh polygons where the surface height differs too much from the surface in cells.
-    /// 
+    ///
     /// Helps on bumpy shapes like terrain but comes at a performance cost.
     pub detail_mesh_generation: Option<DetailMeshSettings>,
 }
@@ -319,7 +319,7 @@ impl NavMeshSettings {
             max_edge_length: 80,
             max_contour_simplification_error: 1.1,
             max_tile_generation_tasks: NonZeroU16::new(8),
-            detail_mesh_generation: None
+            detail_mesh_generation: None,
         }
     }
     /// Setter for [`NavMeshSettings::walkable_radius`]
@@ -381,9 +381,12 @@ impl NavMeshSettings {
 
         self
     }
-    
+
     /// Setter for [`NavMeshSettings::max_traversable_slope_radians`]
-    pub fn with_detail_mesh_generation(mut self, detail_mesh_generation_settings: DetailMeshSettings) -> Self {
+    pub fn with_detail_mesh_generation(
+        mut self,
+        detail_mesh_generation_settings: DetailMeshSettings,
+    ) -> Self {
         self.detail_mesh_generation = Some(detail_mesh_generation_settings);
 
         self

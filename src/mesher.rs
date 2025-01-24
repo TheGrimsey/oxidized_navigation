@@ -93,9 +93,6 @@ pub fn build_poly_mesh(contour_set: ContourSet, nav_mesh_settings: &NavMeshSetti
 
     if let Some(detail_poly_mesh) = build_detail_mesh(nav_mesh_settings, open_tile, &poly_mesh) {
         poly_mesh = detail_poly_mesh;
-        info!("Built polky mesg??");
-    } else {
-        info!("Detail mesh generation failed.");
     }
 
     // For each edge, find other polygon that shares that edge.

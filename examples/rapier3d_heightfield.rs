@@ -224,17 +224,13 @@ fn draw_nav_mesh_system(keys: Res<ButtonInput<KeyCode>>, mut draw_nav_mesh: ResM
 
 fn setup_world_system(mut commands: Commands) {
     // light
-    commands.spawn(PointLightBundle {
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
-        ..default()
-    });
+    commands.spawn((PointLight::default(), Transform::from_xyz(4.0, 8.0, 4.0)));
 
     // Camera
-    commands.spawn(Camera3dBundle {
-        transform: Transform::from_xyz(0.0, 15.0, 50.0)
-            .looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
-        ..default()
-    });
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(60.0, 50.0, 50.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+    ));
 
     let heightfield_size = 70;
 
@@ -249,8 +245,8 @@ fn setup_world_system(mut commands: Commands) {
 
     // Heightfield.
     commands.spawn((
-        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
-        Collider::heightfield(heightfield_heights, heightfield_size, heightfield_size, Vec3::splat(heightfield_size as f32)),
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Collider::heightfield(heightfield_heights, 50, 50, Vec3::new(50.0, 50.0, 50.0)),
         NavMeshAffector,
     ));
 }
@@ -272,12 +268,9 @@ fn spawn_or_despawn_affector_system(
     } else {
         let entity = commands
             .spawn((
-                PbrBundle {
-                    mesh: meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5))),
-                    material: materials.add(Color::srgb(1.0, 0.1, 0.5)),
-                    transform: Transform::from_xyz(5.0, 0.8, -5.0),
-                    ..default()
-                },
+                Mesh3d(meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5)))),
+                MeshMaterial3d(materials.add(Color::srgb(1.0, 0.1, 0.5))),
+                Transform::from_xyz(5.0, 0.8, -5.0),
                 Collider::cuboid(1.25, 1.25, 1.25),
                 NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
             ))

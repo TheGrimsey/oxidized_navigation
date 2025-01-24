@@ -759,6 +759,7 @@ fn add_unique_floor_region(region: &mut Region, region_id: u16) {
     region.floors.push(region_id);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn flood_region(
     tile_side: usize,
     entry: LevelStackEntry,

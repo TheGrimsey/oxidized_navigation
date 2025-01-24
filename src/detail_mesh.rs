@@ -304,6 +304,7 @@ fn distance_pt_seg(point: Vec3, va: Vec3, vb: Vec3) -> f32 {
     (point - closest).length_squared()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_poly_detail(
     height_patch: &HeightPatch,
     // Vertices of the polygon we are currently building detail for.
@@ -356,12 +357,12 @@ fn build_poly_detail(
                 nn = (MAX_VERTS - 1).saturating_sub(verts.len());
             }
 
-            for k in 0..=nn {
+            for (k, edge) in edge.iter_mut().enumerate().take(nn + 1) {
                 let t = k as f32 / nn as f32;
                 let mut pos = vertex_j.as_vec3().lerp(vertex_i.as_vec3(), t).floor().as_uvec3();
                 pos.y = get_height(pos.x, pos.y, pos.z, search_radius, height_patch) as u32;
                 
-                edge[k] = pos.as_u16vec3();
+                *edge = pos.as_u16vec3();
             }
 
             // Simplify samples
@@ -376,8 +377,8 @@ fn build_poly_detail(
                 // Find maximum deviation along the segment
                 let mut max_dev = 0.0;
                 let mut max_i = None;
-                for m in a + 1..b {
-                    let dev = distance_pt_seg(edge[m].as_vec3(), vertex_a.as_vec3(), vertex_b.as_vec3());
+                for (m, edge) in edge.iter().enumerate().take(b).skip(a + 1) {
+                    let dev = distance_pt_seg(edge.as_vec3(), vertex_a.as_vec3(), vertex_b.as_vec3());
                     if dev > max_dev {
                         max_dev = dev;
                         max_i = Some(m);

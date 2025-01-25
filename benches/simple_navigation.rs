@@ -88,7 +88,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let nav_mesh_settings = NavMeshSettings {
         cell_width: 0.25,
         cell_height: 0.1,
-        tile_width: 100,
+        tile_width: NonZeroU16::new(100).unwrap(),
         world_half_extents: 12.5,
         world_bottom_bound: -100.0,
         max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
@@ -100,6 +100,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         max_contour_simplification_error: 1.1,
         max_edge_length: 80,
         max_tile_generation_tasks: NonZeroU16::new(1),
+        experimental_detail_mesh_generation: None,
     };
 
     let simple_tiles = NavMeshTiles {

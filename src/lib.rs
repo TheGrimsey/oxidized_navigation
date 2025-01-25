@@ -44,7 +44,7 @@
 //! [examples]: https://github.com/TheGrimsey/oxidized_navigation/blob/master/examples
 
 use std::marker::PhantomData;
-use std::num::NonZeroU16;
+use std::num::{NonZeroU16, NonZeroU8};
 use std::sync::{Arc, RwLock};
 
 use bevy::ecs::entity::EntityHashMap;
@@ -75,6 +75,7 @@ mod contour;
 pub mod conversion;
 #[cfg(feature = "debug_draw")]
 pub mod debug_draw;
+mod detail_mesh;
 mod heightfields;
 mod math;
 mod mesher;
@@ -202,6 +203,20 @@ struct TileAffectors(HashMap<UVec2, HashSet<Entity>>);
 #[derive(Default, Resource)]
 struct DirtyTiles(HashSet<UVec2>);
 
+/// Settings for generating height-corrected detail meshes.
+#[derive(Clone)]
+pub struct DetailMeshSettings {
+    /// The maximum acceptible error in height between the nav-mesh polygons & the true world (in cells).
+    pub max_height_error: NonZeroU16,
+    /// Determines how often (in cells) to sample the height when generating the height-corrected nav-mesh.
+    ///
+    /// This greatly affects generation performance. Higher values reduce samples by half to the previous one.
+    /// Ex. 1.0, 0.5, 0.25, 0.125.
+    ///
+    /// **Suggested value:** >=2. Start high & reduce as needed.  
+    pub sample_step: NonZeroU8,
+}
+
 /// Settings for nav-mesh generation.
 #[derive(Resource, Clone)]
 pub struct NavMeshSettings {
@@ -223,7 +238,7 @@ pub struct NavMeshSettings {
     /// **Suggested value**: ???
     ///
     /// Higher means more to update each time something within the tile changes, smaller means you will have more overhead from connecting the edges to other tiles & generating the tile itself.
-    pub tile_width: u16,
+    pub tile_width: NonZeroU16,
 
     /// Extents of the world as measured from the world origin (0.0, 0.0) on the XZ-plane.
     ///
@@ -251,7 +266,7 @@ pub struct NavMeshSettings {
 
     /// Minimum size of a region in cells, anything smaller than this will be removed. This is used to filter out smaller disconnected island that may appear on surfaces like tables.
     pub min_region_area: u32,
-    /// Maximum size of a region in cells we can merge other regions into.a
+    /// Maximum size of a region in cells we can merge other regions into.
     pub max_region_area_to_merge_into: u32,
 
     /// Maximum length of an edge before it's split.
@@ -267,6 +282,12 @@ pub struct NavMeshSettings {
     ///
     /// Adjust this to control memory & CPU usage. More tiles generating at once will have a higher memory footprint.
     pub max_tile_generation_tasks: Option<NonZeroU16>,
+
+    /// When not None, height correct nav-mesh polygons where the surface height differs too much from the surface in cells. This is very useful for bumpy terrain.
+    ///
+    /// Helps on bumpy shapes like terrain but comes at a performance cost.
+    /// **Experimental**: This may have issues at the edges of regions.
+    pub experimental_detail_mesh_generation: Option<DetailMeshSettings>,
 }
 impl NavMeshSettings {
     /// Helper function for creating nav-mesh settings with reasonable defaults from the size of your navigation agent and bounds of your world.
@@ -287,7 +308,7 @@ impl NavMeshSettings {
         Self {
             cell_width,
             cell_height,
-            tile_width: 120,
+            tile_width: NonZeroU16::new(120).unwrap(),
             world_half_extents: world_half_extents.abs(),
             world_bottom_bound,
             max_traversable_slope_radians: 50.0_f32.to_radians(),
@@ -299,6 +320,7 @@ impl NavMeshSettings {
             max_edge_length: 80,
             max_contour_simplification_error: 1.1,
             max_tile_generation_tasks: NonZeroU16::new(8),
+            experimental_detail_mesh_generation: None,
         }
     }
     /// Setter for [`NavMeshSettings::walkable_radius`]
@@ -308,7 +330,7 @@ impl NavMeshSettings {
         self
     }
     /// Setter for [`NavMeshSettings::tile_width`]
-    pub fn with_tile_width(mut self, tile_width: u16) -> Self {
+    pub fn with_tile_width(mut self, tile_width: NonZeroU16) -> Self {
         self.tile_width = tile_width;
 
         self
@@ -361,10 +383,22 @@ impl NavMeshSettings {
         self
     }
 
+    /// Setter for [`NavMeshSettings::experimental_detail_mesh_generation`]
+    ///
+    /// **Experimental**: This may have issues at the edges of regions.
+    pub fn with_experimental_detail_mesh_generation(
+        mut self,
+        detail_mesh_generation_settings: DetailMeshSettings,
+    ) -> Self {
+        self.experimental_detail_mesh_generation = Some(detail_mesh_generation_settings);
+
+        self
+    }
+
     /// Returns the length of a tile's side in world units.
     #[inline]
     pub fn get_tile_size(&self) -> f32 {
-        self.cell_width * f32::from(self.tile_width)
+        self.cell_width * f32::from(self.tile_width.get())
     }
     #[inline]
     pub fn get_border_size(&self) -> f32 {
@@ -393,7 +427,7 @@ impl NavMeshSettings {
 
     #[inline]
     pub fn get_tile_side_with_border(&self) -> usize {
-        usize::from(self.tile_width) + usize::from(self.walkable_radius) * 2
+        usize::from(self.tile_width.get()) + usize::from(self.walkable_radius) * 2
     }
     #[inline]
     pub fn get_border_side(&self) -> usize {
@@ -831,13 +865,13 @@ pub fn build_tile_sync(
     let contour_set = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build contours").entered();
-        build_contours(open_tile, nav_mesh_settings)
+        build_contours(&open_tile, nav_mesh_settings)
     };
 
     let poly_mesh = {
         #[cfg(feature = "trace")]
         let _span = info_span!("Build poly mesh").entered();
-        build_poly_mesh(contour_set, nav_mesh_settings)
+        build_poly_mesh(contour_set, nav_mesh_settings, &open_tile)
     };
 
     {
@@ -847,11 +881,6 @@ pub fn build_tile_sync(
         create_nav_mesh_tile_from_poly_mesh(poly_mesh, tile_coord, nav_mesh_settings)
     }
 }
-
-/*
-*   Lots of math stuff.
-*   Don't know where else to put it.
-*/
 
 fn get_neighbour_index(tile_size: usize, index: usize, dir: usize) -> usize {
     match dir {

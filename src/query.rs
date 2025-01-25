@@ -192,9 +192,7 @@ pub fn find_polygon_path(
 
                 // TODO: Ideally you want to be able to override this but for now we just go with the distance.
                 let node_cost_multiplier = area_cost_multipliers.map_or(1.0, |multipliers| {
-                    let area = nav_mesh.tiles.get(&best_tile).unwrap().polygons
-                        [best_polygon as usize]
-                        .area;
+                    let area = nav_mesh.tiles[&best_tile].areas[best_polygon as usize];
 
                     *multipliers.get(area.0 as usize).unwrap_or(&1.0)
                 });

@@ -78,7 +78,7 @@ pub(super) fn build_heightfield_tile(
     let tile_max_bound = IVec3::new((tile_side - 1) as i32, 0, (tile_side - 1) as i32);
 
     let tile_origin = nav_mesh_settings.get_tile_origin_with_border(tile_coord);
-    let tile_origin = Vec3::new(
+    let tile_origin = Vec3A::new(
         tile_origin.x,
         nav_mesh_settings.world_bottom_bound,
         tile_origin.y,
@@ -88,17 +88,17 @@ pub(super) fn build_heightfield_tile(
 
     for collection in triangle_collections.iter() {
         // TODO: This might be wrong for avian or custom parry3d colliders, but I can't figure out a nice way to know whether or not we're actually dealing with a rapier3d collider.
-        let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
+        let transform = collection.transform.with_scale(Vec3::ONE).compute_affine(); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         match &collection.triangles {
             Triangles::Triangle(vertices) => {
                 let translated_vertices =
-                    vertices.map(|vertex| transform.transform_point(vertex) - tile_origin);
+                    vertices.map(|vertex| transform.transform_point3a(vertex.into()) - tile_origin);
 
                 process_triangle(
-                    Vec3A::from(translated_vertices[0]),
-                    Vec3A::from(translated_vertices[1]),
-                    Vec3A::from(translated_vertices[2]),
+                    translated_vertices[0],
+                    translated_vertices[1],
+                    translated_vertices[2],
                     nav_mesh_settings,
                     tile_max_bound,
                     tile_side,
@@ -111,13 +111,13 @@ pub(super) fn build_heightfield_tile(
                 translated_vertices.extend(
                     vertices
                         .iter()
-                        .map(|vertex| transform.transform_point(*vertex) - tile_origin),
+                        .map(|vertex| transform.transform_point3a((*vertex).into()) - tile_origin),
                 ); // Transform vertices.
 
                 for triangle in triangles.iter() {
-                    let a = Vec3A::from(translated_vertices[triangle[0] as usize]);
-                    let b = Vec3A::from(translated_vertices[triangle[1] as usize]);
-                    let c = Vec3A::from(translated_vertices[triangle[2] as usize]);
+                    let a = translated_vertices[triangle[0] as usize];
+                    let b = translated_vertices[triangle[1] as usize];
+                    let c = translated_vertices[triangle[2] as usize];
 
                     process_triangle(
                         a,
@@ -136,21 +136,18 @@ pub(super) fn build_heightfield_tile(
 
     for collection in heightfields.iter() {
         // TODO: This might be wrong for avian or custom parry3d colliders, but I can't figure out a nice way to know whether or not we're actually dealing with a rapier3d collider.
-        let transform = collection.transform.with_scale(Vec3::ONE); // The collider returned from rapier already has scale applied to it, so we reset it here.
+        let transform = collection.transform.with_scale(Vec3::ONE).compute_affine(); // The collider returned from rapier already has scale applied to it, so we reset it here.
 
         for triangle in collection.heightfield.triangles() {
-            let a = Vec3A::from(
-                transform.transform_point(Vec3::new(triangle.a.x, triangle.a.y, triangle.a.z))
-                    - tile_origin,
-            );
-            let b = Vec3A::from(
-                transform.transform_point(Vec3::new(triangle.b.x, triangle.b.y, triangle.b.z))
-                    - tile_origin,
-            );
-            let c = Vec3A::from(
-                transform.transform_point(Vec3::new(triangle.c.x, triangle.c.y, triangle.c.z))
-                    - tile_origin,
-            );
+            let a =
+                transform.transform_point3a(Vec3A::new(triangle.a.x, triangle.a.y, triangle.a.z))
+                    - tile_origin;
+            let b =
+                transform.transform_point3a(Vec3A::new(triangle.b.x, triangle.b.y, triangle.b.z))
+                    - tile_origin;
+            let c =
+                transform.transform_point3a(Vec3A::new(triangle.c.x, triangle.c.y, triangle.c.z))
+                    - tile_origin;
 
             process_triangle(
                 a,
@@ -192,7 +189,7 @@ fn process_triangle(
     }
 
     let clamped_bound_min = min_bound.max(IVec3::ZERO);
-    let clamped_bound_max = max_bound.min(tile_max_bound);
+    let clamped_bound_max = max_bound.min(tile_max_bound) + IVec3::ONE;
     let traversable = is_triangle_traversable(a, b, c, nav_mesh_settings);
     let vertices = [a, b, c];
 
@@ -203,7 +200,7 @@ fn process_triangle(
     // V
     // X is column. Z is row.
     // Which means we iterate Z first.
-    for z in clamped_bound_min.z..=clamped_bound_max.z {
+    for z in clamped_bound_min.z..clamped_bound_max.z {
         let row_clip_min = z as f32 * nav_mesh_settings.cell_width;
         let row_clip_max = row_clip_min + nav_mesh_settings.cell_width;
 
@@ -229,10 +226,11 @@ fn process_triangle(
             column_max_vert_x = column_max_vert_x.max(vertex.x);
         }
         let column_min = ((column_min_vert_x / nav_mesh_settings.cell_width) as i32).max(0);
-        let column_max =
-            ((column_max_vert_x / nav_mesh_settings.cell_width) as i32).min((tile_side - 1) as i32);
+        let column_max = ((column_max_vert_x / nav_mesh_settings.cell_width) as i32)
+            .min((tile_side - 1) as i32)
+            + 1;
 
-        for x in column_min..=column_max {
+        for x in column_min..column_max {
             let column_clip_min = x as f32 * nav_mesh_settings.cell_width;
             let column_clip_max = column_clip_min + nav_mesh_settings.cell_width;
 
@@ -359,38 +357,42 @@ fn divide_polygon(
     for i in 0..vertices.len() {
         let previous = (vertices.len() - 1 + i) % vertices.len(); // j is i-1 wrapped.
 
-        let in_a = delta_from_line[previous] >= 0.0;
-        let in_b = delta_from_line[i] >= 0.0;
+        let vertex_prev = vertices[previous];
+        let vertex_i = vertices[i];
+
+        let delta_prev = delta_from_line[previous];
+        let delta_i = delta_from_line[i];
+
+        let in_a = delta_prev >= 0.0;
+        let in_b = delta_i >= 0.0;
 
         // Check if both vertices are on the same side of the line.
         if in_a != in_b {
             // We slide the vertex along to the edge.
-            let slide =
-                delta_from_line[previous] / (delta_from_line[previous] - delta_from_line[i]);
+            let slide = delta_prev / (delta_prev - delta_i);
 
-            polygon_left[verts_left] =
-                vertices[previous] + (vertices[i] - vertices[previous]) * slide;
+            polygon_left[verts_left] = vertex_prev + (vertex_i - vertex_prev) * slide;
             polygon_right[verts_right] = polygon_left[verts_left];
             verts_left += 1;
             verts_right += 1;
 
-            if delta_from_line[i] > 0.0 {
-                polygon_left[verts_left] = vertices[i];
+            if delta_i > 0.0 {
+                polygon_left[verts_left] = vertex_i;
                 verts_left += 1;
-            } else if delta_from_line[i] < 0.0 {
-                polygon_right[verts_right] = vertices[i];
+            } else if delta_i < 0.0 {
+                polygon_right[verts_right] = vertex_i;
                 verts_right += 1;
             }
         } else {
-            if delta_from_line[i] >= 0.0 {
-                polygon_left[verts_left] = vertices[i];
+            if delta_i >= 0.0 {
+                polygon_left[verts_left] = vertex_i;
                 verts_left += 1;
 
-                if delta_from_line[i] != 0.0 {
+                if delta_i != 0.0 {
                     continue;
                 }
             }
-            polygon_right[verts_right] = vertices[i];
+            polygon_right[verts_right] = vertex_i;
             verts_right += 1;
         }
     }

@@ -41,7 +41,7 @@ struct ContourRegion {
     holes: Vec<ContourHole>,
 }
 
-pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) -> ContourSet {
+pub fn build_contours(open_tile: &OpenTile, nav_mesh_settings: &NavMeshSettings) -> ContourSet {
     let max_contours = open_tile.max_regions.max(8);
     let mut contour_set = ContourSet {
         contours: Vec::with_capacity(max_contours.into()),
@@ -95,7 +95,7 @@ pub fn build_contours(open_tile: OpenTile, nav_mesh_settings: &NavMeshSettings) 
             walk_contour(
                 cell_index,
                 span_index,
-                &open_tile,
+                open_tile,
                 nav_mesh_settings,
                 &mut boundry_flags,
                 &mut vertices,
@@ -705,7 +705,7 @@ fn simplify_contour(
     }
 }
 
-fn point_distance_from_segment(point: IVec2, seg_a: IVec2, seg_b: IVec2) -> f32 {
+pub fn point_distance_from_segment(point: IVec2, seg_a: IVec2, seg_b: IVec2) -> f32 {
     let segment_delta = (seg_b - seg_a).as_vec2();
     let point_delta = (point - seg_a).as_vec2();
 

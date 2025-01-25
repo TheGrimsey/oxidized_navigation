@@ -40,7 +40,6 @@ pub enum Link {
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
     pub links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
-    pub area: Area,
 }
 
 /*
@@ -53,12 +52,13 @@ pub struct NavMeshTile {
     /// Vertices in world space.
     pub vertices: Box<[Vec3]>,
     pub polygons: Box<[Polygon]>,
+    pub areas: Box<[Area]>,
     pub edges: Box<[[EdgeConnection; VERTICES_IN_TRIANGLE]]>,
 }
 impl NavMeshTile {
     /// Returns the closest point on ``polygon`` to ``position``.
     pub fn get_closest_point_in_polygon(&self, polygon: &Polygon, position: Vec3) -> Vec3 {
-        let vertices = polygon.indices.map(|index| self.vertices[index as usize]);
+        let vertices: [Vec3; 3] = polygon.indices.map(|index| self.vertices[index as usize]);
 
         if let Some(height) = get_height_in_triangle(&vertices, position) {
             return Vec3::new(position.x, height, position.z);
@@ -614,8 +614,7 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
         .polygons
         .into_iter()
         .zip(poly_mesh.edges.iter())
-        .zip(poly_mesh.areas)
-        .map(|((indices, edges), area)| {
+        .map(|(indices, edges)| {
             // Pre build internal links.
             let links = edges
                 .iter()
@@ -632,11 +631,7 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
                 })
                 .collect();
 
-            Polygon {
-                links,
-                indices,
-                area,
-            }
+            Polygon { links, indices }
         })
         .collect();
 
@@ -658,5 +653,6 @@ pub(super) fn create_nav_mesh_tile_from_poly_mesh(
         vertices,
         edges: poly_mesh.edges.into_boxed_slice(),
         polygons,
+        areas: poly_mesh.areas.into_boxed_slice(),
     }
 }

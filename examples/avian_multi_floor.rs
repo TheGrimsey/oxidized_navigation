@@ -10,7 +10,6 @@ use avian3d::PhysicsPlugins;
 use bevy::tasks::futures_lite::future;
 use bevy::{
     color::palettes,
-    math::primitives,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };

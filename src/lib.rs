@@ -738,7 +738,7 @@ enum GeometryResult<'a> {
     Unsupported,
 }
 
-impl<'a> From<GeometryToConvert> for GeometryResult<'a> {
+impl From<GeometryToConvert> for GeometryResult<'_> {
     fn from(value: GeometryToConvert) -> Self {
         GeometryResult::GeometryToConvert(value)
     }

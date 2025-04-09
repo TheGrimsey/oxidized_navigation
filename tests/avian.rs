@@ -57,6 +57,51 @@ fn setup_world_system(mut commands: Commands) {
     ));
 }
 
+fn setup_compound_world_system(mut commands: Commands) {
+    commands.spawn((
+        Transform::IDENTITY,
+        Collider::compound(vec![
+            // Plane
+            (
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Collider::cuboid(25.0, 0.1, 25.0),
+            ),
+            // Cube
+            (
+                Vec3::new(-5.0, 0.8, -5.0),
+                Quat::IDENTITY,
+                Collider::cuboid(1.25, 1.25, 1.25),
+            ),
+            // Tall Cube
+            (
+                Vec3::new(-0.179, 18.419, -27.744),
+                Quat::IDENTITY,
+                Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(15.0, 15.0, 15.0)),
+            ),
+            // Rotated Cube
+            (
+                Vec3::new(0.0, 0.0, 0.0),
+                Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
+                Collider::cuboid(1.25, 1.25, 1.25),
+            ),
+            // Scaled and rotated cube
+            (
+                Vec3::new(0.0, 0.0, 0.0),
+                Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
+                Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
+            ),
+            // Thin wall
+            (
+                Vec3::new(-3.0, 0.8, 5.0),
+                Quat::IDENTITY,
+                Collider::cuboid(0.05, 0.05, 0.05),
+            ),
+        ]),
+        NavMeshAffector,
+    ));
+}
+
 fn setup_app(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
@@ -94,6 +139,17 @@ fn wait_for_generation_to_finish(app: &mut App) {
         }
 
         std::thread::sleep(SLEEP_DURATION);
+    }
+}
+
+trait ScaledCollider {
+    fn scaled_by(self, scale: Vec3) -> Self;
+}
+
+impl ScaledCollider for Collider {
+    fn scaled_by(mut self, scale: Vec3) -> Self {
+        self.set_scale(scale, 0);
+        self
     }
 }
 
@@ -199,8 +255,44 @@ fn nav_mesh_is_deterministic() {
 }
 
 #[test]
-fn compund_colliders_create_same_navmesh_as_individual_colliders() {
+fn compound_colliders_create_same_navmesh_as_individual_colliders() {
     let mut app = App::new();
 
     setup_app(&mut app);
+
+    app.add_systems(Startup, setup_world_system);
+
+    wait_for_generation_to_finish(&mut app);
+
+    let nav_mesh = app.world().resource::<NavMesh>().get();
+    let nav_mesh_one = nav_mesh
+        .read()
+        .expect("Failed to get nav-mesh lock.")
+        .clone();
+
+    app.world_mut()
+        .run_system_once(
+            |q_transform: Query<Entity, With<Transform>>, mut commands: Commands| {
+                for entity in q_transform.iter() {
+                    commands.entity(entity).despawn_recursive();
+                }
+            },
+        )
+        .unwrap();
+
+    wait_for_generation_to_finish(&mut app);
+
+    app.world_mut()
+        .run_system_once(setup_compound_world_system)
+        .unwrap();
+
+    wait_for_generation_to_finish(&mut app);
+
+    let nav_mesh_two = app.world().resource::<NavMesh>().get();
+    let nav_mesh_two = nav_mesh_two
+        .read()
+        .expect("Failed to get nav-mesh lock.")
+        .clone();
+
+    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
 }

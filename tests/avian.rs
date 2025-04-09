@@ -13,7 +13,7 @@ const SLEEP_DURATION: Duration = Duration::from_millis(2);
 
 #[test]
 fn test_simple_navigation() {
-    let path = setup_app().setup_world().run_pathfinding();
+    let path = App::setup_test_world().setup_world().run_pathfinding();
 
     if let Err(error) = path {
         panic!("Pathfinding failed: {error:?}");
@@ -22,14 +22,17 @@ fn test_simple_navigation() {
 
 #[test]
 fn nav_mesh_is_cleared() {
-    let path = setup_app().setup_world().clear_world().run_pathfinding();
+    let path = App::setup_test_world()
+        .setup_world()
+        .clear_world()
+        .run_pathfinding();
 
     assert!(path.is_err());
 }
 
 #[test]
 fn nav_mesh_is_deterministic() {
-    let mut app = setup_app();
+    let mut app = App::setup_test_world();
 
     let nav_mesh_one = app.setup_world().get_nav_mesh();
     app.clear_world();
@@ -40,7 +43,7 @@ fn nav_mesh_is_deterministic() {
 
 #[test]
 fn compound_colliders_create_same_navmesh_as_individual_colliders() {
-    let mut app = setup_app();
+    let mut app = App::setup_test_world();
 
     let nav_mesh_one = app.setup_world().get_nav_mesh();
     app.clear_world();
@@ -49,99 +52,8 @@ fn compound_colliders_create_same_navmesh_as_individual_colliders() {
     assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
 }
 
-fn setup_world_system(mut commands: Commands) {
-    // Plane
-    commands.spawn((
-        Transform::IDENTITY,
-        Collider::cuboid(25.0, 0.1, 25.0),
-        NavMeshAffector,
-    ));
-
-    // Cube
-    commands.spawn((
-        Transform::from_xyz(-5.0, 0.8, -5.0),
-        Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector,
-    ));
-
-    // Tall Cube
-    commands.spawn((
-        Transform::from_xyz(-0.179, 18.419, -27.744).with_scale(Vec3::new(15.0, 15.0, 15.0)),
-        Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector,
-    ));
-
-    // Rotated Cube
-    commands.spawn((
-        Transform::from_xyz(0.0, 0.0, 0.0)
-            .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0)),
-        Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector,
-    ));
-
-    // Scaled and rotated cube
-    commands.spawn((
-        Transform::from_xyz(0.0, 0.0, 0.0)
-            .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
-            .with_scale(Vec3::new(2.0, 2.0, 2.0)),
-        Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector,
-    ));
-
-    // Thin wall
-    commands.spawn((
-        Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
-        Collider::cuboid(0.05, 0.05, 0.05),
-        NavMeshAffector,
-    ));
-}
-
-fn setup_compound_world_system(mut commands: Commands) {
-    commands.spawn((
-        Transform::IDENTITY,
-        Collider::compound(vec![
-            // Plane
-            (
-                Vec3::ZERO,
-                Quat::IDENTITY,
-                Collider::cuboid(25.0, 0.1, 25.0),
-            ),
-            // Cube
-            (
-                Vec3::new(-5.0, 0.8, -5.0),
-                Quat::IDENTITY,
-                Collider::cuboid(1.25, 1.25, 1.25),
-            ),
-            // Tall Cube
-            (
-                Vec3::new(-0.179, 18.419, -27.744),
-                Quat::IDENTITY,
-                Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(15.0, 15.0, 15.0)),
-            ),
-            // Rotated Cube
-            (
-                Vec3::new(0.0, 0.0, 0.0),
-                Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
-                Collider::cuboid(1.25, 1.25, 1.25),
-            ),
-            // Scaled and rotated cube
-            (
-                Vec3::new(0.0, 0.0, 0.0),
-                Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
-                Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
-            ),
-            // Thin wall
-            (
-                Vec3::new(-3.0, 0.8, 5.0),
-                Quat::IDENTITY,
-                Collider::cuboid(0.05, 0.05, 0.05),
-            ),
-        ]),
-        NavMeshAffector,
-    ));
-}
-
 trait TestApp {
+    fn setup_test_world() -> App;
     fn wait_for_generation_to_finish(&mut self) -> &mut Self;
     fn setup_world(&mut self) -> &mut Self;
     fn setup_compound_world(&mut self) -> &mut Self;
@@ -151,6 +63,36 @@ trait TestApp {
 }
 
 impl TestApp for App {
+    fn setup_test_world() -> App {
+        let mut app = App::new();
+
+        app.add_plugins((
+            MinimalPlugins,
+            TransformPlugin,
+            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
+                cell_width: 0.25,
+                cell_height: 0.1,
+                tile_width: NonZeroU16::new(100).unwrap(),
+                world_half_extents: 250.0,
+                world_bottom_bound: -100.0,
+                max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
+                walkable_height: 20,
+                walkable_radius: 1,
+                step_height: 3,
+                min_region_area: 100,
+                max_region_area_to_merge_into: 500,
+                max_contour_simplification_error: 1.1,
+                max_edge_length: 80,
+                max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
+                experimental_detail_mesh_generation: None,
+            }),
+            PhysicsPlugins::default(),
+            HierarchyPlugin,
+        ));
+
+        app
+    }
+
     fn wait_for_generation_to_finish(&mut self) -> &mut Self {
         loop {
             self.update();
@@ -169,7 +111,53 @@ impl TestApp for App {
 
     fn setup_world(&mut self) -> &mut Self {
         self.world_mut()
-            .run_system_once(setup_world_system)
+            .run_system_once(|mut commands: Commands| {
+                // Plane
+                commands.spawn((
+                    Transform::IDENTITY,
+                    Collider::cuboid(25.0, 0.1, 25.0),
+                    NavMeshAffector,
+                ));
+
+                // Cube
+                commands.spawn((
+                    Transform::from_xyz(-5.0, 0.8, -5.0),
+                    Collider::cuboid(1.25, 1.25, 1.25),
+                    NavMeshAffector,
+                ));
+
+                // Tall Cube
+                commands.spawn((
+                    Transform::from_xyz(-0.179, 18.419, -27.744)
+                        .with_scale(Vec3::new(15.0, 15.0, 15.0)),
+                    Collider::cuboid(1.25, 1.25, 1.25),
+                    NavMeshAffector,
+                ));
+
+                // Rotated Cube
+                commands.spawn((
+                    Transform::from_xyz(0.0, 0.0, 0.0)
+                        .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0)),
+                    Collider::cuboid(1.25, 1.25, 1.25),
+                    NavMeshAffector,
+                ));
+
+                // Scaled and rotated cube
+                commands.spawn((
+                    Transform::from_xyz(0.0, 0.0, 0.0)
+                        .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
+                        .with_scale(Vec3::new(2.0, 2.0, 2.0)),
+                    Collider::cuboid(1.25, 1.25, 1.25),
+                    NavMeshAffector,
+                ));
+
+                // Thin wall
+                commands.spawn((
+                    Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
+                    Collider::cuboid(0.05, 0.05, 0.05),
+                    NavMeshAffector,
+                ));
+            })
             .unwrap();
 
         self.wait_for_generation_to_finish();
@@ -179,7 +167,51 @@ impl TestApp for App {
 
     fn setup_compound_world(&mut self) -> &mut Self {
         self.world_mut()
-            .run_system_once(setup_compound_world_system)
+            .run_system_once(|mut commands: Commands| {
+                commands.spawn((
+                    Transform::IDENTITY,
+                    Collider::compound(vec![
+                        // Plane
+                        (
+                            Vec3::ZERO,
+                            Quat::IDENTITY,
+                            Collider::cuboid(25.0, 0.1, 25.0),
+                        ),
+                        // Cube
+                        (
+                            Vec3::new(-5.0, 0.8, -5.0),
+                            Quat::IDENTITY,
+                            Collider::cuboid(1.25, 1.25, 1.25),
+                        ),
+                        // Tall Cube
+                        (
+                            Vec3::new(-0.179, 18.419, -27.744),
+                            Quat::IDENTITY,
+                            Collider::cuboid(1.25, 1.25, 1.25)
+                                .scaled_by(Vec3::new(15.0, 15.0, 15.0)),
+                        ),
+                        // Rotated Cube
+                        (
+                            Vec3::new(0.0, 0.0, 0.0),
+                            Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
+                            Collider::cuboid(1.25, 1.25, 1.25),
+                        ),
+                        // Scaled and rotated cube
+                        (
+                            Vec3::new(0.0, 0.0, 0.0),
+                            Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
+                            Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
+                        ),
+                        // Thin wall
+                        (
+                            Vec3::new(-3.0, 0.8, 5.0),
+                            Quat::IDENTITY,
+                            Collider::cuboid(0.05, 0.05, 0.05),
+                        ),
+                    ]),
+                    NavMeshAffector,
+                ));
+            })
             .unwrap();
 
         self.wait_for_generation_to_finish();
@@ -222,36 +254,6 @@ impl TestApp for App {
             .expect("Failed to get nav-mesh lock.")
             .clone()
     }
-}
-
-fn setup_app() -> App {
-    let mut app = App::new();
-
-    app.add_plugins((
-        MinimalPlugins,
-        TransformPlugin,
-        OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
-            cell_width: 0.25,
-            cell_height: 0.1,
-            tile_width: NonZeroU16::new(100).unwrap(),
-            world_half_extents: 250.0,
-            world_bottom_bound: -100.0,
-            max_traversable_slope_radians: (40.0_f32 - 0.1).to_radians(),
-            walkable_height: 20,
-            walkable_radius: 1,
-            step_height: 3,
-            min_region_area: 100,
-            max_region_area_to_merge_into: 500,
-            max_contour_simplification_error: 1.1,
-            max_edge_length: 80,
-            max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
-            experimental_detail_mesh_generation: None,
-        }),
-        PhysicsPlugins::default(),
-        HierarchyPlugin,
-    ));
-
-    app
 }
 
 trait ScaledCollider {

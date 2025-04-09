@@ -32,6 +32,23 @@ fn setup_world_system(mut commands: Commands) {
         NavMeshAffector,
     ));
 
+    // Rotated Cube
+    commands.spawn((
+        Transform::from_xyz(0.0, 0.0, 0.0)
+            .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0)),
+        Collider::cuboid(1.25, 1.25, 1.25),
+        NavMeshAffector,
+    ));
+
+    // Scaled and rotated cube
+    commands.spawn((
+        Transform::from_xyz(0.0, 0.0, 0.0)
+            .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
+            .with_scale(Vec3::new(2.0, 2.0, 2.0)),
+        Collider::cuboid(1.25, 1.25, 1.25),
+        NavMeshAffector,
+    ));
+
     // Thin wall
     commands.spawn((
         Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),

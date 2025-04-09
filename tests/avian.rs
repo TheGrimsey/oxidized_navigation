@@ -42,6 +42,17 @@ fn nav_mesh_is_deterministic() {
 }
 
 #[test]
+fn compound_colliders_create_same_navmesh_as_individual_colliders_with_only_one_plane() {
+    let mut app = App::setup_test_world();
+
+    let nav_mesh_one = app.setup_plane().get_nav_mesh();
+    app.clear_world();
+    let nav_mesh_two = app.setup_compound_plane().get_nav_mesh();
+
+    assert_nav_mesh_equal(&nav_mesh_one, &nav_mesh_two);
+}
+
+#[test]
 fn compound_colliders_create_same_navmesh_as_individual_colliders() {
     let mut app = App::setup_test_world();
 
@@ -94,6 +105,8 @@ trait TestApp {
     fn wait_for_generation_to_finish(&mut self) -> &mut Self;
     fn setup_world(&mut self) -> &mut Self;
     fn setup_compound_world(&mut self) -> &mut Self;
+    fn setup_plane(&mut self) -> &mut Self;
+    fn setup_compound_plane(&mut self) -> &mut Self;
     fn clear_world(&mut self) -> &mut Self;
     fn run_pathfinding(&self) -> Result<Vec<Vec3>, FindPathError>;
     fn get_nav_mesh(&self) -> NavMeshTiles;
@@ -142,6 +155,42 @@ impl TestApp for App {
 
             std::thread::sleep(SLEEP_DURATION);
         }
+
+        self
+    }
+
+    fn setup_plane(&mut self) -> &mut Self {
+        self.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                commands.spawn((
+                    Transform::IDENTITY,
+                    Collider::cuboid(25.0, 0.1, 25.0),
+                    NavMeshAffector,
+                ));
+            })
+            .unwrap();
+
+        self.wait_for_generation_to_finish();
+
+        self
+    }
+
+    fn setup_compound_plane(&mut self) -> &mut Self {
+        self.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                commands.spawn((
+                    Transform::IDENTITY,
+                    Collider::compound(vec![(
+                        Vec3::ZERO,
+                        Quat::IDENTITY,
+                        Collider::cuboid(25.0, 0.1, 25.0),
+                    )]),
+                    NavMeshAffector,
+                ));
+            })
+            .unwrap();
+
+        self.wait_for_generation_to_finish();
 
         self
     }

@@ -1,7 +1,7 @@
 use std::{num::NonZeroU16, time::Duration};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
-use bevy::prelude::*;
+use bevy::{ecs::system::RunSystemOnce, prelude::*};
 use oxidized_navigation::{
     query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
     OxidizedNavigationPlugin,
@@ -103,4 +103,87 @@ fn test_simple_navigation() {
     if let Err(error) = path {
         panic!("Pathfinding failed: {error:?}");
     }
+}
+
+#[test]
+fn nav_mesh_is_cleared() {
+    let mut app = App::new();
+
+    setup_app(&mut app);
+
+    app.add_systems(Startup, setup_world_system);
+
+    wait_for_generation_to_finish(&mut app);
+
+    app.world_mut()
+        .run_system_once(
+            |q_transform: Query<Entity, With<Transform>>, mut commands: Commands| {
+                for entity in q_transform.iter() {
+                    commands.entity(entity).despawn_recursive();
+                }
+            },
+        )
+        .unwrap();
+
+    wait_for_generation_to_finish(&mut app);
+
+    let nav_mesh_settings = app.world().resource::<NavMeshSettings>();
+    let nav_mesh = app.world().resource::<NavMesh>().get();
+    let nav_mesh = nav_mesh.read().expect("Failed to get nav-mesh lock.");
+
+    let start_pos = Vec3::new(5.0, 1.0, 5.0);
+    let end_pos = Vec3::new(-15.0, 1.0, -15.0);
+
+    // Run pathfinding to get a polygon path.
+    let path = find_path(&nav_mesh, nav_mesh_settings, start_pos, end_pos, None, None);
+
+    assert!(path.is_err());
+}
+
+#[test]
+fn nav_mesh_is_deterministic() {
+    let mut app = App::new();
+
+    setup_app(&mut app);
+
+    app.add_systems(Startup, setup_world_system);
+
+    wait_for_generation_to_finish(&mut app);
+
+    let nav_mesh = app.world().resource::<NavMesh>().get();
+    let nav_mesh_one = nav_mesh
+        .read()
+        .expect("Failed to get nav-mesh lock.")
+        .clone();
+
+    app.world_mut()
+        .run_system_once(
+            |q_transform: Query<Entity, With<Transform>>, mut commands: Commands| {
+                for entity in q_transform.iter() {
+                    commands.entity(entity).despawn_recursive();
+                }
+            },
+        )
+        .unwrap();
+
+    wait_for_generation_to_finish(&mut app);
+
+    app.world_mut().run_system_once(setup_world_system).unwrap();
+
+    wait_for_generation_to_finish(&mut app);
+
+    let nav_mesh_two = app.world().resource::<NavMesh>().get();
+    let nav_mesh_two = nav_mesh_two
+        .read()
+        .expect("Failed to get nav-mesh lock.")
+        .clone();
+
+    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
+}
+
+#[test]
+fn compund_colliders_create_same_navmesh_as_individual_colliders() {
+    let mut app = App::new();
+
+    setup_app(&mut app);
 }

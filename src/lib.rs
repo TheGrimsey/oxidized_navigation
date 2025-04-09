@@ -805,7 +805,7 @@ fn find_out_collider_type(collider: TypedShape) -> GeometryResult {
         TypedShape::Polyline(_) => GeometryResult::Unsupported,  /* This is a line. */
         TypedShape::Segment(_) => GeometryResult::Unsupported,   /* This is a line segment. */
         TypedShape::Custom(_) => {
-            error!(
+            warn!(
                 "Custom shapes are not yet supported for nav-mesh generation, skipping for now.."
             );
             GeometryResult::Unsupported

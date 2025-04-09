@@ -53,12 +53,7 @@ impl Triangles {
 
                 let next_index = verts.len() as u32;
                 tris.push([next_index, next_index + 1, next_index + 2]);
-
-                verts.extend(
-                    other_verts
-                        .iter()
-                        .map(|point| Vec3::new(point.x, point.y, point.z)),
-                );
+                verts.extend(other_verts);
 
                 Self::TriMesh(verts.into_boxed_slice(), tris.into_boxed_slice())
             }

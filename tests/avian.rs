@@ -11,6 +11,44 @@ use oxidized_navigation::{
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
 
+#[test]
+fn test_simple_navigation() {
+    let path = setup_app().setup_world().run_pathfinding();
+
+    if let Err(error) = path {
+        panic!("Pathfinding failed: {error:?}");
+    }
+}
+
+#[test]
+fn nav_mesh_is_cleared() {
+    let path = setup_app().setup_world().clear_world().run_pathfinding();
+
+    assert!(path.is_err());
+}
+
+#[test]
+fn nav_mesh_is_deterministic() {
+    let mut app = setup_app();
+
+    let nav_mesh_one = app.setup_world().get_nav_mesh();
+    app.clear_world();
+    let nav_mesh_two = app.setup_world().get_nav_mesh();
+
+    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
+}
+
+#[test]
+fn compound_colliders_create_same_navmesh_as_individual_colliders() {
+    let mut app = setup_app();
+
+    let nav_mesh_one = app.setup_world().get_nav_mesh();
+    app.clear_world();
+    let nav_mesh_two = app.setup_compound_world().get_nav_mesh();
+
+    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
+}
+
 fn setup_world_system(mut commands: Commands) {
     // Plane
     commands.spawn((
@@ -225,42 +263,4 @@ impl ScaledCollider for Collider {
         self.set_scale(scale, 0);
         self
     }
-}
-
-#[test]
-fn test_simple_navigation() {
-    let path = setup_app().setup_world().run_pathfinding();
-
-    if let Err(error) = path {
-        panic!("Pathfinding failed: {error:?}");
-    }
-}
-
-#[test]
-fn nav_mesh_is_cleared() {
-    let path = setup_app().setup_world().clear_world().run_pathfinding();
-
-    assert!(path.is_err());
-}
-
-#[test]
-fn nav_mesh_is_deterministic() {
-    let mut app = setup_app();
-
-    let nav_mesh_one = app.setup_world().get_nav_mesh();
-    app.clear_world();
-    let nav_mesh_two = app.setup_world().get_nav_mesh();
-
-    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
-}
-
-#[test]
-fn compound_colliders_create_same_navmesh_as_individual_colliders() {
-    let mut app = setup_app();
-
-    let nav_mesh_one = app.setup_world().get_nav_mesh();
-    app.clear_world();
-    let nav_mesh_two = app.setup_compound_world().get_nav_mesh();
-
-    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
 }

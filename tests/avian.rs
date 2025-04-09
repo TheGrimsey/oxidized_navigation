@@ -1,10 +1,10 @@
 use std::{num::NonZeroU16, time::Duration};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
-use bevy::{ecs::system::RunSystemOnce, prelude::*};
+use bevy::{ecs::system::RunSystemOnce, prelude::*, utils::HashMap};
 use oxidized_navigation::{
     query::{find_path, FindPathError},
-    tiles::NavMeshTiles,
+    tiles::{NavMeshTile, NavMeshTiles},
     ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
 
@@ -38,7 +38,7 @@ fn nav_mesh_is_deterministic() {
     app.clear_world();
     let nav_mesh_two = app.setup_world().get_nav_mesh();
 
-    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
+    assert_nav_mesh_equal(&nav_mesh_one, &nav_mesh_two);
 }
 
 #[test]
@@ -49,7 +49,22 @@ fn compound_colliders_create_same_navmesh_as_individual_colliders() {
     app.clear_world();
     let nav_mesh_two = app.setup_compound_world().get_nav_mesh();
 
-    assert_eq!(nav_mesh_one.tiles, nav_mesh_two.tiles);
+    assert_nav_mesh_equal(&nav_mesh_one, &nav_mesh_two);
+}
+
+#[track_caller]
+fn assert_nav_mesh_equal(nav_mesh_one: &NavMeshTiles, nav_mesh_two: &NavMeshTiles) {
+    assert_eq!(nav_mesh_one.tiles.len(), nav_mesh_two.tiles.len());
+    let nav_mesh_one_tiles_sorted = sort_tiles(nav_mesh_one.tiles.clone());
+    let nav_mesh_two_tiles_sorted = sort_tiles(nav_mesh_two.tiles.clone());
+    assert_eq!(nav_mesh_one_tiles_sorted, nav_mesh_two_tiles_sorted);
+}
+
+fn sort_tiles(tiles: HashMap<UVec2, NavMeshTile>) -> Vec<(UVec2, NavMeshTile)> {
+    let mut tiles = tiles.into_iter().collect::<Vec<_>>();
+    // Lexicographically sort the tiles. This is unique for each tile coord.
+    tiles.sort_by_key(|(tile_coord, _)| (tile_coord.x, tile_coord.y));
+    tiles
 }
 
 trait TestApp {

@@ -57,7 +57,29 @@ fn assert_nav_mesh_equal(nav_mesh_one: &NavMeshTiles, nav_mesh_two: &NavMeshTile
     assert_eq!(nav_mesh_one.tiles.len(), nav_mesh_two.tiles.len());
     let nav_mesh_one_tiles_sorted = sort_tiles(nav_mesh_one.tiles.clone());
     let nav_mesh_two_tiles_sorted = sort_tiles(nav_mesh_two.tiles.clone());
-    assert_eq!(nav_mesh_one_tiles_sorted, nav_mesh_two_tiles_sorted);
+    for (i, (tile_one, tile_two)) in nav_mesh_one_tiles_sorted
+        .iter()
+        .zip(nav_mesh_two_tiles_sorted.iter())
+        .enumerate()
+    {
+        assert_eq!(tile_one.0, tile_two.0, "Tile {i} has different tile coords");
+        assert_eq!(
+            tile_one.1.vertices, tile_two.1.vertices,
+            "Tile {i} has different vertices"
+        );
+        assert_eq!(
+            tile_one.1.polygons, tile_two.1.polygons,
+            "Tile {i} has different polygons"
+        );
+        assert_eq!(
+            tile_one.1.areas, tile_two.1.areas,
+            "Tile {i} has different areas"
+        );
+        assert_eq!(
+            tile_one.1.edges, tile_two.1.edges,
+            "Tile {i} has different edges"
+        );
+    }
 }
 
 fn sort_tiles(tiles: HashMap<UVec2, NavMeshTile>) -> Vec<(UVec2, NavMeshTile)> {

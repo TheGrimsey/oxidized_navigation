@@ -800,7 +800,6 @@ fn find_out_collider_type(collider: TypedShape) -> GeometryResult {
 
             GeometryResult::Compound(results)
         }
-        .into(),
         // These ones do not make sense in this.
         TypedShape::HalfSpace(_) => GeometryResult::Unsupported, /* This is like an infinite plane? We don't care. */
         TypedShape::Polyline(_) => GeometryResult::Unsupported,  /* This is a line. */

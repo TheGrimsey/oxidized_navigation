@@ -65,6 +65,7 @@ use heightfields::{
     erode_walkable_area, HeightFieldCollection,
 };
 use mesher::build_poly_mesh;
+use parry3d::shape::HeightField;
 use parry3d::{math::Isometry, na::Vector3, shape::TypedShape};
 use regions::build_regions;
 use smallvec::SmallVec;
@@ -642,87 +643,22 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         {
             let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
-            let type_to_convert = match collider.oxidized_into_typed_shape() {
-                TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)),
-                TypedShape::Cuboid(cuboid) => {
-                    GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid))
-                }
-                TypedShape::Capsule(capsule) => {
-                    GeometryToConvert::Collider(ColliderType::Capsule(*capsule))
-                }
-                TypedShape::TriMesh(trimesh) => GeometryToConvert::ParryTriMesh(
-                    // Can't turn these into boxed slices instantly because they are references.. So we need a copy.
-                    trimesh.vertices().to_vec().into_boxed_slice(),
-                    trimesh.indices().to_vec().into_boxed_slice(),
-                ),
-                TypedShape::HeightField(heightfield) => {
-                    // Deduplicate heightfields.
-                    let heightfield = if let Some(heightfield) = heightfields.get(&entity) {
-                        heightfield.clone()
-                    } else {
-                        let heightfield = Arc::new(HeightFieldCollection {
-                            transform: global_transform.compute_transform(),
-                            heightfield: heightfield.clone(),
-                            area,
-                        });
+            let type_to_convert = find_out_collider_type(collider);
 
-                        heightfields.insert(entity, heightfield.clone());
+            let should_generate_tile =
+                handle_geometry_result_and_decide_if_tile_should_be_generated(
+                    type_to_convert,
+                    entity,
+                    global_transform,
+                    area,
+                    &mut geometry_collections,
+                    &mut heightfield_collections,
+                    &mut heightfields,
+                );
 
-                        heightfield
-                    };
-
-                    heightfield_collections.push(heightfield);
-
-                    continue;
-                }
-                TypedShape::ConvexPolyhedron(polyhedron) => {
-                    let tri = polyhedron.to_trimesh();
-
-                    GeometryToConvert::ParryTriMesh(tri.0.into_boxed_slice(), tri.1.into_boxed_slice())
-                }
-                TypedShape::Cylinder(cylinder) => {
-                    GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder))
-                }
-                TypedShape::Cone(cone) => {
-                    GeometryToConvert::Collider(ColliderType::Cone(*cone))
-                }
-                TypedShape::RoundCuboid(round_cuboid) => {
-                    GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.inner_shape))
-                }
-                TypedShape::RoundCylinder(round_cylinder) => GeometryToConvert::Collider(
-                    ColliderType::Cylinder(round_cylinder.inner_shape),
-                ),
-                TypedShape::RoundCone(round_cone) => {
-                    GeometryToConvert::Collider(ColliderType::Cone(round_cone.inner_shape))
-                }
-                TypedShape::RoundConvexPolyhedron(round_polyhedron) => {
-                    let tri = round_polyhedron.inner_shape.to_trimesh();
-
-                    GeometryToConvert::ParryTriMesh(tri.0.into_boxed_slice(), tri.1.into_boxed_slice())
-                }
-                TypedShape::Triangle(triangle) => {
-                    GeometryToConvert::Collider(ColliderType::Triangle(*triangle))
-                }
-                TypedShape::RoundTriangle(triangle) => {
-                    GeometryToConvert::Collider(ColliderType::Triangle(triangle.inner_shape))
-                }
-                // TODO: This one requires me to think.
-                TypedShape::Compound(_) => {
-                    warn!("Compound colliders are not yet supported for nav-mesh generation, skipping for now..");
-                    continue;
-                }
-                // These ones do not make sense in this.
-                TypedShape::HalfSpace(_) => continue, /* This is like an infinite plane? We don't care. */
-                TypedShape::Polyline(_) => continue,  /* This is a line. */
-                TypedShape::Segment(_) => continue,   /* This is a line segment. */
-                TypedShape::Custom(_) => unimplemented!("Custom shapes are not yet supported for nav-mesh generation, skipping for now.."),
-            };
-
-            geometry_collections.push(GeometryCollection {
-                transform: global_transform.compute_transform(),
-                geometry_to_convert: type_to_convert,
-                area,
-            });
+            if !should_generate_tile {
+                continue;
+            }
         }
 
         // Step 2: Acquire nav_mesh lock
@@ -741,6 +677,141 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         active_generation_tasks.0.push(task);
     }
     heightfields.clear();
+}
+
+fn handle_geometry_result_and_decide_if_tile_should_be_generated(
+    type_to_convert: GeometryResult,
+    entity: Entity,
+    global_transform: &GlobalTransform,
+    area: Option<Area>,
+    geometry_collections: &mut Vec<GeometryCollection>,
+    heightfield_collections: &mut Vec<Arc<HeightFieldCollection>>,
+    heightfields: &mut EntityHashMap<Arc<HeightFieldCollection>>,
+) -> bool {
+    match type_to_convert {
+        GeometryResult::GeometryToConvert(geometry_to_convert) => {
+            geometry_collections.push(GeometryCollection {
+                transform: global_transform.compute_transform(),
+                geometry_to_convert,
+                area,
+            });
+            true
+        }
+        GeometryResult::Heightfield(heightfield) => {
+            // Deduplicate heightfields.
+            let heightfield = if let Some(heightfield) = heightfields.get(&entity) {
+                heightfield.clone()
+            } else {
+                let heightfield = Arc::new(HeightFieldCollection {
+                    transform: global_transform.compute_transform(),
+                    heightfield: heightfield.clone(),
+                    area,
+                });
+
+                heightfields.insert(entity, heightfield.clone());
+
+                heightfield
+            };
+
+            heightfield_collections.push(heightfield);
+            false
+        }
+        GeometryResult::Unsupported => false,
+        GeometryResult::Compound(results) => results.into_iter().any(|result| {
+            handle_geometry_result_and_decide_if_tile_should_be_generated(
+                result,
+                entity,
+                global_transform,
+                area,
+                geometry_collections,
+                heightfield_collections,
+                heightfields,
+            )
+        }),
+    }
+}
+
+enum GeometryResult<'a> {
+    Compound(Vec<GeometryResult<'a>>),
+    GeometryToConvert(GeometryToConvert),
+    Heightfield(&'a HeightField),
+    Unsupported,
+}
+
+impl<'a> From<GeometryToConvert> for GeometryResult<'a> {
+    fn from(value: GeometryToConvert) -> Self {
+        GeometryResult::GeometryToConvert(value)
+    }
+}
+
+fn find_out_collider_type<C: OxidizedCollider>(collider: &C) -> GeometryResult {
+    match collider.oxidized_into_typed_shape() {
+        TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)).into(),
+        TypedShape::Cuboid(cuboid) => {
+            GeometryToConvert::Collider(ColliderType::Cuboid(*cuboid)).into()
+        }
+        TypedShape::Capsule(capsule) => {
+            GeometryToConvert::Collider(ColliderType::Capsule(*capsule)).into()
+        }
+        TypedShape::TriMesh(trimesh) => GeometryToConvert::ParryTriMesh(
+            // Can't turn these into boxed slices instantly because they are references.. So we need a copy.
+            trimesh.vertices().to_vec().into_boxed_slice(),
+            trimesh.indices().to_vec().into_boxed_slice(),
+        )
+        .into(),
+        TypedShape::HeightField(heightfield) => GeometryResult::Heightfield(heightfield),
+        TypedShape::ConvexPolyhedron(polyhedron) => {
+            let tri = polyhedron.to_trimesh();
+
+            GeometryToConvert::ParryTriMesh(tri.0.into_boxed_slice(), tri.1.into_boxed_slice())
+                .into()
+        }
+        TypedShape::Cylinder(cylinder) => {
+            GeometryToConvert::Collider(ColliderType::Cylinder(*cylinder)).into()
+        }
+        TypedShape::Cone(cone) => GeometryToConvert::Collider(ColliderType::Cone(*cone)).into(),
+        TypedShape::RoundCuboid(round_cuboid) => {
+            GeometryToConvert::Collider(ColliderType::Cuboid(round_cuboid.inner_shape)).into()
+        }
+        TypedShape::RoundCylinder(round_cylinder) => {
+            GeometryToConvert::Collider(ColliderType::Cylinder(round_cylinder.inner_shape)).into()
+        }
+        TypedShape::RoundCone(round_cone) => {
+            GeometryToConvert::Collider(ColliderType::Cone(round_cone.inner_shape)).into()
+        }
+        TypedShape::RoundConvexPolyhedron(round_polyhedron) => {
+            let tri = round_polyhedron.inner_shape.to_trimesh();
+
+            GeometryToConvert::ParryTriMesh(tri.0.into_boxed_slice(), tri.1.into_boxed_slice())
+                .into()
+        }
+        TypedShape::Triangle(triangle) => {
+            GeometryToConvert::Collider(ColliderType::Triangle(*triangle)).into()
+        }
+        TypedShape::RoundTriangle(triangle) => {
+            GeometryToConvert::Collider(ColliderType::Triangle(triangle.inner_shape)).into()
+        }
+        TypedShape::Compound(colliders) => {
+            let results = colliders
+                .shapes()
+                .iter()
+                .map(|(isometry, shape)| find_out_collider_type(shape))
+                .collect();
+
+            GeometryResult::Compound(results)
+        }
+        .into(),
+        // These ones do not make sense in this.
+        TypedShape::HalfSpace(_) => GeometryResult::Unsupported, /* This is like an infinite plane? We don't care. */
+        TypedShape::Polyline(_) => GeometryResult::Unsupported,  /* This is a line. */
+        TypedShape::Segment(_) => GeometryResult::Unsupported,   /* This is a line segment. */
+        TypedShape::Custom(_) => {
+            error!(
+                "Custom shapes are not yet supported for nav-mesh generation, skipping for now.."
+            );
+            GeometryResult::Unsupported
+        }
+    }
 }
 
 /// Event containing the tile coordinate of a generated/regenerated tile.

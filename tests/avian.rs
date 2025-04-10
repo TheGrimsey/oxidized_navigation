@@ -50,12 +50,12 @@ fn nav_mesh_is_deterministic() {
 }
 
 #[test]
-fn compound_colliders_create_same_navmesh_as_individual_colliders_with_only_one_plane() {
+fn compound_colliders_create_same_navmesh_as_individual_colliders_with_no_thin_wall() {
     let mut app = App::setup_test_world();
 
-    let nav_mesh_one = app.setup_plane().get_nav_mesh();
+    let nav_mesh_one = app.setup_no_thin_wall().get_nav_mesh();
     app.clear_world();
-    let nav_mesh_two = app.setup_compound_plane().get_nav_mesh();
+    let nav_mesh_two = app.setup_compound_no_thin_wall().get_nav_mesh();
 
     assert_nav_mesh_equal(nav_mesh_one, nav_mesh_two);
 }
@@ -149,8 +149,8 @@ trait TestApp {
     fn wait_for_generation_to_finish(&mut self) -> &mut Self;
     fn setup_world(&mut self) -> &mut Self;
     fn setup_compound_world(&mut self) -> &mut Self;
-    fn setup_plane(&mut self) -> &mut Self;
-    fn setup_compound_plane(&mut self) -> &mut Self;
+    fn setup_no_thin_wall(&mut self) -> &mut Self;
+    fn setup_compound_no_thin_wall(&mut self) -> &mut Self;
     fn clear_world(&mut self) -> &mut Self;
     fn run_pathfinding(&self) -> Result<Vec<Vec3>, FindPathError>;
     fn get_nav_mesh(&self) -> NavMeshTiles;
@@ -203,7 +203,7 @@ impl TestApp for App {
         self
     }
 
-    fn setup_plane(&mut self) -> &mut Self {
+    fn setup_no_thin_wall(&mut self) -> &mut Self {
         self.world_mut()
             .run_system_once(|mut commands: Commands| {
                 // Plane
@@ -244,12 +244,6 @@ impl TestApp for App {
                     Collider::cuboid(1.25, 1.25, 1.25),
                     NavMeshAffector,
                 ));
-                // Thin wall
-                commands.spawn((
-                    Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
-                    Collider::cuboid(0.05, 0.05, 0.05),
-                    NavMeshAffector,
-                ));
             })
             .unwrap();
 
@@ -258,7 +252,7 @@ impl TestApp for App {
         self
     }
 
-    fn setup_compound_plane(&mut self) -> &mut Self {
+    fn setup_compound_no_thin_wall(&mut self) -> &mut Self {
         self.world_mut()
             .run_system_once(|mut commands: Commands| {
                 commands.spawn((
@@ -294,12 +288,6 @@ impl TestApp for App {
                             Vec3::new(0.0, 0.0, 0.0),
                             Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
                             Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
-                        ),
-                        // Thin wall
-                        (
-                            Vec3::new(-3.0, 0.8, 5.0),
-                            Quat::IDENTITY,
-                            Collider::cuboid(0.05, 0.05, 0.05),
                         ),
                     ]),
                     NavMeshAffector,

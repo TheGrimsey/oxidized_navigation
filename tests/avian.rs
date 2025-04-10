@@ -86,10 +86,23 @@ fn assert_nav_mesh_equal(nav_mesh_one: NavMeshTiles, nav_mesh_two: NavMeshTiles)
             tile_one.1.vertices, tile_two.1.vertices,
             "Tile {i} has different vertices"
         );
-        assert_eq!(
-            tile_one.1.polygons, tile_two.1.polygons,
-            "Tile {i} has different polygons"
-        );
+
+        for (j, (polygon_one, polygon_two)) in tile_one
+            .1
+            .polygons
+            .iter()
+            .zip(tile_two.1.polygons.iter())
+            .enumerate()
+        {
+            assert_eq!(
+                polygon_one.indices, polygon_two.indices,
+                "Tile {i} has different polygon {j} indices"
+            );
+            assert_eq!(
+                polygon_one.links, polygon_two.links,
+                "Tile {i} has different polygon {j} links"
+            );
+        }
         assert_eq!(
             tile_one.1.areas, tile_two.1.areas,
             "Tile {i} has different areas"
@@ -231,6 +244,12 @@ impl TestApp for App {
                     Collider::cuboid(1.25, 1.25, 1.25),
                     NavMeshAffector,
                 ));
+                // Thin wall
+                commands.spawn((
+                    Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
+                    Collider::cuboid(0.05, 0.05, 0.05),
+                    NavMeshAffector,
+                ));
             })
             .unwrap();
 
@@ -275,6 +294,12 @@ impl TestApp for App {
                             Vec3::new(0.0, 0.0, 0.0),
                             Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
                             Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
+                        ),
+                        // Thin wall
+                        (
+                            Vec3::new(-3.0, 0.8, 5.0),
+                            Quat::IDENTITY,
+                            Collider::cuboid(0.05, 0.05, 0.05),
                         ),
                     ]),
                     NavMeshAffector,

@@ -710,7 +710,6 @@ fn handle_geometry_result(
             heightfield_collections.push(heightfield);
         }
         GeometryResult::Compound(results) => {
-            // not using `.any()` because we want to have the side effect for all results.
             for (isometry, result) in results {
                 let translation = Vec3::from(isometry.translation);
                 let rotation = Quat::from(isometry.rotation);

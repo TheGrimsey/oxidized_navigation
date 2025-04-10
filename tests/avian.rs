@@ -207,6 +207,14 @@ impl TestApp for App {
                     NavMeshAffector,
                 ));
 
+                // Tall Cube
+                commands.spawn((
+                    Transform::from_xyz(-0.179, 18.419, -27.744)
+                        .with_scale(Vec3::new(15.0, 15.0, 15.0)),
+                    Collider::cuboid(1.25, 1.25, 1.25),
+                    NavMeshAffector,
+                ));
+
                 // Rotated Cube
                 commands.spawn((
                     Transform::from_xyz(0.0, 0.0, 0.0)
@@ -239,6 +247,13 @@ impl TestApp for App {
                             Vec3::new(-5.0, 0.8, -5.0),
                             Quat::IDENTITY,
                             Collider::cuboid(1.25, 1.25, 1.25),
+                        ),
+                        // Tall Cube
+                        (
+                            Vec3::new(-0.179, 18.419, -27.744),
+                            Quat::IDENTITY,
+                            Collider::cuboid(1.25, 1.25, 1.25)
+                                .scaled_by(Vec3::new(15.0, 15.0, 15.0)),
                         ),
                         // Rotated Cube
                         (

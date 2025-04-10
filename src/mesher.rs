@@ -139,7 +139,7 @@ pub fn build_poly_mesh(
     poly_mesh
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EdgeConnectionDirection {
     XNegative,
     ZPositive,

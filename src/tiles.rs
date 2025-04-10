@@ -13,7 +13,7 @@ use crate::{
 use super::mesher::PolyMesh;
 
 /// Representation of a link between different polygons either internal to the tile or external (crossing over to another tile).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Link {
     Internal {
         /// Edge on self polygon.
@@ -36,7 +36,7 @@ pub enum Link {
 }
 
 /// A polygon within a nav-mesh tile.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
     pub links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.

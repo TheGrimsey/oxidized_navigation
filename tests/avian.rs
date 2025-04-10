@@ -1,7 +1,15 @@
-use std::{num::NonZeroU16, time::Duration};
+use std::{
+    hash::{BuildHasher, Hash, Hasher},
+    num::NonZeroU16,
+    time::Duration,
+};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
-use bevy::{ecs::system::RunSystemOnce, prelude::*, utils::HashMap};
+use bevy::{
+    ecs::system::RunSystemOnce,
+    prelude::*,
+    utils::{HashMap, RandomState},
+};
 use oxidized_navigation::{
     query::{find_path, FindPathError},
     tiles::{NavMeshTile, NavMeshTiles},
@@ -38,7 +46,7 @@ fn nav_mesh_is_deterministic() {
     app.clear_world();
     let nav_mesh_two = app.setup_world().get_nav_mesh();
 
-    assert_nav_mesh_equal(&nav_mesh_one, &nav_mesh_two);
+    assert_nav_mesh_equal(nav_mesh_one, nav_mesh_two);
 }
 
 #[test]
@@ -49,7 +57,7 @@ fn compound_colliders_create_same_navmesh_as_individual_colliders_with_only_one_
     app.clear_world();
     let nav_mesh_two = app.setup_compound_plane().get_nav_mesh();
 
-    assert_nav_mesh_equal(&nav_mesh_one, &nav_mesh_two);
+    assert_nav_mesh_equal(nav_mesh_one, nav_mesh_two);
 }
 
 #[test]
@@ -60,11 +68,11 @@ fn compound_colliders_create_same_navmesh_as_individual_colliders() {
     app.clear_world();
     let nav_mesh_two = app.setup_compound_world().get_nav_mesh();
 
-    assert_nav_mesh_equal(&nav_mesh_one, &nav_mesh_two);
+    assert_nav_mesh_equal(nav_mesh_one, nav_mesh_two);
 }
 
 #[track_caller]
-fn assert_nav_mesh_equal(nav_mesh_one: &NavMeshTiles, nav_mesh_two: &NavMeshTiles) {
+fn assert_nav_mesh_equal(nav_mesh_one: NavMeshTiles, nav_mesh_two: NavMeshTiles) {
     assert_eq!(nav_mesh_one.tiles.len(), nav_mesh_two.tiles.len());
     let nav_mesh_one_tiles_sorted = sort_tiles(nav_mesh_one.tiles.clone());
     let nav_mesh_two_tiles_sorted = sort_tiles(nav_mesh_two.tiles.clone());
@@ -94,10 +102,26 @@ fn assert_nav_mesh_equal(nav_mesh_one: &NavMeshTiles, nav_mesh_two: &NavMeshTile
 }
 
 fn sort_tiles(tiles: HashMap<UVec2, NavMeshTile>) -> Vec<(UVec2, NavMeshTile)> {
-    let mut tiles = tiles.into_iter().collect::<Vec<_>>();
+    let mut tiles = tiles
+        .into_iter()
+        .map(|(_coord, tile)| (_coord, sort_tile(tile)))
+        .collect::<Vec<_>>();
     // Lexicographically sort the tiles. This is unique for each tile coord.
-    tiles.sort_by_key(|(tile_coord, _)| (tile_coord.x, tile_coord.y));
+    tiles.sort_by_key(|(cood, _tile)| (cood.x, cood.y));
     tiles
+}
+
+fn sort_tile(mut tile: NavMeshTile) -> NavMeshTile {
+    // Polygons come from a hashmap, so they have a random order.
+    tile.polygons.sort_by_key(|polygon| hash_polygon(polygon));
+    tile
+}
+
+fn hash_polygon(polygon: &oxidized_navigation::tiles::Polygon) -> u64 {
+    let state = RandomState::with_seed(1337);
+    let mut hasher = state.build_hasher();
+    polygon.hash(&mut hasher);
+    hasher.finish()
 }
 
 trait TestApp {

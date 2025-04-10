@@ -644,12 +644,12 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
             let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
             let geometry_result = get_geometry_type(collider.oxidized_into_typed_shape());
-
+            let transform = global_transform.compute_transform();
             let should_generate_tile =
                 handle_geometry_result_and_decide_if_tile_should_be_generated(
                     geometry_result,
                     entity,
-                    global_transform,
+                    transform,
                     area,
                     &mut geometry_collections,
                     &mut heightfield_collections,
@@ -682,7 +682,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
 fn handle_geometry_result_and_decide_if_tile_should_be_generated(
     type_to_convert: GeometryResult,
     entity: Entity,
-    global_transform: &GlobalTransform,
+    global_transform: Transform,
     area: Option<Area>,
     geometry_collections: &mut Vec<GeometryCollection>,
     heightfield_collections: &mut Vec<Arc<HeightFieldCollection>>,
@@ -691,7 +691,7 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
     match type_to_convert {
         GeometryResult::GeometryToConvert(geometry_to_convert) => {
             geometry_collections.push(GeometryCollection {
-                transform: global_transform.compute_transform(),
+                transform: global_transform,
                 geometry_to_convert,
                 area,
             });
@@ -703,7 +703,7 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
                 heightfield.clone()
             } else {
                 let heightfield = Arc::new(HeightFieldCollection {
-                    transform: global_transform.compute_transform(),
+                    transform: global_transform,
                     heightfield: heightfield.clone(),
                     area,
                 });
@@ -717,22 +717,36 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
             false
         }
         GeometryResult::Unsupported => false,
-        GeometryResult::Compound(results) => results.into_iter().any(|result| {
-            handle_geometry_result_and_decide_if_tile_should_be_generated(
-                result,
-                entity,
-                global_transform,
-                area,
-                geometry_collections,
-                heightfield_collections,
-                heightfields,
-            )
-        }),
+        GeometryResult::Compound(results) => {
+            let mut generate_any_tile = false;
+            // not using `.any()` because we want to have the side effect for all results.
+            for (isometry, result) in results {
+                let translation = Vec3::from(isometry.translation);
+                let rotation = Quat::from(isometry.rotation);
+                let mut transform = global_transform;
+                transform.translation += translation;
+                transform.rotation *= rotation;
+                let should_generate_tile =
+                    handle_geometry_result_and_decide_if_tile_should_be_generated(
+                        result,
+                        entity,
+                        transform,
+                        area,
+                        geometry_collections,
+                        heightfield_collections,
+                        heightfields,
+                    );
+                if should_generate_tile {
+                    generate_any_tile = true;
+                }
+            }
+            generate_any_tile
+        }
     }
 }
 
 enum GeometryResult<'a> {
-    Compound(Vec<GeometryResult<'a>>),
+    Compound(Vec<(Isometry<f32>, GeometryResult<'a>)>),
     GeometryToConvert(GeometryToConvert),
     Heightfield(&'a HeightField),
     Unsupported,
@@ -795,7 +809,7 @@ fn get_geometry_type(collider: TypedShape) -> GeometryResult {
             let results = colliders
                 .shapes()
                 .iter()
-                .map(|(isometry, shape)| get_geometry_type(shape.0.as_typed_shape()))
+                .map(|(isometry, shape)| (*isometry, get_geometry_type(shape.0.as_typed_shape())))
                 .collect();
 
             GeometryResult::Compound(results)

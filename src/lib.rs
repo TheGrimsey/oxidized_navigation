@@ -52,6 +52,7 @@ use bevy::tasks::futures_lite::future;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
     ecs::system::Resource,
+    ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
     utils::{HashMap, HashSet},
 };
@@ -95,6 +96,7 @@ pub enum OxidizedNavigation {
 
 pub struct OxidizedNavigationPlugin<ColliderComponent> {
     pub settings: NavMeshSettings,
+    schedule: Interned<dyn ScheduleLabel>,
     _collider_type: PhantomData<ColliderComponent>,
 }
 
@@ -106,8 +108,17 @@ where
     pub fn new(settings: NavMeshSettings) -> OxidizedNavigationPlugin<C> {
         OxidizedNavigationPlugin::<C> {
             settings,
+            schedule: RunFixedMainLoop.intern(),
             _collider_type: PhantomData::<C>,
         }
+    }
+
+    /// Sets the schedule for running the plugin. Defaults to
+    /// [`RunFixedMainLoop`].
+    #[must_use]
+    pub fn in_schedule(mut self, schedule: impl ScheduleLabel) -> Self {
+      self.schedule = schedule.intern();
+      self
     }
 }
 
@@ -126,7 +137,7 @@ where
             .init_resource::<ActiveGenerationTasks>();
 
         app.configure_sets(
-            RunFixedMainLoop,
+            self.schedule,
             (
                 OxidizedNavigation::RemovedComponent,
                 OxidizedNavigation::Main,
@@ -137,14 +148,14 @@ where
         );
 
         app.add_systems(
-            RunFixedMainLoop,
+            self.schedule,
             handle_removed_affectors_system
                 .run_if(any_component_removed::<NavMeshAffector>)
                 .in_set(OxidizedNavigation::RemovedComponent),
         );
 
         app.add_systems(
-            RunFixedMainLoop,
+            self.schedule,
             (
                 (remove_finished_tasks, update_navmesh_affectors_system::<C>),
                 send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),

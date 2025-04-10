@@ -643,11 +643,11 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         {
             let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
-            let type_to_convert = find_out_collider_type(collider.oxidized_into_typed_shape());
+            let geometry_result = get_geometry_type(collider.oxidized_into_typed_shape());
 
             let should_generate_tile =
                 handle_geometry_result_and_decide_if_tile_should_be_generated(
-                    type_to_convert,
+                    geometry_result,
                     entity,
                     global_transform,
                     area,
@@ -744,7 +744,7 @@ impl From<GeometryToConvert> for GeometryResult<'_> {
     }
 }
 
-fn find_out_collider_type(collider: TypedShape) -> GeometryResult {
+fn get_geometry_type(collider: TypedShape) -> GeometryResult {
     match collider {
         TypedShape::Ball(ball) => GeometryToConvert::Collider(ColliderType::Ball(*ball)).into(),
         TypedShape::Cuboid(cuboid) => {
@@ -795,7 +795,7 @@ fn find_out_collider_type(collider: TypedShape) -> GeometryResult {
             let results = colliders
                 .shapes()
                 .iter()
-                .map(|(isometry, shape)| find_out_collider_type(shape.0.as_typed_shape()))
+                .map(|(isometry, shape)| get_geometry_type(shape.0.as_typed_shape()))
                 .collect();
 
             GeometryResult::Compound(results)

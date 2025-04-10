@@ -193,9 +193,17 @@ impl TestApp for App {
     fn setup_plane(&mut self) -> &mut Self {
         self.world_mut()
             .run_system_once(|mut commands: Commands| {
+                // Plane
                 commands.spawn((
                     Transform::IDENTITY,
                     Collider::cuboid(25.0, 0.1, 25.0),
+                    NavMeshAffector,
+                ));
+
+                // Cube
+                commands.spawn((
+                    Transform::from_xyz(-5.0, 0.8, -5.0),
+                    Collider::cuboid(1.25, 1.25, 1.25),
                     NavMeshAffector,
                 ));
             })
@@ -211,11 +219,20 @@ impl TestApp for App {
             .run_system_once(|mut commands: Commands| {
                 commands.spawn((
                     Transform::IDENTITY,
-                    Collider::compound(vec![(
-                        Vec3::ZERO,
-                        Quat::IDENTITY,
-                        Collider::cuboid(25.0, 0.1, 25.0),
-                    )]),
+                    Collider::compound(vec![
+                        // Plane
+                        (
+                            Vec3::ZERO,
+                            Quat::IDENTITY,
+                            Collider::cuboid(25.0, 0.1, 25.0),
+                        ),
+                        // Cube
+                        (
+                            Vec3::new(-5.0, 0.8, -5.0),
+                            Quat::IDENTITY,
+                            Collider::cuboid(1.25, 1.25, 1.25),
+                        ),
+                    ]),
                     NavMeshAffector,
                 ));
             })

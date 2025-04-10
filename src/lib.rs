@@ -573,7 +573,7 @@ fn can_generate_new_tiles(
 ) -> bool {
     nav_mesh_settings
         .max_tile_generation_tasks
-        .map_or(true, |max_tile_generation_tasks| {
+        .is_none_or(|max_tile_generation_tasks| {
             active_generation_tasks.0.len() < max_tile_generation_tasks.get().into()
         })
         && !dirty_tiles.0.is_empty()

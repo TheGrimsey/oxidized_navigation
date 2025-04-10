@@ -215,6 +215,15 @@ impl TestApp for App {
                     NavMeshAffector,
                 ));
 
+                // Scaled and rotated cube
+                commands.spawn((
+                    Transform::from_xyz(0.0, 0.0, 0.0)
+                        .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
+                        .with_scale(Vec3::new(2.0, 2.0, 2.0)),
+                    Collider::cuboid(1.25, 1.25, 1.25),
+                    NavMeshAffector,
+                ));
+
                 // Rotated Cube
                 commands.spawn((
                     Transform::from_xyz(0.0, 0.0, 0.0)
@@ -260,6 +269,12 @@ impl TestApp for App {
                             Vec3::new(0.0, 0.0, 0.0),
                             Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
                             Collider::cuboid(1.25, 1.25, 1.25),
+                        ),
+                        // Scaled and rotated cube
+                        (
+                            Vec3::new(0.0, 0.0, 0.0),
+                            Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
+                            Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
                         ),
                     ]),
                     NavMeshAffector,

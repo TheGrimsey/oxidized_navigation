@@ -77,7 +77,7 @@ fn assert_nav_mesh_equal(nav_mesh_one: NavMeshTiles, nav_mesh_two: NavMeshTiles)
     let nav_mesh_one_tiles_sorted = sort_tiles(nav_mesh_one.tiles.clone());
     let nav_mesh_two_tiles_sorted = sort_tiles(nav_mesh_two.tiles.clone());
     for (i, (tile_one, tile_two)) in nav_mesh_one_tiles_sorted
-        .iter()
+        .into_iter()
         .zip(nav_mesh_two_tiles_sorted.iter())
         .enumerate()
     {
@@ -102,25 +102,32 @@ fn assert_nav_mesh_equal(nav_mesh_one: NavMeshTiles, nav_mesh_two: NavMeshTiles)
 }
 
 fn sort_tiles(tiles: HashMap<UVec2, NavMeshTile>) -> Vec<(UVec2, NavMeshTile)> {
+    // The hashmap is not sorted, so we need to sort the tiles by their coord.
+    // Technically, we could compare the hashmaps directly, but
+    // - The inner types also need some sorting.
+    // - Having an order is way nicer to debug when checking error messages.
     let mut tiles = tiles
         .into_iter()
         .map(|(_coord, tile)| (_coord, sort_tile(tile)))
         .collect::<Vec<_>>();
-    // Lexicographically sort the tiles. This is unique for each tile coord.
-    tiles.sort_by_key(|(cood, _tile)| (cood.x, cood.y));
+    tiles.sort_by_key(|(coord, _tile)| hash_deterministic(coord));
     tiles
 }
 
 fn sort_tile(mut tile: NavMeshTile) -> NavMeshTile {
     // Polygons come from a hashmap, so they have a random order.
-    tile.polygons.sort_by_key(|polygon| hash_polygon(polygon));
+    for polygon in tile.polygons.iter_mut() {
+        polygon.links.sort_by_key(|link| hash_deterministic(link));
+    }
+    tile.polygons
+        .sort_by_key(|polygon| hash_deterministic(polygon));
     tile
 }
 
-fn hash_polygon(polygon: &oxidized_navigation::tiles::Polygon) -> u64 {
+fn hash_deterministic<T: Hash>(value: &T) -> u64 {
     let state = RandomState::with_seed(1337);
     let mut hasher = state.build_hasher();
-    polygon.hash(&mut hasher);
+    value.hash(&mut hasher);
     hasher.finish()
 }
 

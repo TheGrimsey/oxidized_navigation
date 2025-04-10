@@ -645,20 +645,15 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
 
             let geometry_result = get_geometry_type(collider.oxidized_into_typed_shape());
             let transform = global_transform.compute_transform();
-            let should_generate_tile =
-                handle_geometry_result_and_decide_if_tile_should_be_generated(
-                    geometry_result,
-                    entity,
-                    transform,
-                    area,
-                    &mut geometry_collections,
-                    &mut heightfield_collections,
-                    &mut heightfields,
-                );
-
-            if !should_generate_tile {
-                continue;
-            }
+            handle_geometry_result(
+                geometry_result,
+                entity,
+                transform,
+                area,
+                &mut geometry_collections,
+                &mut heightfield_collections,
+                &mut heightfields,
+            );
         }
 
         // Step 2: Acquire nav_mesh lock
@@ -679,7 +674,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     heightfields.clear();
 }
 
-fn handle_geometry_result_and_decide_if_tile_should_be_generated(
+fn handle_geometry_result(
     type_to_convert: GeometryResult,
     entity: Entity,
     global_transform: Transform,
@@ -687,7 +682,7 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
     geometry_collections: &mut Vec<GeometryCollection>,
     heightfield_collections: &mut Vec<Arc<HeightFieldCollection>>,
     heightfields: &mut EntityHashMap<Arc<HeightFieldCollection>>,
-) -> bool {
+) {
     match type_to_convert {
         GeometryResult::GeometryToConvert(geometry_to_convert) => {
             geometry_collections.push(GeometryCollection {
@@ -695,7 +690,6 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
                 geometry_to_convert,
                 area,
             });
-            true
         }
         GeometryResult::Heightfield(heightfield) => {
             // Deduplicate heightfields.
@@ -714,11 +708,8 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
             };
 
             heightfield_collections.push(heightfield);
-            false
         }
-        GeometryResult::Unsupported => false,
         GeometryResult::Compound(results) => {
-            let mut generate_any_tile = false;
             // not using `.any()` because we want to have the side effect for all results.
             for (isometry, result) in results {
                 let translation = Vec3::from(isometry.translation);
@@ -726,22 +717,18 @@ fn handle_geometry_result_and_decide_if_tile_should_be_generated(
                 let mut transform = global_transform;
                 transform.translation += translation;
                 transform.rotation *= rotation;
-                let should_generate_tile =
-                    handle_geometry_result_and_decide_if_tile_should_be_generated(
-                        result,
-                        entity,
-                        transform,
-                        area,
-                        geometry_collections,
-                        heightfield_collections,
-                        heightfields,
-                    );
-                if should_generate_tile {
-                    generate_any_tile = true;
-                }
+                handle_geometry_result(
+                    result,
+                    entity,
+                    transform,
+                    area,
+                    geometry_collections,
+                    heightfield_collections,
+                    heightfields,
+                );
             }
-            generate_any_tile
         }
+        GeometryResult::Unsupported => {}
     }
 }
 

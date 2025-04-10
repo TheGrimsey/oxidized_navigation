@@ -125,16 +125,26 @@ where
             .init_resource::<NavMeshAffectorRelations>()
             .init_resource::<ActiveGenerationTasks>();
 
+        app.configure_sets(
+            RunFixedMainLoop,
+            (
+                OxidizedNavigation::RemovedComponent,
+                OxidizedNavigation::Main,
+            )
+                .chain()
+                // Configure our systems to run before physics engines.
+                .in_set(RunFixedMainLoopSystem::BeforeFixedMainLoop),
+        );
+
         app.add_systems(
-            Update,
+            RunFixedMainLoop,
             handle_removed_affectors_system
                 .run_if(any_component_removed::<NavMeshAffector>)
-                .before(send_tile_rebuild_tasks_system::<C>)
                 .in_set(OxidizedNavigation::RemovedComponent),
         );
 
         app.add_systems(
-            Update,
+            RunFixedMainLoop,
             (
                 (remove_finished_tasks, update_navmesh_affectors_system::<C>),
                 send_tile_rebuild_tasks_system::<C>.run_if(can_generate_new_tiles),

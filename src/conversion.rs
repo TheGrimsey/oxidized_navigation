@@ -129,7 +129,7 @@ fn rasterize_collider_inner(collider: ColliderType, memoized_triangles: Triangle
     };
 
     let vertices = vertices
-        .iter()
+        .into_iter()
         .map(|point| Vec3::new(point.x, point.y, point.z))
         .collect();
 

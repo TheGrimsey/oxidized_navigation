@@ -148,6 +148,75 @@ trait TestApp {
     fn get_nav_mesh(&self) -> NavMeshTiles;
 }
 
+#[derive(Bundle)]
+struct TestCollider {
+    transform: Transform,
+    collider: Collider,
+}
+
+impl TestCollider {
+    fn plane() -> Self {
+        Self {
+            transform: Transform::IDENTITY,
+            collider: Collider::cuboid(25.0, 0.1, 25.0),
+        }
+    }
+
+    fn cube() -> Self {
+        Self {
+            transform: Transform::from_xyz(-5.0, 0.8, -5.0),
+            collider: Collider::cuboid(1.25, 1.25, 1.25),
+        }
+    }
+
+    fn tall_cube() -> Self {
+        Self {
+            transform: Transform::from_xyz(-0.179, 18.419, -27.744),
+            collider: Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(15.0, 15.0, 15.0)),
+        }
+    }
+
+    fn rotated_cube() -> Self {
+        Self {
+            transform: Transform::from_xyz(0.0, 0.0, 0.0)
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0)),
+            collider: Collider::cuboid(1.25, 1.25, 1.25),
+        }
+    }
+
+    fn scaled_and_rotated_cube() -> Self {
+        Self {
+            transform: Transform::from_xyz(0.0, 0.0, 0.0)
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
+                .with_scale(Vec3::new(2.0, 2.0, 2.0)),
+            collider: Collider::cuboid(1.25, 1.25, 1.25),
+        }
+    }
+
+    fn fully_transformed_cube() -> Self {
+        Self {
+            transform: Transform::from_xyz(10.0, 0.0, -0.1)
+                .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
+                .with_scale(Vec3::new(2.0, 2.0, 2.0)),
+            collider: Collider::cuboid(1.25, 1.25, 1.25),
+        }
+    }
+
+    fn cone() -> Self {
+        Self {
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            collider: Collider::cone(1.25, 1.25),
+        }
+    }
+
+    fn thin_wall() -> Self {
+        Self {
+            transform: Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
+            collider: Collider::cuboid(0.05, 0.05, 0.05),
+        }
+    }
+}
+
 impl TestApp for App {
     fn setup_test_world() -> App {
         let mut app = App::new();
@@ -201,11 +270,7 @@ impl TestApp for App {
         self.world_mut()
             .run_system_once(|mut commands: Commands| {
                 // Thin wall
-                commands.spawn((
-                    Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
-                    Collider::cuboid(0.05, 0.05, 0.05),
-                    NavMeshAffector,
-                ));
+                commands.spawn((TestCollider::thin_wall(), NavMeshAffector));
             })
             .unwrap();
 
@@ -217,44 +282,19 @@ impl TestApp for App {
     fn setup_world_without_thin_wall(&mut self) -> &mut Self {
         self.world_mut()
             .run_system_once(|mut commands: Commands| {
-                // Plane
-                commands.spawn((
-                    Transform::IDENTITY,
-                    Collider::cuboid(25.0, 0.1, 25.0),
-                    NavMeshAffector,
-                ));
-
-                // Cube
-                commands.spawn((
-                    Transform::from_xyz(-5.0, 0.8, -5.0),
-                    Collider::cuboid(1.25, 1.25, 1.25),
-                    NavMeshAffector,
-                ));
-
-                // Tall Cube
-                commands.spawn((
-                    Transform::from_xyz(-0.179, 18.419, -27.744)
-                        .with_scale(Vec3::new(15.0, 15.0, 15.0)),
-                    Collider::cuboid(1.25, 1.25, 1.25),
-                    NavMeshAffector,
-                ));
-
-                // Scaled and rotated cube
-                commands.spawn((
-                    Transform::from_xyz(0.0, 0.0, 0.0)
-                        .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0))
-                        .with_scale(Vec3::new(2.0, 2.0, 2.0)),
-                    Collider::cuboid(1.25, 1.25, 1.25),
-                    NavMeshAffector,
-                ));
-
-                // Rotated Cube
-                commands.spawn((
-                    Transform::from_xyz(0.0, 0.0, 0.0)
-                        .with_rotation(Quat::from_rotation_y(std::f32::consts::TAU / 8.0)),
-                    Collider::cuboid(1.25, 1.25, 1.25),
-                    NavMeshAffector,
-                ));
+                [
+                    TestCollider::plane(),
+                    TestCollider::cube(),
+                    TestCollider::tall_cube(),
+                    TestCollider::rotated_cube(),
+                    TestCollider::scaled_and_rotated_cube(),
+                    TestCollider::fully_transformed_cube(),
+                    TestCollider::cone(),
+                ]
+                .into_iter()
+                .for_each(|collider| {
+                    commands.spawn((collider, NavMeshAffector));
+                });
             })
             .unwrap();
 
@@ -268,39 +308,26 @@ impl TestApp for App {
             .run_system_once(|mut commands: Commands| {
                 commands.spawn((
                     Transform::IDENTITY,
-                    Collider::compound(vec![
-                        // Plane
-                        (
-                            Vec3::ZERO,
-                            Quat::IDENTITY,
-                            Collider::cuboid(25.0, 0.1, 25.0),
-                        ),
-                        // Cube
-                        (
-                            Vec3::new(-5.0, 0.8, -5.0),
-                            Quat::IDENTITY,
-                            Collider::cuboid(1.25, 1.25, 1.25),
-                        ),
-                        // Tall Cube
-                        (
-                            Vec3::new(-0.179, 18.419, -27.744),
-                            Quat::IDENTITY,
-                            Collider::cuboid(1.25, 1.25, 1.25)
-                                .scaled_by(Vec3::new(15.0, 15.0, 15.0)),
-                        ),
-                        // Rotated Cube
-                        (
-                            Vec3::new(0.0, 0.0, 0.0),
-                            Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
-                            Collider::cuboid(1.25, 1.25, 1.25),
-                        ),
-                        // Scaled and rotated cube
-                        (
-                            Vec3::new(0.0, 0.0, 0.0),
-                            Quat::from_rotation_y(std::f32::consts::TAU / 8.0),
-                            Collider::cuboid(1.25, 1.25, 1.25).scaled_by(Vec3::new(2.0, 2.0, 2.0)),
-                        ),
-                    ]),
+                    Collider::compound(
+                        [
+                            TestCollider::plane(),
+                            TestCollider::cube(),
+                            TestCollider::tall_cube(),
+                            TestCollider::rotated_cube(),
+                            TestCollider::scaled_and_rotated_cube(),
+                            TestCollider::fully_transformed_cube(),
+                            TestCollider::cone(),
+                        ]
+                        .into_iter()
+                        .map(|collider| {
+                            (
+                                collider.transform.translation,
+                                collider.transform.rotation,
+                                collider.collider.scaled_by(collider.transform.scale),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    ),
                     NavMeshAffector,
                 ));
             })

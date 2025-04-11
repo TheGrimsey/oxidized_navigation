@@ -50,6 +50,17 @@ fn nav_mesh_is_deterministic() {
 }
 
 #[test]
+fn nav_mesh_is_deterministic_with_compound_colliders() {
+    let mut app = App::setup_test_world();
+
+    let nav_mesh_one = app.setup_compound_world().get_nav_mesh();
+    app.clear_world();
+    let nav_mesh_two = app.setup_compound_world().get_nav_mesh();
+
+    assert_nav_mesh_equal(nav_mesh_one, nav_mesh_two);
+}
+
+#[test]
 fn compound_colliders_create_same_navmesh_as_individual_colliders() {
     let mut app = App::setup_test_world();
 
@@ -142,6 +153,7 @@ trait TestApp {
     fn wait_for_generation_to_finish(&mut self) -> &mut Self;
     fn setup_world(&mut self) -> &mut Self;
     fn setup_world_without_thin_wall(&mut self) -> &mut Self;
+    fn setup_compound_world(&mut self) -> &mut Self;
     fn setup_compound_world_without_thin_wall(&mut self) -> &mut Self;
     fn clear_world(&mut self) -> &mut Self;
     fn run_pathfinding(&self) -> Result<Vec<Vec3>, FindPathError>;
@@ -295,6 +307,42 @@ impl TestApp for App {
                 .for_each(|collider| {
                     commands.spawn((collider, NavMeshAffector));
                 });
+            })
+            .unwrap();
+
+        self.wait_for_generation_to_finish();
+
+        self
+    }
+
+    fn setup_compound_world(&mut self) -> &mut Self {
+        self.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                commands.spawn((
+                    Transform::IDENTITY,
+                    Collider::compound(
+                        [
+                            TestCollider::plane(),
+                            TestCollider::cube(),
+                            TestCollider::tall_cube(),
+                            TestCollider::rotated_cube(),
+                            TestCollider::scaled_and_rotated_cube(),
+                            TestCollider::fully_transformed_cube(),
+                            TestCollider::cone(),
+                            TestCollider::thin_wall(),
+                        ]
+                        .into_iter()
+                        .map(|collider| {
+                            (
+                                collider.transform.translation,
+                                collider.transform.rotation,
+                                collider.collider.scaled_by(collider.transform.scale),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                    ),
+                    NavMeshAffector,
+                ));
             })
             .unwrap();
 

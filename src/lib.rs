@@ -118,8 +118,8 @@ where
     /// [`RunFixedMainLoop`].
     #[must_use]
     pub fn in_schedule(mut self, schedule: impl ScheduleLabel) -> Self {
-      self.schedule = schedule.intern();
-      self
+        self.schedule = schedule.intern();
+        self
     }
 }
 

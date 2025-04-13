@@ -13,7 +13,7 @@ use crate::{
 use super::mesher::PolyMesh;
 
 /// Representation of a link between different polygons either internal to the tile or external (crossing over to another tile).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Link {
     Internal {
         /// Edge on self polygon.
@@ -36,7 +36,7 @@ pub enum Link {
 }
 
 /// A polygon within a nav-mesh tile.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Polygon {
     pub indices: [u32; VERTICES_IN_TRIANGLE],
     pub links: SmallVec<[Link; VERTICES_IN_TRIANGLE]>, // This becomes a mess memory wise with a ton of different small objects around.
@@ -47,7 +47,7 @@ pub struct Polygon {
 */
 
 /// A single nav-mesh tile.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct NavMeshTile {
     /// Vertices in world space.
     pub vertices: Box<[Vec3]>,
@@ -71,7 +71,7 @@ impl NavMeshTile {
 /// Container for all nav-mesh tiles. Used for pathfinding queries.
 ///
 /// Call [crate::query::find_path] to run pathfinding algorithm.
-#[derive(Default)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct NavMeshTiles {
     pub tiles: HashMap<UVec2, NavMeshTile>,
     pub tile_generations: HashMap<UVec2, u64>,

@@ -17,6 +17,7 @@ use bevy::{
 use bevy::tasks::futures_lite::future;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
+    colliders::rapier::RapierCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
@@ -34,9 +35,9 @@ fn main() {
                 }),
                 ..default()
             }),
-            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
-                0.5, 1.9, 250.0, -1.0,
-            )),
+            OxidizedNavigationPlugin::<RapierCollider>::new(
+                NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -1.0),
+            ),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.

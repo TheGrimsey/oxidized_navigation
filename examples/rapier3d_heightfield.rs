@@ -20,6 +20,7 @@ use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use bevy_rapier3d::render::RapierDebugRenderPlugin;
 use oxidized_navigation::DetailMeshSettings;
 use oxidized_navigation::{
+    colliders::rapier::RapierCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
@@ -36,7 +37,7 @@ fn main() {
                 }),
                 ..default()
             }),
-            OxidizedNavigationPlugin::<Collider>::new(
+            OxidizedNavigationPlugin::<RapierCollider>::new(
                 NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -10.0)
                     .with_max_tile_generation_tasks(Some(NonZeroU16::MIN))
                     .with_experimental_detail_mesh_generation(DetailMeshSettings {

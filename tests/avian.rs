@@ -11,6 +11,7 @@ use bevy::{
     utils::{HashMap, RandomState},
 };
 use oxidized_navigation::{
+    colliders::avian::AvianCollider,
     query::{find_path, FindPathError},
     tiles::{NavMeshTile, NavMeshTiles},
     ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
@@ -236,7 +237,7 @@ impl TestApp for App {
         app.add_plugins((
             MinimalPlugins,
             TransformPlugin,
-            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
+            OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings {
                 cell_width: 0.25,
                 cell_height: 0.1,
                 tile_width: NonZeroU16::new(100).unwrap(),

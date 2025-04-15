@@ -487,6 +487,7 @@ type NavmeshAffectorChangedQueryFilter<C> = (
     With<NavMeshAffector>,
 );
 
+#[expect(clippy::type_complexity)]
 fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
@@ -507,7 +508,7 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
             transform.translation.into(),
             transform.rotation.to_scaled_axis().into(),
         );
-        let local_aabb = C::oxidized_compute_local_aabb(&collider);
+        let local_aabb = C::oxidized_compute_local_aabb(collider);
         let aabb = local_aabb
             .scaled(&Vector3::new(
                 transform.scale.x,
@@ -600,6 +601,7 @@ fn can_generate_new_tiles(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::type_complexity)]
 fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
     mut generation_ticker: ResMut<GenerationTicker>,
@@ -667,7 +669,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         {
             let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
-            let geometry_result = get_geometry_type(C::oxidized_into_typed_shape(&collider));
+            let geometry_result = get_geometry_type(C::oxidized_into_typed_shape(collider));
             let transform = global_transform.compute_transform();
             handle_geometry_result(
                 geometry_result,

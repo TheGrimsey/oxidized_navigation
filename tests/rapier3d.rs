@@ -3,8 +3,8 @@ use std::{num::NonZeroU16, time::Duration};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
-    query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
-    OxidizedNavigationPlugin,
+    colliders::rapier::RapierCollider, query::find_path, ActiveGenerationTasks, NavMesh,
+    NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
@@ -61,7 +61,7 @@ fn setup_app(app: &mut App) {
     app.add_plugins((
         MinimalPlugins,
         TransformPlugin,
-        OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {
+        OxidizedNavigationPlugin::<RapierCollider>::new(NavMeshSettings {
             cell_width: 0.25,
             cell_height: 0.1,
             tile_width: NonZeroU16::new(100).unwrap(),

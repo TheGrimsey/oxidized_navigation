@@ -14,6 +14,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
 };
 use oxidized_navigation::{
+    colliders::avian::AvianCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
@@ -32,7 +33,7 @@ fn main() {
                 }),
                 ..default()
             }),
-            OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings::from_agent_and_bounds(
+            OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings::from_agent_and_bounds(
                 0.5, 1.9, 250.0, -1.0,
             )),
             OxidizedNavigationDebugDrawPlugin,

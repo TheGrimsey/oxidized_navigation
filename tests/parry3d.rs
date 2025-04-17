@@ -19,12 +19,14 @@ struct MyParryCollider {
 }
 
 impl OxidizedCollider for MyParryCollider {
-    fn oxidized_into_typed_shape(&self) -> TypedShape {
-        self.collider.as_typed_shape()
+    type Component = Self;
+
+    fn oxidized_into_typed_shape(collider: &Self) -> TypedShape {
+        collider.collider.as_typed_shape()
     }
 
-    fn oxidized_compute_local_aabb(&self) -> Aabb {
-        self.collider.compute_local_aabb()
+    fn oxidized_compute_local_aabb(collider: &Self) -> Aabb {
+        collider.collider.compute_local_aabb()
     }
 }
 

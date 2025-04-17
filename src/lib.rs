@@ -98,7 +98,7 @@ pub enum OxidizedNavigation {
 pub struct OxidizedNavigationPlugin<ColliderComponent> {
     pub settings: NavMeshSettings,
     schedule: Interned<dyn ScheduleLabel>,
-    _collider_type: PhantomData<ColliderComponent>,
+    _collider_type: PhantomData<fn() -> ColliderComponent>,
 }
 
 impl<C> OxidizedNavigationPlugin<C>
@@ -110,7 +110,7 @@ where
         OxidizedNavigationPlugin::<C> {
             settings,
             schedule: RunFixedMainLoop.intern(),
-            _collider_type: PhantomData::<C>,
+            _collider_type: PhantomData,
         }
     }
 
@@ -123,10 +123,7 @@ where
     }
 }
 
-impl<C> Plugin for OxidizedNavigationPlugin<C>
-where
-    C: OxidizedCollider,
-{
+impl<C: OxidizedCollider> Plugin for OxidizedNavigationPlugin<C> {
     fn build(&self, app: &mut App) {
         app.insert_resource(self.settings.clone());
 
@@ -490,87 +487,89 @@ type NavmeshAffectorChangedQueryFilter<C> = (
     With<NavMeshAffector>,
 );
 
+#[expect(clippy::type_complexity)]
 fn update_navmesh_affectors_system<C: OxidizedCollider>(
     nav_mesh_settings: Res<NavMeshSettings>,
     mut tile_affectors: ResMut<TileAffectors>,
     mut affector_relations: ResMut<NavMeshAffectorRelations>,
     mut dirty_tiles: ResMut<DirtyTiles>,
-    mut query: Query<(Entity, &C, &GlobalTransform), NavmeshAffectorChangedQueryFilter<C>>,
+    query: Query<
+        (Entity, &C::Component, &GlobalTransform),
+        NavmeshAffectorChangedQueryFilter<C::Component>,
+    >,
 ) {
     // Expand by 2 * walkable_radius to match with erode_walkable_area.
     let border_expansion =
         f32::from(nav_mesh_settings.walkable_radius * 2) * nav_mesh_settings.cell_width;
 
-    query
-        .iter_mut()
-        .for_each(|(e, collider, global_transform)| {
-            let transform = global_transform.compute_transform();
-            let iso = Isometry::new(
-                transform.translation.into(),
-                transform.rotation.to_scaled_axis().into(),
-            );
-            let local_aabb = collider.oxidized_compute_local_aabb();
-            let aabb = local_aabb
-                .scaled(&Vector3::new(
-                    transform.scale.x,
-                    transform.scale.y,
-                    transform.scale.z,
-                ))
-                .transform_by(&iso);
+    query.iter().for_each(|(e, collider, global_transform)| {
+        let transform = global_transform.compute_transform();
+        let iso = Isometry::new(
+            transform.translation.into(),
+            transform.rotation.to_scaled_axis().into(),
+        );
+        let local_aabb = C::oxidized_compute_local_aabb(collider);
+        let aabb = local_aabb
+            .scaled(&Vector3::new(
+                transform.scale.x,
+                transform.scale.y,
+                transform.scale.z,
+            ))
+            .transform_by(&iso);
 
-            let min_vec = Vec2::new(
-                aabb.mins.x - border_expansion,
-                aabb.mins.z - border_expansion,
-            );
-            let min_tile = nav_mesh_settings.get_tile_containing_position(min_vec);
+        let min_vec = Vec2::new(
+            aabb.mins.x - border_expansion,
+            aabb.mins.z - border_expansion,
+        );
+        let min_tile = nav_mesh_settings.get_tile_containing_position(min_vec);
 
-            let max_vec = Vec2::new(
-                aabb.maxs.x + border_expansion,
-                aabb.maxs.z + border_expansion,
-            );
-            let max_tile = nav_mesh_settings.get_tile_containing_position(max_vec);
+        let max_vec = Vec2::new(
+            aabb.maxs.x + border_expansion,
+            aabb.maxs.z + border_expansion,
+        );
+        let max_tile = nav_mesh_settings.get_tile_containing_position(max_vec);
 
-            let relation = if let Some(relation) = affector_relations.0.get_mut(&e) {
-                // Remove from previous.
-                for old_tile in relation.iter().filter(|tile_coord| {
-                    min_tile.x > tile_coord.x
-                        || min_tile.y > tile_coord.y
-                        || max_tile.x < tile_coord.x
-                        || max_tile.y < tile_coord.y
-                }) {
-                    if let Some(affectors) = tile_affectors.get_mut(old_tile) {
-                        affectors.remove(&e);
-                        dirty_tiles.0.insert(*old_tile);
-                    }
-                }
-                relation.clear();
-
-                relation
-            } else {
-                affector_relations
-                    .0
-                    .insert_unique_unchecked(e, SmallVec::default())
-                    .1
-            };
-
-            for x in min_tile.x..=max_tile.x {
-                for y in min_tile.y..=max_tile.y {
-                    let tile_coord = UVec2::new(x, y);
-
-                    let affectors = if let Some(affectors) = tile_affectors.get_mut(&tile_coord) {
-                        affectors
-                    } else {
-                        tile_affectors
-                            .insert_unique_unchecked(tile_coord, HashSet::default())
-                            .1
-                    };
-                    affectors.insert(e);
-
-                    relation.push(tile_coord);
-                    dirty_tiles.0.insert(tile_coord);
+        let relation = if let Some(relation) = affector_relations.0.get_mut(&e) {
+            // Remove from previous.
+            for old_tile in relation.iter().filter(|tile_coord| {
+                min_tile.x > tile_coord.x
+                    || min_tile.y > tile_coord.y
+                    || max_tile.x < tile_coord.x
+                    || max_tile.y < tile_coord.y
+            }) {
+                if let Some(affectors) = tile_affectors.get_mut(old_tile) {
+                    affectors.remove(&e);
+                    dirty_tiles.0.insert(*old_tile);
                 }
             }
-        });
+            relation.clear();
+
+            relation
+        } else {
+            affector_relations
+                .0
+                .insert_unique_unchecked(e, SmallVec::default())
+                .1
+        };
+
+        for x in min_tile.x..=max_tile.x {
+            for y in min_tile.y..=max_tile.y {
+                let tile_coord = UVec2::new(x, y);
+
+                let affectors = if let Some(affectors) = tile_affectors.get_mut(&tile_coord) {
+                    affectors
+                } else {
+                    tile_affectors
+                        .insert_unique_unchecked(tile_coord, HashSet::default())
+                        .1
+                };
+                affectors.insert(e);
+
+                relation.push(tile_coord);
+                dirty_tiles.0.insert(tile_coord);
+            }
+        }
+    });
 }
 
 fn handle_removed_affectors_system(
@@ -602,6 +601,7 @@ fn can_generate_new_tiles(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[expect(clippy::type_complexity)]
 fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     mut active_generation_tasks: ResMut<ActiveGenerationTasks>,
     mut generation_ticker: ResMut<GenerationTicker>,
@@ -612,7 +612,12 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
     nav_mesh: Res<NavMesh>,
     tile_affectors: Res<TileAffectors>,
     collider_query: Query<
-        (Entity, &C, &GlobalTransform, Option<&NavMeshAreaType>),
+        (
+            Entity,
+            &C::Component,
+            &GlobalTransform,
+            Option<&NavMeshAreaType>,
+        ),
         With<NavMeshAffector>,
     >,
 ) {
@@ -664,7 +669,7 @@ fn send_tile_rebuild_tasks_system<C: OxidizedCollider>(
         {
             let area = nav_mesh_affector.map_or(Some(Area(0)), |area_type| area_type.0);
 
-            let geometry_result = get_geometry_type(collider.oxidized_into_typed_shape());
+            let geometry_result = get_geometry_type(C::oxidized_into_typed_shape(collider));
             let transform = global_transform.compute_transform();
             handle_geometry_result(
                 geometry_result,

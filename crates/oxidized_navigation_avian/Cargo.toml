@@ -1,0 +1,58 @@
+[package]
+name = "oxidized_navigation_avian"
+description = "Avian integration for oxidized_navigation."
+version = "0.13.0"
+edition = "2021"
+
+authors = ["TheGrimsey"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/TheGrimsey/oxidized_navigation"
+repository = "https://github.com/TheGrimsey/oxidized_navigation"
+documentation = "https://docs.rs/crate/oxidized_navigation"
+
+keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
+categories = ["game-development"]
+
+[lib]
+bench = false
+
+[features]
+debug_draw = ["oxidized_navigation/debug_draw", "avian3d/debug-plugin"]
+trace = []
+
+[[example]]
+name = "avian"
+required-features = ["avian", "debug_draw"]
+
+[[example]]
+name = "avian_multi_floor"
+required-features = ["avian", "debug_draw"]
+
+[[test]]
+name = "avian"
+required-features = ["avian"]
+
+[dependencies]
+oxidized_navigation = { version = "0.12" }
+bevy = { version = "0.15", default-features = false }
+
+avian3d = { version = "0.2", default-features = false, features = ["3d", "f32", "parry-f32"] }
+parry3d = { version = "0.17" }
+
+[dev-dependencies]
+bevy = { version = "0.15", default-features = false, features = [
+    "bevy_asset",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_window",
+    "bevy_winit",
+    "x11",
+    "ktx2",
+    "tonemapping_luts",
+    "zstd",
+] }
+
+[package.metadata.docs.rs]
+# Compile docs.rs docs with debug_draw so docs for it appear.
+features = ["debug_draw"]

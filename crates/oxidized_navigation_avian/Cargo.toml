@@ -34,7 +34,7 @@ name = "avian"
 required-features = ["avian"]
 
 [dependencies]
-oxidized_navigation = { version = "0.12" }
+oxidized_navigation = { path = "../oxidized_navigation", version = "0.13" }
 bevy = { version = "0.15", default-features = false }
 
 avian3d = { version = "0.2", default-features = false, features = ["3d", "f32", "parry-f32"] }

@@ -24,7 +24,7 @@ avian = ["avian3d", "parry3d"]
 debug_draw = [
     "bevy/bevy_gizmos",
     "bevy/bevy_render",
-    "bevy_rapier3d?/debug-render-3d",
+    #"bevy_rapier3d?/debug-render-3d",
     "avian3d?/debug-plugin",
 ]
 trace = []

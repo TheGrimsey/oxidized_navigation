@@ -1,7 +1,7 @@
 [package]
 name = "oxidized_navigation_avian"
 description = "Avian integration for oxidized_navigation."
-version = "0.13.0"
+version = "0.1.0"
 edition = "2021"
 
 authors = ["TheGrimsey"]
@@ -19,7 +19,6 @@ bench = false
 
 [features]
 debug_draw = ["oxidized_navigation/debug_draw", "avian3d/debug-plugin"]
-trace = []
 
 [[example]]
 name = "avian"
@@ -51,7 +50,3 @@ bevy = { version = "0.15", default-features = false, features = [
     "tonemapping_luts",
     "zstd",
 ] }
-
-[package.metadata.docs.rs]
-# Compile docs.rs docs with debug_draw so docs for it appear.
-features = ["debug_draw"]

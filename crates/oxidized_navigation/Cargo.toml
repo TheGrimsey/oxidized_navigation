@@ -25,6 +25,10 @@ trace = []
 name = "parry3d"
 required-features = ["debug_draw"]
 
+[[example]]
+name = "parry3d"
+required-features = ["debug_draw"]
+
 [dependencies]
 bevy = { version = "0.15", default-features = false, features = ["multi_threaded"] }
 

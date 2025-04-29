@@ -39,7 +39,7 @@ jobs:
           - artifact_key: avian
             test_arg: -p oxidized_navigation_avian
           - artifact_key: rapier3d
-            test_arg: -p oxidized_navigation_rapier3d
+            test_arg: -p oxidized_navigation_rapier
     steps:
       - name: Checkout repository code.
         uses: actions/checkout@v4

@@ -1,8 +1,4 @@
-use std::{
-    hash::Hash,
-    num::NonZeroU16,
-    time::Duration,
-};
+use std::{hash::Hash, num::NonZeroU16, time::Duration};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
 use bevy::{
@@ -137,14 +133,13 @@ fn sort_tile(mut tile: NavMeshTile) -> NavMeshTile {
     for polygon in tile.polygons.iter_mut() {
         polygon.links.sort_by_key(hash_deterministic);
     }
-    tile.polygons
-        .sort_by_key(hash_deterministic);
+    tile.polygons.sort_by_key(hash_deterministic);
     tile
 }
 
 fn hash_deterministic<T: Hash>(value: &T) -> u64 {
     let state = RandomState::with_seed(1337);
-    
+
     state.hash_one(value)
 }
 

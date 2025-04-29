@@ -19,8 +19,8 @@ use oxidized_navigation::{
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
-use std::sync::{Arc, RwLock};
 use oxidized_navigation_avian::AvianCollider;
+use std::sync::{Arc, RwLock};
 
 fn main() {
     App::new()

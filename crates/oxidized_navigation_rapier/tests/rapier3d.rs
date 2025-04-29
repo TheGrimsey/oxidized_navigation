@@ -3,8 +3,8 @@ use std::{num::NonZeroU16, time::Duration};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
-    query::find_path, ActiveGenerationTasks, NavMesh,
-    NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
+    query::find_path, ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings,
+    OxidizedNavigationPlugin,
 };
 use oxidized_navigation_rapier::RapierCollider;
 

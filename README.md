@@ -4,7 +4,7 @@
 
 Tiled **Runtime** Nav-mesh generation for 3D worlds in [Bevy](https://bevyengine.org/). Based on [Recast's Nav-mesh generation](https://github.com/recastnavigation/recastnavigation/) but in Rust.
 
-Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement the ``OxidizedCollider`` trait from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``. ``OxidizedCollider`` implementations for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) and [Avian 3d](https://crates.io/crates/avian3d) are included under the `rapier` and `avian` features.
+Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement the ``OxidizedCollider`` trait from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``. ``OxidizedCollider`` implementations for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) and [Avian 3d](https://crates.io/crates/avian3d) are included in the `oxidized_navitation_rapier` & `oxidized_navigation_avian` crates respectively.
 
 ## Quick-start:
 **Nav-mesh generation:**
@@ -21,7 +21,7 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 3. To access the data call ``RwLock::read``. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
 4. Call ``query::find_path`` with the ``NavMeshTiles`` returned from the ``RwLock``. 
 
-*Also see the [examples](https://github.com/TheGrimsey/oxidized_navigation/tree/master/examples) for how to run pathfinding in an async task which may be preferable.*
+*Also see the [examples](https://github.com/TheGrimsey/oxidized_navigation/tree/master/crates/oxidized_navigation/examples) for how to run pathfinding in an async task which may be preferable.*
 
 ## FAQ
 

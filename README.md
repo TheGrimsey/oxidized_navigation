@@ -4,13 +4,13 @@
 
 Tiled **Runtime** Nav-mesh generation for 3D worlds in [Bevy](https://bevyengine.org/). Based on [Recast's Nav-mesh generation](https://github.com/recastnavigation/recastnavigation/) but in Rust.
 
-Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement the ``OxidizedCollider`` trait from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``. ``OxidizedCollider`` implementations for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) and [Avian 3d](https://crates.io/crates/avian3d) are included under the `rapier` and `avian` features.
+Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement the ``OxidizedCollider`` trait from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``. ``OxidizedCollider`` implementations for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) and [Avian 3d](https://crates.io/crates/avian3d) are included in the `oxidized_navitation_rapier` & `oxidized_navigation_avian` crates respectively.
 
 ## Quick-start:
 **Nav-mesh generation:**
 1. Choose which backend you're going to use (bevy_rapier3d, avian_3d, or custom parry3d based colliders) and enable the relevant crate features (`rapier`, `avian`, or `parry3d` features).
 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `avian_3d`.
-3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for avian `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`)
+3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for avian `OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings {...}`)
 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `avian_3d`) to any entity you want to affect the nav-mesh.
 
 *At this point nav-meshes will be automatically generated whenever the collider or ``GlobalTransform`` of any entity with a ``NavMeshAffector`` is changed.*
@@ -21,19 +21,13 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 3. To access the data call ``RwLock::read``. *This will block until you get read acces on the lock. If a task is already writing to the lock it may take time.*
 4. Call ``query::find_path`` with the ``NavMeshTiles`` returned from the ``RwLock``. 
 
-*Also see the [examples](https://github.com/TheGrimsey/oxidized_navigation/tree/master/examples) for how to run pathfinding in an async task which may be preferable.*
+*Also see the [examples](https://github.com/TheGrimsey/oxidized_navigation/tree/master/crates/oxidized_navigation/examples) for how to run pathfinding in an async task which may be preferable.*
 
 ## FAQ
 
 > I added the `OxidizedNavigationPlugin` to my app and now it won't compile.
 
-You need to use `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`, where `Collider` is either a rapier or avian `Collider`, or your own custom collider that implements the `OxidizedCollider` trait. This is necessary to allow us to be generic over different `Collider` components.
-
-> When enabling XPBD, I get the error "You must pick a single parry3d feature."
-
-You need to disable the default `parry_016` feature as XPBD uses a different version of `Parry3d`. 
-
-*A version of `Parry3d` needs to be enabled by default for the crate to be compilable & publishable.*
+You need to use `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`, where `Collider` is either `RapierCollider` or `AvianCollider` from the integration crates, or your own struct that implements the `OxidizedCollider` trait. This is necessary to allow us to be generic over different `Collider` components.
 
 > I don't want to use the Rapier3d or XPBD3d physics engines just to generate a navmesh. How do I create my own `parry3d` wrapper component?
 
@@ -43,20 +37,30 @@ You need to create a component that contains a parry3d `SharedShape`, then imple
 
 Currently only `parry3d` colliders are supported, or crates using `parry3d` colliders. You'd have to write a function to convert your shapes/bevy shapes into `parry3d` colliders.
 
-> Why aren't my Xpbd/Parry3d colliders scaled properly?
-
-You need to manually apply your transform's scale to the Xpbd/Parry3d collider's shape.
-
 > My physics crate updated and now my nav-meshes won't generate.
 
-This is due to how dependencies are handled, Oxidized Navigation will only interact with the versions specified in [Supported Versions](#supported-versions). If you want to use other versions you can [make cargo use a different version](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section).
+This is due to how dependencies are handled, Oxidized Navigation depends on a specific parry3d version. The integration crates depend on specific versions of their physics crates.
+
+If a new version of the integration crate hasn't released yet, you can implement the `OxidizedCollider` trait yourself, see the [parry3d example](https://github.com/TheGrimsey/oxidized_navigation/blob/master/crates/oxidized_navigation/examples/parry3d.rs).
 
 > How do I draw the Nav-mesh for debugging?
 
-Debug draw is available behind the ``debug_draw`` feature and using the ``OxidizedNavigationDebugDrawPlugin`` see usage in examples.
+Debug draw is available behind the ``debug_draw`` feature & the ``OxidizedNavigationDebugDrawPlugin``, see usage in examples.
 
 ## Supported versions
 
+| Crate Version | Bevy Version |
+| ------------- | ------------ |
+| 0.13          | 0.15         |
+
+### Integration Crates
+
+Two integration crates are shipped for Oxidized Navigation for Avian3d (`oxidized_navigation_avian`) & Rapier3d (`oxidized_navigation_rapier`) respectively.
+
+### 
+
+<details>
+<summary> Before integration crates split </summary>
 | Crate Version | Bevy Version | Bevy Rapier 3D Version | Bevy Xpbd 3D Version | Avian3D Version     | Parry3d Version |
 |---------------|--------------|------------------------|----------------------|---------------------|-----------------|
 | 0.12.0        | 0.15         | 0.28                   | unsupported          | git-rev-52cbcec (1) | 0.17            |
@@ -71,15 +75,7 @@ Debug draw is available behind the ``debug_draw`` feature and using the ``Oxidiz
 | 0.3.0         | 0.10.0       | 0.21                   | unsupported          | unsupported         | unsupported     |
 | 0.2.0         | 0.9.X        | 0.20                   | unsupported          | unsupported         | unsupported     |
 | 0.1.X         | 0.9.X        | 0.19                   | unsupported          | unsupported         | unsupported     |
-
-### (1)
-- Avian3D has yet to publish an official bevy-0.15 release. There will be a 0.12.1 release when they do
-- You will need to use a `[patch.crates-io]` override for now see [MIGRATING - 0.12.0](https://github.com/TheGrimsey/oxidized_navigation/blob/master/MIGRATING.md#0120)
-- The minimum git rev sha supported is [52cbcec](https://github.com/Jondolf/avian/commit/52cbcecce0fd05a65005ab6935ebeb231373c2c6)
-- Newer git revs will possibly (probably) work but are untested with this crate, YMMV 🤷🏼
-
-**Using an unsupported Rapier, Xpbd, Avian3d or parry3d version will cause Oxidized Navigation to fail as it tries to get the wrong version of components.**
-In this case you may be able to [override which version Oxidized Navigation depends on](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html).
+</details>
 
 ## Non-exhaustive TODO-list:
 

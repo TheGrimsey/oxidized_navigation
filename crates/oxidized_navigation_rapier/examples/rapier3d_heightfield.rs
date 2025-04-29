@@ -1,61 +1,78 @@
-//! Nav-mesh set up example for multiple floors.
+//! Nav-mesh set up example for both blocking & async pathfinding with a heightfield.
 //!
 //! Press A to run async path finding.
 //!
 //! Press B to run blocking path finding.
 //!
 
-use avian3d::prelude::Collider;
-use avian3d::PhysicsPlugins;
+use std::num::{NonZeroU16, NonZeroU8};
+use std::sync::{Arc, RwLock};
+
+use bevy::color::palettes;
 use bevy::tasks::futures_lite::future;
 use bevy::{
-    color::palettes,
+    math::primitives,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
+use bevy_editor_pls::EditorPlugin;
+use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
+use bevy_rapier3d::render::RapierDebugRenderPlugin;
+use oxidized_navigation::DetailMeshSettings;
 use oxidized_navigation::{
-    colliders::avian::AvianCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
-use std::sync::{Arc, RwLock};
+use oxidized_navigation_rapier::RapierCollider;
 
 fn main() {
     App::new()
-        // Default Plugins
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Oxidized Navigation: Rapier 3d Multi floor".to_owned(),
+                    title: "Oxidized Navigation: Rapier 3d Heightfield".to_owned(),
                     ..default()
                 }),
                 ..default()
             }),
-            OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings::from_agent_and_bounds(
-                0.5, 1.9, 250.0, -1.0,
-            )),
+            OxidizedNavigationPlugin::<RapierCollider>::new(
+                NavMeshSettings::from_agent_and_bounds(0.5, 1.9, 250.0, -10.0)
+                    .with_max_tile_generation_tasks(Some(NonZeroU16::MIN))
+                    .with_experimental_detail_mesh_generation(DetailMeshSettings {
+                        max_height_error: NonZeroU16::new(4).unwrap(),
+                        sample_step: NonZeroU8::new(16).unwrap(),
+                    }),
+            ),
             OxidizedNavigationDebugDrawPlugin,
             // The rapier plugin needs to be added for the scales of colliders to be correct if the scale of the entity is not uniformly 1.
             // An example of this is the "Thin Wall" in [setup_world_system]. If you remove this plugin, it will not appear correctly.
-            PhysicsPlugins::default(),
+            RapierPhysicsPlugin::<NoUserData>::default(),
+            RapierDebugRenderPlugin::default(),
+            EditorPlugin::default(),
         ))
         .insert_resource(AsyncPathfindingTasks::default())
-        .add_systems(Startup, setup_world_system)
+        .add_systems(Startup, (setup_world_system, info_system))
         .add_systems(
             Update,
             (
                 run_blocking_pathfinding,
                 run_async_pathfinding,
                 poll_pathfinding_tasks_system,
-                toggle_nav_mesh_debug_draw,
+                draw_nav_mesh_system,
                 spawn_or_despawn_affector_system,
             ),
         )
         .run();
 }
 
+//
+//  Blocking Pathfinding.
+//  Press B to run.
+//
+//  Running pathfinding in a system.
+//
 fn run_blocking_pathfinding(
     mut commands: Commands,
     keys: Res<ButtonInput<KeyCode>>,
@@ -101,9 +118,14 @@ fn run_blocking_pathfinding(
     }
 }
 
+//
+//  Async Pathfinding.
+//  Press A to run.
+//
 //  Running pathfinding in a task without blocking the frame.
 //  Also check out Bevy's async compute example.
 //  https://github.com/bevyengine/bevy/blob/main/examples/async_tasks/async_compute.rs
+//
 
 // Holder resource for tasks.
 #[derive(Default, Resource)]
@@ -150,7 +172,7 @@ fn poll_pathfinding_tasks_system(
             info!("Async path task finished with result: {:?}", string_path);
             commands.spawn(DrawPath {
                 timer: Some(Timer::from_seconds(4.0, TimerMode::Once)),
-                pulled_path: string_path,
+                pulled_path: string_path.clone(),
                 color: palettes::css::BLUE.into(),
             });
 
@@ -193,50 +215,47 @@ async fn async_path_find(
     None
 }
 
-fn toggle_nav_mesh_debug_draw(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut show_navmesh: ResMut<DrawNavMesh>,
-) {
+//
+//  Draw Nav-mesh.
+//  Press M to toggle drawing the navmesh.
+//
+fn draw_nav_mesh_system(keys: Res<ButtonInput<KeyCode>>, mut draw_nav_mesh: ResMut<DrawNavMesh>) {
     if keys.just_pressed(KeyCode::KeyM) {
-        show_navmesh.0 = !show_navmesh.0;
+        draw_nav_mesh.0 = !draw_nav_mesh.0;
     }
 }
 
-fn setup_world_system(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    print_controls();
+fn setup_world_system(mut commands: Commands) {
+    // light
+    commands.spawn((PointLight::default(), Transform::from_xyz(4.0, 8.0, 4.0)));
 
+    // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(15.0, 10.0, 20.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        Transform::from_xyz(60.0, 50.0, 50.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
     ));
 
-    commands.spawn((
-        DirectionalLight {
-            shadows_enabled: true,
-            ..default()
-        },
-        Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, -0.5, 0.0)),
-    ));
+    let heightfield_size = 70;
 
-    // Plane
-    commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(10.0, 10.0))),
-        MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
-        Transform::IDENTITY,
-        Collider::cuboid(10.0, 0.2, 10.0),
-        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
-    ));
+    let heightfield_heights = (0..(heightfield_size * heightfield_size))
+        .map(|value| {
+            let y = value / heightfield_size;
+            let x = value % heightfield_size;
 
+            ((y as f32 / 10.0).sin() + (x as f32 / 10.0).cos()) / 10.0
+        })
+        .collect();
+
+    // Heightfield.
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(10.0, 10.0))),
-        MeshMaterial3d(materials.add(Color::srgb(0.68, 0.68, 1.0))),
-        Transform::from_xyz(0.0, 6.0, 0.0),
-        Collider::cuboid(10.0, 0.2, 10.0),
-        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
+        Transform::from_xyz(0.0, 0.0, 0.0),
+        Collider::heightfield(
+            heightfield_heights,
+            heightfield_size,
+            heightfield_size,
+            Vec3::splat(heightfield_size as f32),
+        ),
+        NavMeshAffector,
     ));
 }
 
@@ -257,10 +276,10 @@ fn spawn_or_despawn_affector_system(
     } else {
         let entity = commands
             .spawn((
-                Mesh3d(meshes.add(Cuboid::new(2.5, 2.5, 2.5))),
+                Mesh3d(meshes.add(Mesh::from(primitives::Cuboid::new(2.5, 2.5, 2.5)))),
                 MeshMaterial3d(materials.add(Color::srgb(1.0, 0.1, 0.5))),
                 Transform::from_xyz(5.0, 0.8, -5.0),
-                Collider::cuboid(2.5, 2.5, 2.5),
+                Collider::cuboid(1.25, 1.25, 1.25),
                 NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
             ))
             .id();
@@ -269,11 +288,11 @@ fn spawn_or_despawn_affector_system(
     }
 }
 
-fn print_controls() {
+fn info_system() {
     info!("=========================================");
     info!("| Press A to run ASYNC path finding.    |");
     info!("| Press B to run BLOCKING path finding. |");
-    info!("| Press M to toggle drawing nav-mesh.   |");
+    info!("| Press M to draw nav-mesh.             |");
     info!("| Press X to spawn or despawn red cube. |");
     info!("=========================================");
 }

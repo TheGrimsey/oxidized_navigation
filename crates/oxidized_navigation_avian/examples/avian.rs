@@ -5,10 +5,10 @@
 use avian3d::prelude::{Collider, PhysicsPlugins};
 use bevy::{math::primitives, prelude::*};
 use oxidized_navigation::{
-    colliders::avian::AvianCollider,
     debug_draw::{DrawNavMesh, OxidizedNavigationDebugDrawPlugin},
     NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+use oxidized_navigation_avian::AvianCollider;
 
 fn main() {
     App::new()

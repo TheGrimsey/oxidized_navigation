@@ -1,10 +1,5 @@
 use bevy::ecs::component::Component;
 
-#[cfg(feature = "avian")]
-pub mod avian;
-#[cfg(feature = "rapier")]
-pub mod rapier;
-
 /// The trait that is required to implement for the collider that you want to use with oxidized-navigation.
 /// Essentially it allows you to use any bevy component that contains a `parry3d::shape::SharedShape` as a collider.
 ///

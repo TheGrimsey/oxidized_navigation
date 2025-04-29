@@ -779,7 +779,7 @@ fn flood_region(
     regions[entry.index as usize] = region_id;
     distances[entry.index as usize] = 0;
 
-    let lev = if level >= 2 { level - 2 } else { 0 };
+    let lev = level.saturating_sub(2);
     let mut expanded_any = false;
 
     while let Some(entry) = stack.pop() {

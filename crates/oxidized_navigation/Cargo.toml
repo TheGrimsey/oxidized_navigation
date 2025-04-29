@@ -23,7 +23,6 @@ trace = []
 
 [[test]]
 name = "parry3d"
-required-features = ["debug_draw"]
 
 [[example]]
 name = "parry3d"

@@ -29,12 +29,6 @@ Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement th
 
 You need to use `OxidizedNavigationPlugin::<Collider>::new(NavMeshSettings {...}`, where `Collider` is either `RapierCollider` or `AvianCollider` from the integration crates, or your own struct that implements the `OxidizedCollider` trait. This is necessary to allow us to be generic over different `Collider` components.
 
-> When enabling XPBD, I get the error "You must pick a single parry3d feature."
-
-You need to disable the default `parry_016` feature as XPBD uses a different version of `Parry3d`. 
-
-*A version of `Parry3d` needs to be enabled by default for the crate to be compilable & publishable.*
-
 > I don't want to use the Rapier3d or XPBD3d physics engines just to generate a navmesh. How do I create my own `parry3d` wrapper component?
 
 You need to create a component that contains a parry3d `SharedShape`, then implement the `OxidizedCollider` trait. See the [parry3d example](./examples/parry3d.rs) for a basic example.
@@ -45,7 +39,9 @@ Currently only `parry3d` colliders are supported, or crates using `parry3d` coll
 
 > My physics crate updated and now my nav-meshes won't generate.
 
-This is due to how dependencies are handled, Oxidized Navigation will only interact with the versions specified in [Supported Versions](#supported-versions). If you want to use other versions you can [make cargo use a different version](https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section).
+This is due to how dependencies are handled, Oxidized Navigation depends on a specific parry3d version. The integration crates depend on specific versions of their physics crates.
+
+If a new version of the integration crate hasn't released yet, you can implement the `OxidizedCollider` trait yourself, see the [parry3d example](https://github.com/TheGrimsey/oxidized_navigation/blob/master/crates/oxidized_navigation/examples/parry3d.rs).
 
 > How do I draw the Nav-mesh for debugging?
 
@@ -57,20 +53,10 @@ Debug draw is available behind the ``debug_draw`` feature & the ``OxidizedNaviga
 | ------------- | ------------ |
 | 0.13          | 0.15         |
 
-### Integration Crate
+### Integration Crates
 
-#### Avian
+Two integration crates are shipped for Oxidized Navigation for Avian3d (`oxidized_navigation_avian`) & Rapier3d (`oxidized_navigation_rapier`) respectively.
 
-| Oxidized Navigation Version | Integration Version |
-| --------------------------- | ------------------- |
-| 0.13 | 0.1 |
-
-#### Rapier
-
-| Oxidized Navigation Version | Integration Version |
-| --------------------------- | ------------------- |
-| 0.13 | 0.1 |
- 
 ### 
 
 <details>

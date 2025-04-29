@@ -51,10 +51,9 @@ use bevy::ecs::entity::EntityHashMap;
 use bevy::tasks::futures_lite::future;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
-    ecs::system::Resource,
     ecs::{intern::Interned, schedule::ScheduleLabel},
+    platform::collections::{HashMap, HashSet},
     prelude::*,
-    utils::{HashMap, HashSet},
 };
 use colliders::OxidizedCollider;
 use contour::build_contours;
@@ -546,10 +545,12 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
 
             relation
         } else {
-            affector_relations
-                .0
-                .insert_unique_unchecked(e, SmallVec::default())
-                .1
+            unsafe {
+                affector_relations
+                    .0
+                    .insert_unique_unchecked(e, SmallVec::default())
+                    .1
+            }
         };
 
         for x in min_tile.x..=max_tile.x {
@@ -559,9 +560,11 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
                 let affectors = if let Some(affectors) = tile_affectors.get_mut(&tile_coord) {
                     affectors
                 } else {
-                    tile_affectors
-                        .insert_unique_unchecked(tile_coord, HashSet::default())
-                        .1
+                    unsafe {
+                        tile_affectors
+                            .insert_unique_unchecked(tile_coord, HashSet::default())
+                            .1
+                    }
                 };
                 affectors.insert(e);
 
@@ -852,7 +855,7 @@ fn remove_finished_tasks(
     active_generation_tasks.0.retain_mut(|task| {
         if let Some(tile) = future::block_on(future::poll_once(task)) {
             if let Some(tile) = tile {
-                event.send(TileGenerated(tile));
+                event.write(TileGenerated(tile));
             }
 
             false

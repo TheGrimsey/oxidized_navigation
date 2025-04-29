@@ -22,19 +22,18 @@ debug_draw = ["oxidized_navigation/debug_draw", "bevy_rapier3d/debug-render-3d"]
 
 [[example]]
 name = "rapier3d"
-required-features = ["rapier", "debug_draw"]
+required-features = ["debug_draw"]
 
 [[example]]
 name = "rapier3d_heightfield"
-required-features = ["rapier", "debug_draw"]
+required-features = ["debug_draw"]
 
 [[example]]
 name = "rapier3d_multi_floor"
-required-features = ["rapier", "debug_draw"]
+required-features = ["debug_draw"]
 
 [[test]]
 name = "rapier3d"
-required-features = ["rapier"]
 
 [dependencies]
 oxidized_navigation = { path = "../oxidized_navigation", version = "0.13" }

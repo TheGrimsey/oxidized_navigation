@@ -3,9 +3,10 @@ use std::{num::NonZeroU16, time::Duration};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
-    colliders::rapier::RapierCollider, query::find_path, ActiveGenerationTasks, NavMesh,
+    query::find_path, ActiveGenerationTasks, NavMesh,
     NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+use oxidized_navigation_rapier::RapierCollider;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);

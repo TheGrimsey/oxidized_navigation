@@ -14,13 +14,13 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
 };
 use oxidized_navigation::{
-    colliders::avian::AvianCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
 use std::sync::{Arc, RwLock};
+use oxidized_navigation_avian::AvianCollider;
 
 fn main() {
     App::new()

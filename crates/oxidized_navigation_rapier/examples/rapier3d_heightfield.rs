@@ -20,12 +20,12 @@ use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use bevy_rapier3d::render::RapierDebugRenderPlugin;
 use oxidized_navigation::DetailMeshSettings;
 use oxidized_navigation::{
-    colliders::rapier::RapierCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+use oxidized_navigation_rapier::RapierCollider;
 
 fn main() {
     App::new()

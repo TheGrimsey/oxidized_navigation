@@ -35,11 +35,11 @@ jobs:
           - artifact_key: benches
             test_arg: --benches
           - artifact_key: parry3d
-            test_arg: test -p oxidized_navigation
+            test_arg: -p oxidized_navigation
           - artifact_key: avian
-            test_arg: test -p oxidized_navigation_avian
+            test_arg: -p oxidized_navigation_avian
           - artifact_key: rapier3d
-            test_arg: test -p oxidized_navigation_rapier3d
+            test_arg: -p oxidized_navigation_rapier3d
     steps:
       - name: Checkout repository code.
         uses: actions/checkout@v4

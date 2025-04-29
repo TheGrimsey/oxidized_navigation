@@ -23,15 +23,14 @@ trace = []
 
 [[example]]
 name = "avian"
-required-features = ["avian", "debug_draw"]
+required-features = ["debug_draw"]
 
 [[example]]
 name = "avian_multi_floor"
-required-features = ["avian", "debug_draw"]
+required-features = ["debug_draw"]
 
 [[test]]
 name = "avian"
-required-features = ["avian"]
 
 [dependencies]
 oxidized_navigation = { path = "../oxidized_navigation", version = "0.13" }

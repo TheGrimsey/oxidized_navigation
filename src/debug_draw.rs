@@ -2,7 +2,7 @@
 use bevy::{
     gizmos::{config::GizmoConfigGroup, AppGizmoBuilder},
     prelude::{
-        any_with_component, App, Color, Commands, Component, Entity, Gizmos, IntoSystemConfigs,
+        any_with_component, App, Color, Commands, Component, Entity, Gizmos, IntoScheduleConfigs,
         Plugin, Query, ReflectResource, Res, Resource, Update, Vec3,
     },
     reflect::Reflect,

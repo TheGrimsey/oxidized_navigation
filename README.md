@@ -4,16 +4,29 @@
 
 Tiled **Runtime** Nav-mesh generation for 3D worlds in [Bevy](https://bevyengine.org/). Based on [Recast's Nav-mesh generation](https://github.com/recastnavigation/recastnavigation/) but in Rust.
 
-Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement the ``OxidizedCollider`` trait from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``. ``OxidizedCollider`` implementations for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) and [Avian 3d](https://crates.io/crates/avian3d) are included in the `oxidized_navitation_rapier` & `oxidized_navigation_avian` crates respectively.
+Takes in [Parry3d](https://crates.io/crates/parry3d) colliders that implement the ``OxidizedCollider`` trait from entities with the ``NavMeshAffector`` component and **asynchronously** generates tiles of navigation meshes based on ``NavMeshSettings``. ``OxidizedCollider`` implementations for [Bevy Rapier3D](https://crates.io/crates/bevy_rapier3d) and [Avian 3d](https://crates.io/crates/avian3d) are included in the `oxidized_navigation_rapier` & `oxidized_navigation_avian` crates respectively.
 
 ## Quick-start:
 **Nav-mesh generation:**
-1. Choose which backend you're going to use (bevy_rapier3d, avian_3d, or custom parry3d based colliders) and enable the relevant crate features (`rapier`, `avian`, or `parry3d` features).
+1. Choose which backend you're going to use (bevy_rapier3d, avian_3d, or custom parry3d based colliders) and use the relevant implementation crate.
 2. If you opted for custom parry3d colliders, implement the `OxidizedCollider` trait for your collider component that wraps a `parry3d::shape::SharedShape`. This is already done for `bevy_rapier3d` and `avian_3d`.
 3. Add ``OxidizedNavigationPlugin`` as a plugin. (eg. for avian `OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings {...}`)
 4. Attach a ``NavMeshAffector`` component and a collider that implements the `OxidizedCollider` trait (already implemented for `bevy_rapier3d` and `avian_3d`) to any entity you want to affect the nav-mesh.
 
 *At this point nav-meshes will be automatically generated whenever the collider or ``GlobalTransform`` of any entity with a ``NavMeshAffector`` is changed.*
+
+```rust
+// Add the plugin (for example for Avian)
+app.add_plugins(OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings::from_agent_and_bounds(
+                0.5, 1.9, 250.0, -1.0,
+)));
+
+// Attach components to an entity
+commands.spawn((
+    NavMeshAffector,
+    Collider::cuboid(25.0, 0.1, 25.0),
+));
+```
 
 **Querying the nav-mesh / Pathfinding:**
 1. Your system needs to take in the ``NavMesh`` resource.

@@ -29,7 +29,7 @@ name = "parry3d"
 required-features = ["debug_draw"]
 
 [dependencies]
-bevy = { version = "0.15", default-features = false, features = ["multi_threaded"] }
+bevy = { version = "0.16", default-features = false, features = ["multi_threaded"] }
 
 # parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
 nalgebra = { version = "0.33", features = ["convert-glam029"] }
@@ -40,7 +40,7 @@ parry3d = { version = "0.17" }
 smallvec = { version = "1.13", features = ["union"] }
 
 [dev-dependencies]
-bevy = { version = "0.15", default-features = false, features = [
+bevy = { version = "0.16", default-features = false, features = [
     "bevy_asset",
     "bevy_pbr",
     "bevy_render",

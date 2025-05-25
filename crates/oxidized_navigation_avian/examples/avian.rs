@@ -106,7 +106,7 @@ fn spawn_or_despawn_affector_system(
     }
 
     if let Some(entity) = *spawned_entity {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
         *spawned_entity = None;
     } else {
         let entity = commands

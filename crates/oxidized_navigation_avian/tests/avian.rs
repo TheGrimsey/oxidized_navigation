@@ -1,10 +1,8 @@
-use std::{hash::Hash, num::NonZeroU16, time::Duration};
+use std::{hash::{Hash, BuildHasher}, num::NonZeroU16, time::Duration};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
 use bevy::{
-    ecs::system::RunSystemOnce,
-    prelude::*,
-    utils::{HashMap, RandomState},
+    ecs::system::RunSystemOnce, platform::{collections::HashMap, hash::FixedState}, prelude::*
 };
 use oxidized_navigation::{
     query::{find_path, FindPathError},
@@ -138,7 +136,7 @@ fn sort_tile(mut tile: NavMeshTile) -> NavMeshTile {
 }
 
 fn hash_deterministic<T: Hash>(value: &T) -> u64 {
-    let state = RandomState::with_seed(1337);
+    let state = FixedState::with_seed(1337);
 
     state.hash_one(value)
 }
@@ -248,8 +246,7 @@ impl TestApp for App {
                 max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
                 experimental_detail_mesh_generation: None,
             }),
-            PhysicsPlugins::default(),
-            HierarchyPlugin,
+            PhysicsPlugins::default()
         ));
 
         app
@@ -386,7 +383,7 @@ impl TestApp for App {
             .run_system_once(
                 |q_transform: Query<Entity, With<Transform>>, mut commands: Commands| {
                     for entity in q_transform.iter() {
-                        commands.entity(entity).despawn_recursive();
+                        commands.entity(entity).despawn();
                     }
                 },
             )

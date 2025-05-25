@@ -1,0 +1,67 @@
+[package]
+name = "oxidized_navigation"
+description = "A Nav-Mesh generation plugin for Bevy Engine."
+version = "0.13.0"
+edition = "2021"
+
+authors = ["TheGrimsey"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/TheGrimsey/oxidized_navigation"
+repository = "https://github.com/TheGrimsey/oxidized_navigation"
+documentation = "https://docs.rs/crate/oxidized_navigation"
+
+keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
+categories = ["game-development"]
+
+[lib]
+bench = false
+
+[features]
+debug_draw = ["bevy/bevy_gizmos", "bevy/bevy_render"]
+trace = []
+
+[[test]]
+name = "parry3d"
+
+[[example]]
+name = "parry3d"
+required-features = ["debug_draw"]
+
+[dependencies]
+bevy = { version = "0.15", default-features = false, features = ["multi_threaded"] }
+
+# parry3d doesn't expose the convert-glam feature, so we need to add nalgebra to enable the feature
+nalgebra = { version = "0.33", features = ["convert-glam029"] }
+
+parry3d = { version = "0.17" }
+
+
+smallvec = { version = "1.13", features = ["union"] }
+
+[dev-dependencies]
+bevy = { version = "0.15", default-features = false, features = [
+    "bevy_asset",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_window",
+    "bevy_winit",
+    "x11",
+    "ktx2",
+    "tonemapping_luts",
+    "zstd",
+] }
+criterion = { version = "0.5" }
+bevy_editor_pls = { git = "https://github.com/onkoe/bevy_editor_pls.git" }
+
+[[bench]]
+name = "simple_geometry"
+harness = false
+
+[[bench]]
+name = "simple_navigation"
+harness = false
+
+[package.metadata.docs.rs]
+# Compile docs.rs docs with debug_draw so docs for it appear.
+features = ["debug_draw"]

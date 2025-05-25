@@ -1,0 +1,57 @@
+[package]
+name = "oxidized_navigation_rapier"
+description = "Rapier integration for oxidized_navigation."
+version = "0.1.0"
+edition = "2021"
+
+authors = ["TheGrimsey"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/TheGrimsey/oxidized_navigation"
+repository = "https://github.com/TheGrimsey/oxidized_navigation"
+documentation = "https://docs.rs/crate/oxidized_navigation"
+
+keywords = ["gamedev", "navmesh", "navmesh-generation", "bevy"]
+categories = ["game-development"]
+
+[lib]
+bench = false
+
+[features]
+debug_draw = ["oxidized_navigation/debug_draw", "bevy_rapier3d/debug-render-3d"]
+
+[[example]]
+name = "rapier3d"
+required-features = ["debug_draw"]
+
+[[example]]
+name = "rapier3d_heightfield"
+required-features = ["debug_draw"]
+
+[[example]]
+name = "rapier3d_multi_floor"
+required-features = ["debug_draw"]
+
+[[test]]
+name = "rapier3d"
+
+[dependencies]
+oxidized_navigation = { path = "../oxidized_navigation", version = "0.13" }
+bevy = { version = "0.15", default-features = false }
+
+bevy_rapier3d = { version = "0.28", default-features = false, features = ["dim3"] }
+parry3d = { version = "0.17" }
+
+[dev-dependencies]
+bevy = { version = "0.15", default-features = false, features = [
+    "bevy_asset",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_window",
+    "bevy_winit",
+    "x11",
+    "ktx2",
+    "tonemapping_luts",
+    "zstd",
+] }
+bevy_editor_pls = { git = "https://github.com/onkoe/bevy_editor_pls.git" }

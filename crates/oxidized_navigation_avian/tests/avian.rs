@@ -1,8 +1,4 @@
-use std::{
-    hash::{BuildHasher, Hash, Hasher},
-    num::NonZeroU16,
-    time::Duration,
-};
+use std::{hash::Hash, num::NonZeroU16, time::Duration};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
 use bevy::{
@@ -11,11 +7,11 @@ use bevy::{
     utils::{HashMap, RandomState},
 };
 use oxidized_navigation::{
-    colliders::avian::AvianCollider,
     query::{find_path, FindPathError},
     tiles::{NavMeshTile, NavMeshTiles},
     ActiveGenerationTasks, NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+use oxidized_navigation_avian::AvianCollider;
 
 const TIMEOUT_DURATION: Duration = Duration::new(15, 0);
 const SLEEP_DURATION: Duration = Duration::from_millis(2);
@@ -135,18 +131,16 @@ fn sort_tiles(tiles: HashMap<UVec2, NavMeshTile>) -> Vec<(UVec2, NavMeshTile)> {
 fn sort_tile(mut tile: NavMeshTile) -> NavMeshTile {
     // Polygons come from a hashmap, so they have a random order.
     for polygon in tile.polygons.iter_mut() {
-        polygon.links.sort_by_key(|link| hash_deterministic(link));
+        polygon.links.sort_by_key(hash_deterministic);
     }
-    tile.polygons
-        .sort_by_key(|polygon| hash_deterministic(polygon));
+    tile.polygons.sort_by_key(hash_deterministic);
     tile
 }
 
 fn hash_deterministic<T: Hash>(value: &T) -> u64 {
     let state = RandomState::with_seed(1337);
-    let mut hasher = state.build_hasher();
-    value.hash(&mut hasher);
-    hasher.finish()
+
+    state.hash_one(value)
 }
 
 trait TestApp {

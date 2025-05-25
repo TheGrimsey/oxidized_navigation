@@ -32,18 +32,14 @@ jobs:
       fail-fast: false
       matrix:
         backend:
-          - feature: parry3d
-            artifact_key: benches
+          - artifact_key: benches
             test_arg: --benches
-          - feature: parry3d
-            artifact_key: parry3d
-            test_arg: --test parry3d
-          - feature: avian
-            artifact_key: avian
-            test_arg: --test avian
-          - feature: rapier
-            artifact_key: rapier3d
-            test_arg: --test rapier3d
+          - artifact_key: parry3d
+            test_arg: -p oxidized_navigation
+          - artifact_key: avian
+            test_arg: -p oxidized_navigation_avian
+          - artifact_key: rapier3d
+            test_arg: -p oxidized_navigation_rapier
     steps:
       - name: Checkout repository code.
         uses: actions/checkout@v4

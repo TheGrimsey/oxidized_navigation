@@ -1,15 +1,13 @@
-//! Nav-mesh set up example for both blocking & async pathfinding.
+//! Nav-mesh set up example for multiple floors.
 //!
 //! Press A to run async path finding.
 //!
 //! Press B to run blocking path finding.
 //!
-
 use std::sync::{Arc, RwLock};
 
 use bevy::{
     color::palettes,
-    math::primitives,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
 };
@@ -17,12 +15,12 @@ use bevy::{
 use bevy::tasks::futures_lite::future;
 use bevy_rapier3d::prelude::{Collider, NoUserData, RapierPhysicsPlugin};
 use oxidized_navigation::{
-    colliders::rapier::RapierCollider,
     debug_draw::{DrawNavMesh, DrawPath, OxidizedNavigationDebugDrawPlugin},
     query::{find_path, find_polygon_path, perform_string_pulling_on_path},
     tiles::NavMeshTiles,
     NavMesh, NavMeshAffector, NavMeshSettings, OxidizedNavigationPlugin,
 };
+use oxidized_navigation_rapier::RapierCollider;
 
 fn main() {
     App::new()
@@ -30,7 +28,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "Oxidized Navigation: Rapier 3d".to_owned(),
+                    title: "Oxidized Navigation: Rapier 3d Multi floor".to_owned(),
                     ..default()
                 }),
                 ..default()
@@ -164,7 +162,7 @@ fn poll_pathfinding_tasks_system(
             commands.spawn(DrawPath {
                 timer: Some(Timer::from_seconds(4.0, TimerMode::Once)),
                 pulled_path: string_path,
-                color: palettes::basic::BLUE.into(),
+                color: palettes::css::BLUE.into(),
             });
 
             false
@@ -223,13 +221,11 @@ fn setup_world_system(
 ) {
     print_controls();
 
-    // Camera
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(10.0, 10.0, 15.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
+        Transform::from_xyz(15.0, 10.0, 20.0).looking_at(Vec3::new(0.0, 2.0, 0.0), Vec3::Y),
     ));
 
-    // Directional light
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
@@ -238,30 +234,20 @@ fn setup_world_system(
         Transform::from_rotation(Quat::from_euler(EulerRot::XYZ, -1.0, -0.5, 0.0)),
     ));
 
-    // Ground plane
+    // Plane
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(50.0, 50.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(25.0, 25.0))),
         MeshMaterial3d(materials.add(Color::srgb(0.3, 0.5, 0.3))),
         Transform::IDENTITY,
-        Collider::cuboid(25.0, 0.1, 25.0),
+        Collider::cuboid(12.5, 0.1, 12.5),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 
-    // Cube
     commands.spawn((
-        Mesh3d(meshes.add(primitives::Cuboid::new(2.5, 2.5, 2.5))),
-        MeshMaterial3d(materials.add(Color::srgb(0.1, 0.1, 0.5))),
-        Transform::from_xyz(-5.0, 0.8, -5.0),
-        Collider::cuboid(1.25, 1.25, 1.25),
-        NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
-    ));
-
-    // Thin wall
-    commands.spawn((
-        Mesh3d(meshes.add(Mesh::from(primitives::Cuboid::new(0.1, 0.1, 0.1)))),
-        MeshMaterial3d(materials.add(Color::srgb(0.1, 0.1, 0.5))),
-        Transform::from_xyz(-3.0, 0.8, 5.0).with_scale(Vec3::new(50.0, 15.0, 1.0)),
-        Collider::cuboid(0.05, 0.05, 0.05),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(10.0, 10.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.68, 0.68, 1.0))),
+        Transform::from_xyz(0.0, 6.0, 0.0),
+        Collider::cuboid(5.0, 0.1, 5.0),
         NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
     ));
 }
@@ -283,9 +269,9 @@ fn spawn_or_despawn_affector_system(
     } else {
         let entity = commands
             .spawn((
-                Mesh3d(meshes.add(primitives::Cuboid::new(2.5, 2.5, 2.5))),
+                Mesh3d(meshes.add(Cuboid::new(2.5, 2.5, 2.5))),
                 MeshMaterial3d(materials.add(Color::srgb(1.0, 0.1, 0.5))),
-                Transform::from_xyz(5.0, 0.8, 0.0),
+                Transform::from_xyz(5.0, 0.8, -5.0),
                 Collider::cuboid(1.25, 1.25, 1.25),
                 NavMeshAffector, // Only entities with a NavMeshAffector component will contribute to the nav-mesh.
             ))

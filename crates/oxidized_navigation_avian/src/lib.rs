@@ -1,6 +1,6 @@
 use parry3d::{bounding_volume::Aabb, shape::TypedShape};
 
-use super::OxidizedCollider;
+use oxidized_navigation::colliders::OxidizedCollider;
 
 pub struct AvianCollider;
 

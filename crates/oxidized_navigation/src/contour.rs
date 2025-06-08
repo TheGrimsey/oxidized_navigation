@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 
 use bevy::{
-    log::warn,
     prelude::{IVec2, UVec2, UVec4},
 };
 
@@ -275,7 +274,6 @@ fn merge_region_holes(region: &mut ContourRegion) {
         }
 
         let Some(index) = index else {
-            warn!("Failed to find merge points.");
             continue;
         };
 

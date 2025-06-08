@@ -1,5 +1,4 @@
 use bevy::{
-    log::warn,
     math::{U16Vec2, U16Vec3, UVec3, Vec3, Vec3Swizzles}, platform::collections::HashMap,
 };
 
@@ -1172,7 +1171,6 @@ fn add_edge(
     r: u32,
 ) -> Option<u32> {
     if *num_edges >= max_edges {
-        warn!("addEdge: Too many edges ({}/{})", *num_edges, max_edges);
         return None;
     }
 

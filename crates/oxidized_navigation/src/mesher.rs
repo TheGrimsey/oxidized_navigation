@@ -1,5 +1,4 @@
 use bevy::{
-    log::info,
     math::U16Vec3,
     prelude::{UVec2, UVec4},
 };
@@ -64,9 +63,7 @@ pub fn build_poly_mesh(
 
         indices.extend(0..contour.vertices.len() as u32);
 
-        if !triangulate(&contour.vertices, &mut indices, &mut triangles) {
-            info!("Triangulation failed for contour.");
-        }
+        triangulate(&contour.vertices, &mut indices, &mut triangles);
 
         for vertex in contour.vertices.iter() {
             let index = add_vertex(

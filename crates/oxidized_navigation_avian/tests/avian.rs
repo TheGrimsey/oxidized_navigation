@@ -6,8 +6,9 @@ use std::{
 
 use avian3d::{
     collision::CollisionDiagnostics,
+    diagnostics::{PhysicsEntityDiagnostics, PhysicsTotalDiagnostics},
     dynamics::solver::SolverDiagnostics,
-    prelude::{Collider, PhysicsPlugins},
+    prelude::{Collider, PhysicsPlugins, SpatialQueryDiagnostics},
 };
 use bevy::{
     ecs::system::RunSystemOnce,
@@ -260,7 +261,10 @@ impl TestApp for App {
         ));
 
         app.init_resource::<CollisionDiagnostics>()
-            .init_resource::<SolverDiagnostics>();
+            .init_resource::<SolverDiagnostics>()
+            .init_resource::<SpatialQueryDiagnostics>()
+            .init_resource::<PhysicsEntityDiagnostics>()
+            .init_resource::<PhysicsTotalDiagnostics>();
 
         app
     }

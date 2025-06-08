@@ -234,6 +234,7 @@ impl TestApp for App {
 
         app.add_plugins((
             MinimalPlugins,
+            bevy::diagnostic::DiagnosticsPlugin,
             TransformPlugin,
             OxidizedNavigationPlugin::<AvianCollider>::new(NavMeshSettings {
                 cell_width: 0.25,

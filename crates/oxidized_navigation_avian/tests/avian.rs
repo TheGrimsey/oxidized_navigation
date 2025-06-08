@@ -1,10 +1,19 @@
-use std::{hash::Hash, num::NonZeroU16, time::Duration};
+use std::{
+    hash::{BuildHasher, Hash},
+    num::NonZeroU16,
+    time::Duration,
+};
 
-use avian3d::prelude::{Collider, PhysicsPlugins};
+use avian3d::{
+    collision::CollisionDiagnostics,
+    diagnostics::{PhysicsEntityDiagnostics, PhysicsTotalDiagnostics},
+    dynamics::solver::SolverDiagnostics,
+    prelude::{Collider, PhysicsPlugins, SpatialQueryDiagnostics},
+};
 use bevy::{
     ecs::system::RunSystemOnce,
+    platform::{collections::HashMap, hash::FixedState},
     prelude::*,
-    utils::{HashMap, RandomState},
 };
 use oxidized_navigation::{
     query::{find_path, FindPathError},
@@ -138,7 +147,7 @@ fn sort_tile(mut tile: NavMeshTile) -> NavMeshTile {
 }
 
 fn hash_deterministic<T: Hash>(value: &T) -> u64 {
-    let state = RandomState::with_seed(1337);
+    let state = FixedState::with_seed(1337);
 
     state.hash_one(value)
 }
@@ -249,8 +258,13 @@ impl TestApp for App {
                 experimental_detail_mesh_generation: None,
             }),
             PhysicsPlugins::default(),
-            HierarchyPlugin,
         ));
+
+        app.init_resource::<CollisionDiagnostics>()
+            .init_resource::<SolverDiagnostics>()
+            .init_resource::<SpatialQueryDiagnostics>()
+            .init_resource::<PhysicsEntityDiagnostics>()
+            .init_resource::<PhysicsTotalDiagnostics>();
 
         app
     }
@@ -386,7 +400,7 @@ impl TestApp for App {
             .run_system_once(
                 |q_transform: Query<Entity, With<Transform>>, mut commands: Commands| {
                     for entity in q_transform.iter() {
-                        commands.entity(entity).despawn_recursive();
+                        commands.entity(entity).despawn();
                     }
                 },
             )

@@ -48,13 +48,12 @@ use std::num::{NonZeroU16, NonZeroU8};
 use std::sync::{Arc, RwLock};
 
 use bevy::ecs::entity::EntityHashMap;
+use bevy::platform::collections::{HashMap, HashSet};
 use bevy::tasks::futures_lite::future;
 use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
-    ecs::system::Resource,
     ecs::{intern::Interned, schedule::ScheduleLabel},
     prelude::*,
-    utils::{HashMap, HashSet},
 };
 use colliders::OxidizedCollider;
 use contour::build_contours;
@@ -546,23 +545,20 @@ fn update_navmesh_affectors_system<C: OxidizedCollider>(
 
             relation
         } else {
-            affector_relations
-                .0
-                .insert_unique_unchecked(e, SmallVec::default())
-                .1
+            unsafe {
+                // SAFETY: We just asserted that the entity is not in the map.
+                affector_relations
+                    .0
+                    .insert_unique_unchecked(e, SmallVec::default())
+                    .1
+            }
         };
 
         for x in min_tile.x..=max_tile.x {
             for y in min_tile.y..=max_tile.y {
                 let tile_coord = UVec2::new(x, y);
 
-                let affectors = if let Some(affectors) = tile_affectors.get_mut(&tile_coord) {
-                    affectors
-                } else {
-                    tile_affectors
-                        .insert_unique_unchecked(tile_coord, HashSet::default())
-                        .1
-                };
+                let affectors = tile_affectors.entry(tile_coord).or_default();
                 affectors.insert(e);
 
                 relation.push(tile_coord);
@@ -830,12 +826,7 @@ fn get_geometry_type(collider: TypedShape) -> GeometryResult {
         TypedShape::HalfSpace(_) => GeometryResult::Unsupported, /* This is like an infinite plane? We don't care. */
         TypedShape::Polyline(_) => GeometryResult::Unsupported,  /* This is a line. */
         TypedShape::Segment(_) => GeometryResult::Unsupported,   /* This is a line segment. */
-        TypedShape::Custom(_) => {
-            warn!(
-                "Custom shapes are not yet supported for nav-mesh generation, skipping for now.."
-            );
-            GeometryResult::Unsupported
-        }
+        TypedShape::Custom(_) => GeometryResult::Unsupported,
     }
 }
 
@@ -852,7 +843,7 @@ fn remove_finished_tasks(
     active_generation_tasks.0.retain_mut(|task| {
         if let Some(tile) = future::block_on(future::poll_once(task)) {
             if let Some(tile) = tile {
-                event.send(TileGenerated(tile));
+                event.write(TileGenerated(tile));
             }
 
             false

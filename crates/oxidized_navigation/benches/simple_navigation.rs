@@ -1,8 +1,8 @@
 use std::num::NonZeroU16;
 
 use bevy::{
+    platform::collections::HashMap,
     prelude::{Transform, UVec2, Vec3},
-    utils::HashMap,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use oxidized_navigation::{

@@ -33,9 +33,9 @@ name = "avian"
 
 [dependencies]
 oxidized_navigation = { path = "../oxidized_navigation", version = "0.13" }
-bevy = { version = "0.16", default-features = false, features = ["bevy_diagnostic"] }
+bevy = { version = "0.16", default-features = false }
 
-avian3d = { version = "0.3", default-features = false, features = ["3d", "f32", "parry-f32"] }
+avian3d = { version = "0.3", default-features = false, features = ["3d", "f32", "parry-f32", "bevy_diagnostic"] }
 parry3d = { version = "0.17" }
 
 [dev-dependencies]
@@ -49,5 +49,4 @@ bevy = { version = "0.16", default-features = false, features = [
     "ktx2",
     "tonemapping_luts",
     "zstd",
-    "bevy_diagnostic"
 ] }

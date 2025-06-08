@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use avian3d::{collision::CollisionDiagnostics, prelude::{Collider, PhysicsPlugins}};
+use avian3d::{collision::CollisionDiagnostics, dynamics::solver::SolverDiagnostics, prelude::{Collider, PhysicsPlugins}};
 use bevy::{
     ecs::system::RunSystemOnce,
     platform::{collections::HashMap, hash::FixedState},
@@ -255,7 +255,7 @@ impl TestApp for App {
             PhysicsPlugins::default(),
         ));
 
-        app.init_resource::<CollisionDiagnostics>();
+        app.init_resource::<CollisionDiagnostics>().init_resource::<SolverDiagnostics>();
 
         app
     }

@@ -1,8 +1,14 @@
-use std::{hash::{Hash, BuildHasher}, num::NonZeroU16, time::Duration};
+use std::{
+    hash::{BuildHasher, Hash},
+    num::NonZeroU16,
+    time::Duration,
+};
 
 use avian3d::prelude::{Collider, PhysicsPlugins};
 use bevy::{
-    ecs::system::RunSystemOnce, platform::{collections::HashMap, hash::FixedState}, prelude::*
+    ecs::system::RunSystemOnce,
+    platform::{collections::HashMap, hash::FixedState},
+    prelude::*,
 };
 use oxidized_navigation::{
     query::{find_path, FindPathError},
@@ -246,7 +252,7 @@ impl TestApp for App {
                 max_tile_generation_tasks: NonZeroU16::new(8), // Github Actions are limited to 7 GB.
                 experimental_detail_mesh_generation: None,
             }),
-            PhysicsPlugins::default()
+            PhysicsPlugins::default(),
         ));
 
         app

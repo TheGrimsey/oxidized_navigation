@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 
-use bevy::{
-    prelude::{IVec2, UVec2, UVec4},
-};
+use bevy::prelude::{IVec2, UVec2, UVec4};
 
 use crate::{
     get_neighbour_index,

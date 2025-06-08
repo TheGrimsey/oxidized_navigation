@@ -1,5 +1,6 @@
 use bevy::{
-    math::{U16Vec2, U16Vec3, UVec3, Vec3, Vec3Swizzles}, platform::collections::HashMap,
+    math::{U16Vec2, U16Vec3, UVec3, Vec3, Vec3Swizzles},
+    platform::collections::HashMap,
 };
 
 #[cfg(feature = "trace")]

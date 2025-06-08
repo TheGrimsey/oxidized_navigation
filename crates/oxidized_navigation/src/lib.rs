@@ -826,9 +826,7 @@ fn get_geometry_type(collider: TypedShape) -> GeometryResult {
         TypedShape::HalfSpace(_) => GeometryResult::Unsupported, /* This is like an infinite plane? We don't care. */
         TypedShape::Polyline(_) => GeometryResult::Unsupported,  /* This is a line. */
         TypedShape::Segment(_) => GeometryResult::Unsupported,   /* This is a line segment. */
-        TypedShape::Custom(_) => {
-            GeometryResult::Unsupported
-        }
+        TypedShape::Custom(_) => GeometryResult::Unsupported,
     }
 }
 

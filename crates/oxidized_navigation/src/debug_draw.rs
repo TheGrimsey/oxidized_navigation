@@ -1,9 +1,13 @@
 //! Module for debug draws.
 use bevy::{
-    ecs::schedule::IntoScheduleConfigs, gizmos::{config::GizmoConfigGroup, AppGizmoBuilder}, prelude::{
-        any_with_component, App, Color, Commands, Component, Entity, Gizmos,
-        Plugin, Query, ReflectResource, Res, Resource, Update, Vec3,
-    }, reflect::Reflect, time::{Time, Timer}
+    ecs::schedule::IntoScheduleConfigs,
+    gizmos::{config::GizmoConfigGroup, AppGizmoBuilder},
+    prelude::{
+        any_with_component, App, Color, Commands, Component, Entity, Gizmos, Plugin, Query,
+        ReflectResource, Res, Resource, Update, Vec3,
+    },
+    reflect::Reflect,
+    time::{Time, Timer},
 };
 
 use crate::NavMesh;

@@ -1,4 +1,6 @@
-# Oxidized Navigation
+# Depricated! See [Rerecast](https://github.com/janhohenheim/rerecast/) for a more accurate Recast port in Rust & support for never Bevy versions..
+
+## Oxidized Navigation
 [![Crates.io](https://img.shields.io/crates/v/oxidized_navigation)](https://crates.io/crates/oxidized_navigation/)
 ![Crates.io](https://img.shields.io/crates/l/oxidized_navigation)
 
